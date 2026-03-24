@@ -1,0 +1,7 @@
+{
+  "name": "Remix: luxardo website",
+  "description": "A premium luxury fashion house specializing in modern ethnic tailoring and private client services.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
