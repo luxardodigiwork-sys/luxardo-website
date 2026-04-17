@@ -1,0 +1,43 @@
+import React, { useEffect } from 'react';
+import { motion } from 'motion/react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { AuthForm } from '../components/AuthForm';
+import { useAuth } from '../context/AuthContext';
+
+export default function LoginPage() {
+  const { user, isAuthReady } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname || '/account';
+
+  useEffect(() => {
+    if (isAuthReady && user) {
+      if (user.role === 'customer') {
+        navigate(from, { replace: true });
+      } else if (['super_admin', 'admin'].includes(user.role)) {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/backend');
+      }
+    }
+  }, [user, isAuthReady, navigate, from]);
+
+  useEffect(() => {
+    if ((window as any).lenis) {
+      (window as any).lenis.scrollTo(0, { immediate: true });
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, []);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="min-h-screen bg-brand-bg pt-32 pb-20 flex flex-col justify-center"
+    >
+      <AuthForm initialMode="signin" />
+    </motion.div>
+  );
+}
