@@ -28,7 +28,8 @@
         "price": { "type": "number" },
         "category": { "type": "string" },
         "image": { "type": "string" },
-        "description": { "type": "string" }
+        "description": { "type": "string" },
+        "lowStockThreshold": { "type": "number" }
       },
       "required": ["id", "name", "price", "category", "image"]
     },
