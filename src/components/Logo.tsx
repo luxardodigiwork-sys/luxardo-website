@@ -1,41 +1,45 @@
-import React from 'react';
+// src/pages/LoginPage.tsx
+import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
-import { LOGO_BASE64 } from './LogoData';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { AuthForm } from '../components/AuthForm';
+import { useAuth } from '../context/AuthContext';
 
-interface LogoProps {
-  className?: string;
-  as?: 'div' | 'h1' | 'h2' | 'span';
-  variant?: 'default' | 'large' | 'inline';
-  dark?: boolean;
-}
+export default function LoginPage() {
+  const { user, isAuthReady } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname || '/'; // Default to home
 
-export const Logo: React.FC<LogoProps> = ({ className = '', as: Component = 'div', variant = 'default', dark = false }) => {
-  const MotionComponent = motion.create(Component);
+  useEffect(() => {
+    if (isAuthReady && user) {
+      if (user.role === 'customer') {
+        navigate(from, { replace: true });
+      } else if (['super_admin', 'admin'].includes(user.role)) {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/'); // Fallback
+      }
+    }
+  }, [user, isAuthReady, navigate, from]);
 
-  if (variant === 'inline') {
-    return (
-      <MotionComponent 
-        initial={{ opacity: 0, y: 10 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
-        className={`font-display tracking-[0.2em] font-bold ${className}`}
-      >
-        LUXARDO
-      </MotionComponent>
-    );
-  }
+  useEffect(() => {
+    if ((window as any).lenis) {
+      (window as any).lenis.scrollTo(0, { immediate: true });
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, []);
 
   return (
-    <motion.img 
-      initial={{ opacity: 0, scale: 0.95 }}
-      whileInView={{ opacity: 1, scale: 1 }}
-      viewport={{ once: true }}
-      transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
-      src={LOGO_BASE64}
-      alt="LUXARDO" 
-      className={`object-contain h-auto  brightness-0 ${dark ? 'invert' : ''} ${variant === 'large' ? 'w-full max-w-6xl opacity-[0.03]' : ''} ${className}`}
-      referrerPolicy="no-referrer"
-    />
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="min-h-screen bg-brand-bg pt-32 pb-20 flex flex-col justify-center items-center"
+    >
+      {/* Hum direct AuthForm dikha rahe hain */}
+      <AuthForm initialMode="signin" />
+    </motion.div>
   );
-};
+}
