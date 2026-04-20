@@ -75,6 +75,11 @@ import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
 import AnalysisLayout from "./components/analysis/AnalysisLayout";
 import AnalysisDashboardPage from "./pages/analysis/AnalysisDashboardPage";
 
+// 🚀 NAYE SECURITY GUARDS YAHAN IMPORT KIYE GAYE HAIN 🚀
+import { CustomerAuth } from "./components/CustomerAuth";
+import { AdminAuth } from "./components/AdminAuth";
+import { AdminGuard } from "./components/AdminGuard";
+
 const ProtectedBackendRoute = ({
   role,
   permission,
@@ -105,7 +110,6 @@ const ProtectedBackendRoute = ({
 };
 
 export default function App() {
-  // ... (Lenis initialization remains the same)
   useEffect(() => {
     if ("scrollRestoration" in history) {
       history.scrollRestoration = "manual";
@@ -122,7 +126,6 @@ export default function App() {
       infinite: false,
     });
 
-    // Expose globally for scroll restoration
     (window as any).lenis = lenis;
 
     function raf(time: number) {
@@ -142,49 +145,53 @@ export default function App() {
       <CartProvider>
         <WishlistProvider>
           <Routes>
-            {/* Admin Routes */}
-            <Route path="/admin/login" element={<AdminLoginPage />} />
+            {/* 🚀 ADMIN SECURE ROUTES 🚀 */}
+            {/* Ye aapka naya secret admin login page hai */}
+            <Route path="/admin-access" element={<AdminAuth />} />
 
-            <Route path="/admin" element={<ProtectedAdminRoute />}>
-              <Route element={<AdminLayout />}>
-                <Route
-                  index
-                  element={<Navigate to="/admin/dashboard" replace />}
-                />
-                <Route path="dashboard" element={<AdminDashboardPage />} />
-                <Route path="dispatch" element={<AdminDispatchPage />} />
-                <Route path="products" element={<AdminProductsPage />} />
-                <Route path="collections" element={<AdminCollectionsPage />} />
-                <Route path="products/new" element={<AdminAddProductPage />} />
-                <Route
-                  path="products/:id/edit"
-                  element={<AdminEditProductPage />}
-                />
-                <Route path="content" element={<AdminContentPage />} />
-                <Route path="media" element={<AdminMediaPage />} />
-                <Route
-                  path="prime-content"
-                  element={<AdminPrimeContentPage />}
-                />
-                <Route path="policies" element={<AdminPoliciesPage />} />
-                <Route
-                  path="bespoke-requests"
-                  element={<AdminBespokeRequestsPage />}
-                />
-                <Route
-                  path="prime-members"
-                  element={<AdminPrimeMembersPage />}
-                />
-                <Route path="partners" element={<AdminPartnersPage />} />
-                <Route
-                  path="contact-messages"
-                  element={<AdminContactMessagesPage />}
-                />
-                <Route
-                  path="backend-management"
-                  element={<AdminBackendManagementPage />}
-                />
-                <Route path="settings" element={<AdminSettingsPage />} />
+            {/* THE VAULT GUARD: Ye poore admin panel ko protect karega */}
+            <Route element={<AdminGuard />}>
+              <Route path="/admin" element={<ProtectedAdminRoute />}>
+                <Route element={<AdminLayout />}>
+                  <Route
+                    index
+                    element={<Navigate to="/admin/dashboard" replace />}
+                  />
+                  <Route path="dashboard" element={<AdminDashboardPage />} />
+                  <Route path="dispatch" element={<AdminDispatchPage />} />
+                  <Route path="products" element={<AdminProductsPage />} />
+                  <Route path="collections" element={<AdminCollectionsPage />} />
+                  <Route path="products/new" element={<AdminAddProductPage />} />
+                  <Route
+                    path="products/:id/edit"
+                    element={<AdminEditProductPage />}
+                  />
+                  <Route path="content" element={<AdminContentPage />} />
+                  <Route path="media" element={<AdminMediaPage />} />
+                  <Route
+                    path="prime-content"
+                    element={<AdminPrimeContentPage />}
+                  />
+                  <Route path="policies" element={<AdminPoliciesPage />} />
+                  <Route
+                    path="bespoke-requests"
+                    element={<AdminBespokeRequestsPage />}
+                  />
+                  <Route
+                    path="prime-members"
+                    element={<AdminPrimeMembersPage />}
+                  />
+                  <Route path="partners" element={<AdminPartnersPage />} />
+                  <Route
+                    path="contact-messages"
+                    element={<AdminContactMessagesPage />}
+                  />
+                  <Route
+                    path="backend-management"
+                    element={<AdminBackendManagementPage />}
+                  />
+                  <Route path="settings" element={<AdminSettingsPage />} />
+                </Route>
               </Route>
             </Route>
 
@@ -260,7 +267,6 @@ export default function App() {
             {/* Public Routes */}
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />
-              {/* ... other routes ... */}
               <Route path="collections" element={<CollectionsPage />} />
               <Route
                 path="collections/:category"
@@ -369,7 +375,10 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
-              <Route path="login" element={<LoginPage />} />
+              
+              {/* 🚀 CUSTOMER LOGIN ROUTE YAHAN HAI 🚀 */}
+              <Route path="login" element={<CustomerAuth />} />
+              
               <Route path="register" element={<RegisterPage />} />
               <Route path="forgot-password" element={<ForgotPasswordPage />} />
               <Route path="product/:id" element={<ProductPage />} />
