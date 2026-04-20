@@ -76,10 +76,9 @@ import AnalysisLayout from "./components/analysis/AnalysisLayout";
 import AnalysisDashboardPage from "./pages/analysis/AnalysisDashboardPage";
 
 // 🚀 NAYE SECURITY GUARDS YAHAN IMPORT KIYE GAYE HAIN 🚀
-import { CustomerAuth } from "./CustomerAuth";
-import { AdminAuth } from "./AdminAuth";
-import { AdminGuard } from "./AdminGuard";
-
+import { CustomerAuth } from "./components/CustomerAuth";
+import { AdminAuth } from "./components/AdminAuth";
+import { AdminGuard } from "./components/AdminGuard";
 const ProtectedBackendRoute = ({
   role,
   permission,
