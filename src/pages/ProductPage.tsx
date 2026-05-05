@@ -36,8 +36,10 @@ export default function ProductPage() {
   const [openSection, setOpenSection] = useState<string | null>('description');
   const [isAdding, setIsAdding] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(1);
   const [isSizeChartOpen, setIsSizeChartOpen] = useState(false);
   const [sizeError, setSizeError] = useState(false);
+  const [addedMessage, setAddedMessage] = useState<string | null>(null);
   const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
 
   const galleryImages = [
@@ -183,8 +185,10 @@ export default function ProductPage() {
     }
     setSizeError(false);
     setIsAdding(true);
-    addToCart(product, 1, selectedSize);
+    addToCart(product, quantity, selectedSize);
+    setAddedMessage(`${quantity} item(s) added to cart`);
     setTimeout(() => setIsAdding(false), 1000);
+    setTimeout(() => setAddedMessage(null), 2000);
   };
 
   // Sizes based on reference image
@@ -316,6 +320,26 @@ export default function ProductPage() {
                 </div>
               </div>
 
+              {/* Quantity Selection */}
+              <div className="space-y-5">
+                <p className="text-[13px] font-sans uppercase tracking-widest font-bold text-black">QUANTITY</p>
+                <div className="flex items-center border border-brand-divider bg-brand-white w-fit">
+                  <button 
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="p-3 hover:bg-brand-divider transition-colors"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-12 text-center font-sans font-medium text-lg">{quantity}</span>
+                  <button 
+                    onClick={() => setQuantity(Math.min(quantity + 1, product.stock !== undefined ? product.stock : 10))}
+                    className="p-3 hover:bg-brand-divider transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
               {/* Actions */}
               <div className="space-y-6 pt-6">
                 <div className="bg-gray-50 p-4 flex items-start gap-4">
@@ -330,7 +354,7 @@ export default function ProductPage() {
                     disabled={isAdding}
                     className="btn-primary flex-1 py-5"
                   >
-                    {isAdding ? 'ADDING...' : 'ADD TO CART'}
+                    {isAdding ? 'ADDING...' : `ADD ${quantity} TO CART`}
                   </button>
                   <button 
                     onClick={handleWishlistToggle}
@@ -364,6 +388,11 @@ export default function ProductPage() {
                   {notificationMessage && (
                     <p className="text-[11px] font-sans text-center text-brand-secondary animate-in fade-in slide-in-from-top-1">
                       {notificationMessage}
+                    </p>
+                  )}
+                  {addedMessage && (
+                    <p className="text-[11px] font-sans text-center text-emerald-600 font-bold animate-in fade-in slide-in-from-top-1">
+                      ✓ {addedMessage}
                     </p>
                   )}
                 </div>

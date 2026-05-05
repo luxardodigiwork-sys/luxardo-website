@@ -21,17 +21,35 @@ export function AdminAuth() {
   // Real-time strict validation check
   const isInputValid = `+${phoneNumber}` === ADMIN_PHONE;
 
+  // UPDATED: Auto-Cleanup reCAPTCHA Logic
   useEffect(() => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'admin-auth-recaptcha', {
-        size: 'invisible',
-        callback: () => {},
-        'expired-callback': () => {
-          setError('Security verify expired. Please reload.');
-          setIsLoading(false);
-        }
-      });
+    // 1. Purane atke hue reCAPTCHA ko saaf karein
+    if (window.recaptchaVerifier) {
+      try {
+        window.recaptchaVerifier.clear();
+      } catch (e) {}
+      window.recaptchaVerifier = undefined;
     }
+
+    // 2. Naya reCAPTCHA banayein
+    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'admin-auth-recaptcha', {
+      size: 'invisible',
+      callback: () => {},
+      'expired-callback': () => {
+        setError('Security verify expired. Please reload.');
+        setIsLoading(false);
+      }
+    });
+
+    // 3. Jab page band ho, toh ise wapas saaf kar dein
+    return () => {
+      if (window.recaptchaVerifier) {
+        try {
+          window.recaptchaVerifier.clear();
+        } catch (e) {}
+        window.recaptchaVerifier = undefined;
+      }
+    };
   }, []);
 
   const handleSendOtp = async (e: React.FormEvent) => {

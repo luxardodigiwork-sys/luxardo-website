@@ -29,81 +29,86 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Load from Firestore if user is logged in
   useEffect(() => {
-    if (!user) return;
+    // ⚡ SAFETY LOCK: User load hone tak wait karein
+    if (!user?.id) {
+      console.log("Wishlist: No active session, using local storage only.");
+      return;
+    }
     
+    // Query tabhi fire hogi jab user.id 100% available hogi
     const q = query(collection(db, 'favorites'), where('userId', '==', user.id));
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const firestoreFavorites = snapshot.docs.map(doc => doc.data().product as Product);
       
-      // Merge local and firestore favorites (prevent duplicates)
       setWishlist(prev => {
         const merged = [...prev];
         
-        // Add firestore favorites to local state
         firestoreFavorites.forEach(fp => {
           if (!merged.some(p => p.id === fp.id)) {
             merged.push(fp);
           }
         });
 
-        // Sync local-only favorites to Firestore
+        // Sync local to Firestore
         prev.forEach(async (localFav) => {
           if (!firestoreFavorites.some(fp => fp.id === localFav.id)) {
             try {
+              // user.id check yahan bhi safe hai
               await setDoc(doc(db, 'favorites', `${user.id}_${localFav.id}`), {
                 userId: user.id,
-                userEmail: user.email,
+                userEmail: user.email || '',
                 productId: localFav.id,
                 product: localFav,
                 createdAt: new Date().toISOString()
               });
             } catch (error) {
-              console.error('Error syncing local favorite to Firestore', error);
+              console.error('Error syncing local favorite', error);
             }
           }
         });
 
         return merged;
       });
+    }, (error) => {
+      console.error("Wishlist Snapshot Error:", error);
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user?.id]); // Sirf user.id change par trigger hoga
 
-  // Save to localStorage whenever wishlist changes
   useEffect(() => {
     localStorage.setItem('luxardo_wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
 
   const addToWishlist = async (product: Product) => {
     if (!isInWishlist(product.id)) {
-      const newWishlist = [...wishlist, product];
-      setWishlist(newWishlist);
+      setWishlist(prev => [...prev, product]);
       
-      if (user) {
+      if (user?.id) {
         try {
           await setDoc(doc(db, 'favorites', `${user.id}_${product.id}`), {
             userId: user.id,
-            userEmail: user.email,
+            userEmail: user.email || '',
             productId: product.id,
             product: product,
             createdAt: new Date().toISOString()
           });
         } catch (error) {
-          console.error('Error saving favorite to Firestore', error);
+          console.error('Error saving to Firestore', error);
         }
       }
     }
   };
 
   const removeFromWishlist = async (productId: string) => {
-    setWishlist(wishlist.filter(p => p.id !== productId));
+    setWishlist(prev => prev.filter(p => p.id !== productId));
     
-    if (user) {
+    if (user?.id) {
       try {
         await deleteDoc(doc(db, 'favorites', `${user.id}_${productId}`));
       } catch (error) {
-        console.error('Error removing favorite from Firestore', error);
+        console.error('Error removing from Firestore', error);
       }
     }
   };

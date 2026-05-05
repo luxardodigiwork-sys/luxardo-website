@@ -8,7 +8,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Country, Language } from '../types';
 import { COUNTRIES, LANGUAGES, COLLECTIONS } from '../constants';
 import { ALL_COUNTRIES } from '../countries';
-import { Logo } from './Logo';
+import Logo from './Logo';
 import { FirstVisitModal } from './FirstVisitModal';
 import { SearchOverlay } from './SearchOverlay';
 import { useCart } from '../context/CartContext';
@@ -138,7 +138,7 @@ export default function Layout() {
       }
 
       if (needsUpdate) {
-        updateUserPreferences(updates);
+      // updateUserPreferences(); // इसे अभी के लिए बंद कर दें
       }
     }
   }, [isAuthReady, user, updateUserPreferences]);
@@ -580,7 +580,7 @@ export default function Layout() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="h-full"
+            className="h-full min-h-screen"
           >
             <ScrollToTopOnMount />
             <Outlet context={{ selectedCountry, selectedLanguage }} />

@@ -19,12 +19,8 @@ export default function AdminLoginPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuthReady && user) {
-      if (['super_admin', 'admin'].includes(user.role)) {
-        navigate('/admin/dashboard');
-      } else if (user.role === 'customer') {
-        navigate('/account');
-      }
+    if (isAuthReady && user && ['super_admin', 'admin'].includes(user.role)) {
+      navigate('/admin/dashboard');
     }
   }, [user, isAuthReady, navigate]);
 

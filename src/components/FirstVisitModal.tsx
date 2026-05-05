@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Search } from 'lucide-react';
-import { Logo } from './Logo';
+import Logo from './Logo';
 import { Country } from '../types';
 import { ALL_COUNTRIES } from '../countries';
 

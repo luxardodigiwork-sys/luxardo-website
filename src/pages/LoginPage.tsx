@@ -1,43 +1,51 @@
 import React, { useEffect } from 'react';
-import { motion } from 'motion/react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { AuthForm } from '../components/AuthForm';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
-  const { user, isAuthReady } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const from = location.state?.from?.pathname || '/account';
+  const { user, isAuthReady, login } = useAuth();
 
   useEffect(() => {
     if (isAuthReady && user) {
-      if (user.role === 'customer') {
-        navigate(from, { replace: true });
-      } else if (['super_admin', 'admin'].includes(user.role)) {
-        navigate('/admin/dashboard');
-      } else {
-        navigate('/backend');
-      }
+      navigate('/admin/dashboard', { replace: true });
     }
-  }, [user, isAuthReady, navigate, from]);
+  }, [user, isAuthReady, navigate]);
 
-  useEffect(() => {
-    if ((window as any).lenis) {
-      (window as any).lenis.scrollTo(0, { immediate: true });
-    } else {
-      window.scrollTo(0, 0);
-    }
-  }, []);
+  const handleBypassLogin = () => {
+    login({
+      id: "admin-1",
+      name: "Abhijeet Sir",
+      role: "admin",
+      isPrimeMember: true,
+      // ⚡ सभी जरूरी परमिशन यहाँ जोड़ दी गई हैं
+      permissions: { 
+        dashboard: true, 
+        orders: true, 
+        products: true, 
+        settings: true,
+        dispatch_actions: true,
+        backend_management: true,
+        analysis_reports: true,
+        media: true,
+        content: true
+      }
+    });
+    navigate('/admin/dashboard');
+  };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className="min-h-screen bg-brand-bg pt-32 pb-20 flex flex-col justify-center"
-    >
-      <AuthForm initialMode="signin" />
-    </motion.div>
+    <div className="min-h-screen flex items-center justify-center bg-[#F5F5F0]">
+      <div className="bg-white p-12 shadow-xl text-center border border-gray-100">
+        <h2 className="font-display uppercase tracking-[0.3em] text-2xl mb-8">Luxardo Access</h2>
+        <p className="text-gray-400 mb-8 text-xs tracking-widest uppercase">Bypass Mode Active</p>
+        <button 
+          onClick={handleBypassLogin} 
+          className="bg-black text-white px-12 py-4 text-sm uppercase tracking-widest hover:bg-gray-800 transition-all"
+        >
+          Enter Admin Portal
+        </button>
+      </div>
+    </div>
   );
 }

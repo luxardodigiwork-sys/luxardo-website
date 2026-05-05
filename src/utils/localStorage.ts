@@ -267,20 +267,79 @@ export const storage = {
 
   // Orders
   getOrders: (): Order[] => {
-    const data = localStorage.getItem(KEYS.ORDERS);
-    if (!data) {
-      localStorage.setItem(KEYS.ORDERS, JSON.stringify(INITIAL_ORDERS));
+    try {
+      const data = localStorage.getItem(KEYS.ORDERS);
+      if (!data) {
+        localStorage.setItem(KEYS.ORDERS, JSON.stringify(INITIAL_ORDERS));
+        return INITIAL_ORDERS;
+      }
+      return JSON.parse(data);
+    } catch (err) {
+      console.error('Failed to read orders from localStorage, falling back to sessionStorage:', err);
+      try {
+        const sessionData = sessionStorage.getItem(KEYS.ORDERS);
+        if (sessionData) return JSON.parse(sessionData);
+      } catch (err2) {
+        console.error('Failed to read orders from sessionStorage:', err2);
+      }
+      // Final fallback: return initial orders
       return INITIAL_ORDERS;
     }
-    return JSON.parse(data);
   },
   saveOrders: (orders: Order[]) => {
-    localStorage.setItem(KEYS.ORDERS, JSON.stringify(orders));
+    try {
+      localStorage.setItem(KEYS.ORDERS, JSON.stringify(orders));
+    } catch (err) {
+      console.error('Failed to save orders to localStorage:', err);
+      try {
+        // Fallback: keep most recent orders only to reduce size
+        const slim = orders.slice(0, 20).map(o => ({
+          id: o.id,
+          userId: o.userId,
+          userName: o.userName,
+          totalAmount: o.totalAmount,
+          status: o.status,
+          paymentStatus: o.paymentStatus,
+          paymentMethod: o.paymentMethod,
+          createdAt: o.createdAt
+        }));
+        localStorage.setItem(KEYS.ORDERS, JSON.stringify(slim));
+      } catch (err2) {
+        console.error('Fallback save to localStorage also failed:', err2);
+        // Last resort: save single most recent order to sessionStorage
+        try {
+          sessionStorage.setItem(KEYS.ORDERS, JSON.stringify(orders.slice(0, 5)));
+        } catch (err3) {
+          console.error('Failed to save orders to sessionStorage:', err3);
+        }
+      }
+    }
   },
   addOrder: (order: Order) => {
-    const orders = storage.getOrders();
-    orders.unshift(order);
-    storage.saveOrders(orders);
+    try {
+      const orders = storage.getOrders();
+      // Create a lightweight copy to avoid storing large image blobs/urls repeatedly
+      const lightweightOrder: Order = {
+        ...order,
+        items: order.items.map(item => {
+          const { image, ...rest } = item as any;
+          return rest as any;
+        })
+      };
+      orders.unshift(lightweightOrder);
+      storage.saveOrders(orders);
+    } catch (err) {
+      console.error('Failed to add order to localStorage:', err);
+      try {
+        // Try saving the full order to sessionStorage as a fallback
+        const existing = sessionStorage.getItem(KEYS.ORDERS);
+        const arr = existing ? JSON.parse(existing) : [];
+        arr.unshift(order);
+        sessionStorage.setItem(KEYS.ORDERS, JSON.stringify(arr.slice(0, 10)));
+      } catch (err2) {
+        console.error('Failed to save order to sessionStorage fallback:', err2);
+      }
+    }
   },
 
   // Users

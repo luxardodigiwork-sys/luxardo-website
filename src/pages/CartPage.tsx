@@ -36,7 +36,7 @@ export default function CartPage() {
             </div>
             
             {cartItems.map((item) => (
-              <div key={item.product.id} className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center py-8 border-b border-brand-divider">
+              <div key={`${item.product.id}-${item.size || 'no-size'}`} className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center py-8 border-b border-brand-divider">
                 <div className="col-span-1 md:col-span-6 flex gap-8">
                   <div className="w-32 h-40 bg-brand-divider shrink-0 overflow-hidden">
                     <img src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />

@@ -123,6 +123,8 @@ export interface Order {
   paymentStatus?: "pending" | "paid" | "failed" | "refunded" | "confirmed";
   paymentMethod?: "cod" | "prepaid" | "razorpay";
   paymentId?: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
   trackingId?: string;
   trackingUrl?: string;
   courierName?: string;
@@ -185,6 +187,8 @@ export interface BackendPermissions {
   export_data: boolean;
   tracking_controls: boolean;
   delivery_update_controls: boolean;
+  // ⚡ FIX APPLIED: Allows dynamic string checking in App.tsx without TS throwing errors
+  [key: string]: boolean | undefined;
 }
 
 export interface BackendUser {

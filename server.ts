@@ -1,5 +1,6 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
+import http from "http";
 import path from "path";
 import Database from "better-sqlite3";
 import bcrypt from "bcryptjs";
@@ -9,8 +10,25 @@ import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 
 const app = express();
-const PORT = 3000;
+const PUBLIC_PORT = Number(process.env.PUBLIC_PORT || 3000);
+const ADMIN_PORT = Number(process.env.ADMIN_PORT || 24678);
 const JWT_SECRET = process.env.JWT_SECRET || "luxardo-super-secret-key-2026";
+
+const adminRoutePrefixes = [
+  "/admin",
+  "/dispatch",
+  "/backend",
+  "/analysis",
+  "/owner",
+  "/admin-access",
+  "/ADMIN-ACCESS",
+];
+
+// For local development, serve both public and admin routes from the same port.
+// Admin routes are handled by the same Express app and do not require cross-port redirects.
+app.use((req, res, next) => {
+  next();
+});
 
 // Initialize Gemini API
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -1084,8 +1102,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  http.createServer(app).listen(PUBLIC_PORT, "0.0.0.0", () => {
+    console.log(`Website running on http://localhost:${PUBLIC_PORT}`);
   });
 }
 

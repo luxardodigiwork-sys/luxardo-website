@@ -501,8 +501,38 @@ export default function AdminContentPage() {
                       }}
                     />
                   </FormField>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <FormField label="Image Size (Quality)">
+                      <select
+                        value={step.imageSize || '4k'}
+                        onChange={(e) => {
+                          const newSteps = [...content.homepage.storySteps];
+                          newSteps[index].imageSize = e.target.value;
+                          updateContent('homepage', 'storySteps', newSteps);
+                        }}
+                        className="w-full border border-brand-divider p-4 font-sans focus:outline-none focus:border-brand-black transition-all bg-transparent hover:border-brand-secondary/50 cursor-pointer"
+                      >
+                        <option value="4k">4K (3840x2160)</option>
+                        <option value="2k">2K (2560x1440)</option>
+                        <option value="1080p">1080p (1920x1080)</option>
+                        <option value="720p">720p (1280x720)</option>
+                      </select>
+                    </FormField>
+                  </div>
                 </div>
-                {/* Visual upload option removed per user request to preserve the 3D scrub integrity */}
+                <div className="space-y-6">
+                  <FormField label="Step Image URL" fullWidth>
+                    <ImageUploadInput
+                      value={step.image || ''}
+                      onChange={(val) => {
+                        const newSteps = [...content.homepage.storySteps];
+                        newSteps[index].image = val;
+                        updateContent('homepage', 'storySteps', newSteps);
+                      }}
+                    />
+                  </FormField>
+                  <ImagePreview url={step.image || ''} label="Image Preview" />
+                </div>
               </div>
             </div>
           ))}

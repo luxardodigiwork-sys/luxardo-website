@@ -1,12 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { BackendPermissions } from "./types";
 import Lenis from "lenis";
-import "lenis/dist/lenis.css";
 
 import Layout from "./components/Layout";
-
 import ProtectedRoute from "./components/ProtectedRoute";
+
 import HomePage from "./pages/HomePage";
 import CollectionsPage from "./pages/CollectionsPage";
 import CollectionDetailPage from "./pages/CollectionDetailPage";
@@ -42,7 +41,6 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 
 import RegisterPage from "./pages/RegisterPage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 
 // Admin imports
 import AdminLoginPage from "./pages/admin/AdminLoginPage";
@@ -68,38 +66,34 @@ import BackendGatewayPage from "./pages/BackendGatewayPage";
 import DispatchLayout from "./components/dispatch/DispatchLayout";
 
 import AdminLayout from "./components/admin/AdminLayout";
-import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
 
 import OwnerLayout from "./components/owner/OwnerLayout";
 import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
 import AnalysisLayout from "./components/analysis/AnalysisLayout";
 import AnalysisDashboardPage from "./pages/analysis/AnalysisDashboardPage";
 
-// 🚀 NAYE SECURITY GUARDS YAHAN IMPORT KIYE GAYE HAIN 🚀
-import { CustomerAuth } from "./components/CustomerAuth";
-import { AdminAuth } from "./components/AdminAuth";
-import { AdminGuard } from "./components/AdminGuard";
 const ProtectedBackendRoute = ({
   role,
   permission,
   children,
 }: {
   role: string;
-  permission?: keyof BackendPermissions;
+  permission?: string;
   children: React.ReactNode;
 }) => {
   const { user, isAuthReady } = useAuth();
-  if (!isAuthReady)
+
+  if (!isAuthReady) {
     return (
       <div className="min-h-screen bg-brand-bg flex items-center justify-center">
         Loading...
       </div>
     );
+  }
 
   const isSuperAdmin = user && ["super_admin", "admin"].includes(user.role);
   const hasRole = user && user.role === role;
-  const hasPermission =
-    !permission || (user?.permissions && user.permissions[permission]);
+  const hasPermission = !permission || user?.permissions?.[permission];
 
   if (!user || (!isSuperAdmin && (!hasRole || !hasPermission))) {
     return <Navigate to="/backend" replace />;
@@ -109,18 +103,24 @@ const ProtectedBackendRoute = ({
 };
 
 export default function App() {
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+  setIsInitializing(false);
+}, []);
+
   useEffect(() => {
     if ("scrollRestoration" in history) {
       history.scrollRestoration = "manual";
     }
 
     const lenis = new Lenis({
-      duration: 1.5,
+      duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       orientation: "vertical",
       gestureOrientation: "vertical",
       smoothWheel: true,
-      wheelMultiplier: 0.8,
+      wheelMultiplier: 1.2,
       touchMultiplier: 1.5,
       infinite: false,
     });
@@ -139,62 +139,65 @@ export default function App() {
     };
   }, []);
 
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-brand-bg flex flex-col gap-6 items-center justify-center font-display uppercase tracking-widest text-sm text-brand-black">
+        <div className="w-12 h-12 border-t-2 border-r-2 border-brand-black rounded-full animate-spin"></div>
+        <p className="animate-pulse">Loading Luxardo...</p>
+      </div>
+    );
+  }
+
   return (
     <AuthProvider>
       <CartProvider>
         <WishlistProvider>
           <Routes>
-            {/* 🚀 ADMIN SECURE ROUTES 🚀 */}
-            {/* Ye aapka naya secret admin login page hai */}
-            <Route path="/admin-access" element={<AdminAuth />} />
+            <Route path="/admin/login" element={<AdminLoginPage />} />
 
-            {/* THE VAULT GUARD: Ye poore admin panel ko protect karega */}
-            <Route element={<AdminGuard />}>
-              <Route path="/admin" element={<ProtectedAdminRoute />}>
-                <Route element={<AdminLayout />}>
-                  <Route
-                    index
-                    element={<Navigate to="/admin/dashboard" replace />}
-                  />
-                  <Route path="dashboard" element={<AdminDashboardPage />} />
-                  <Route path="dispatch" element={<AdminDispatchPage />} />
-                  <Route path="products" element={<AdminProductsPage />} />
-                  <Route path="collections" element={<AdminCollectionsPage />} />
-                  <Route path="products/new" element={<AdminAddProductPage />} />
-                  <Route
-                    path="products/:id/edit"
-                    element={<AdminEditProductPage />}
-                  />
-                  <Route path="content" element={<AdminContentPage />} />
-                  <Route path="media" element={<AdminMediaPage />} />
-                  <Route
-                    path="prime-content"
-                    element={<AdminPrimeContentPage />}
-                  />
-                  <Route path="policies" element={<AdminPoliciesPage />} />
-                  <Route
-                    path="bespoke-requests"
-                    element={<AdminBespokeRequestsPage />}
-                  />
-                  <Route
-                    path="prime-members"
-                    element={<AdminPrimeMembersPage />}
-                  />
-                  <Route path="partners" element={<AdminPartnersPage />} />
-                  <Route
-                    path="contact-messages"
-                    element={<AdminContactMessagesPage />}
-                  />
-                  <Route
-                    path="backend-management"
-                    element={<AdminBackendManagementPage />}
-                  />
-                  <Route path="settings" element={<AdminSettingsPage />} />
-                </Route>
+            <Route path="/admin">
+              <Route element={<AdminLayout />}>
+                <Route
+                  index
+                  element={<Navigate to="/admin/dashboard" replace />}
+                />
+                <Route path="dashboard" element={<AdminDashboardPage />} />
+                <Route path="dispatch" element={<AdminDispatchPage />} />
+                <Route path="products" element={<AdminProductsPage />} />
+                <Route path="collections" element={<AdminCollectionsPage />} />
+                <Route path="products/new" element={<AdminAddProductPage />} />
+                <Route
+                  path="products/:id/edit"
+                  element={<AdminEditProductPage />}
+                />
+                <Route path="content" element={<AdminContentPage />} />
+                <Route path="media" element={<AdminMediaPage />} />
+                <Route
+                  path="prime-content"
+                  element={<AdminPrimeContentPage />}
+                />
+                <Route path="policies" element={<AdminPoliciesPage />} />
+                <Route
+                  path="bespoke-requests"
+                  element={<AdminBespokeRequestsPage />}
+                />
+                <Route
+                  path="prime-members"
+                  element={<AdminPrimeMembersPage />}
+                />
+                <Route path="partners" element={<AdminPartnersPage />} />
+                <Route
+                  path="contact-messages"
+                  element={<AdminContactMessagesPage />}
+                />
+                <Route
+                  path="backend-management"
+                  element={<AdminBackendManagementPage />}
+                />
+                <Route path="settings" element={<AdminSettingsPage />} />
               </Route>
             </Route>
 
-            {/* Dispatch Portal Routes */}
             <Route
               path="/dispatch/login"
               element={<Navigate to="/backend" replace />}
@@ -217,8 +220,16 @@ export default function App() {
               <Route path="dashboard" element={<DispatchDashboardPage />} />
             </Route>
 
-            {/* Backend Gateway & Other Portals */}
             <Route path="/backend" element={<BackendGatewayPage />} />
+            <Route
+              path="/admin-access"
+              caseSensitive={false}
+              element={<Navigate to="/backend" replace />}
+            />
+            <Route
+              path="/ADMIN-ACCESS"
+              element={<Navigate to="/backend" replace />}
+            />
             <Route
               path="/analysis/login"
               element={<Navigate to="/backend" replace />}
@@ -263,7 +274,6 @@ export default function App() {
               <Route path="dashboard" element={<AnalysisDashboardPage />} />
             </Route>
 
-            {/* Public Routes */}
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />
               <Route path="collections" element={<CollectionsPage />} />
@@ -360,6 +370,7 @@ export default function App() {
               <Route path="track-order/:orderId" element={<TrackOrderPage />} />
               <Route
                 path="account"
+                caseSensitive={false}
                 element={
                   <ProtectedRoute>
                     <AccountPage />
@@ -374,12 +385,8 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
-              
-              {/* 🚀 CUSTOMER LOGIN ROUTE YAHAN HAI 🚀 */}
-              <Route path="login" element={<CustomerAuth />} />
-              
+              <Route path="login" element={<LoginPage />} />
               <Route path="register" element={<RegisterPage />} />
-              <Route path="forgot-password" element={<ForgotPasswordPage />} />
               <Route path="product/:id" element={<ProductPage />} />
             </Route>
           </Routes>

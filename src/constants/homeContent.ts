@@ -40,7 +40,7 @@ export const DEFAULT_SITE_CONTENT = {
     intro: {
       label: 'The Maison',
       heading: 'Design Discipline',
-      description: 'Luxardo is a modern ethnic luxury menswear brand built around the philosophy of design discipline and selected imported fabrics. We believe that true luxury is found in the intersection of traditional craftsmanship and contemporary aesthetic precision.\n\nOur approach is defined by premium presentation and a refined customer experience, ensuring that every garment is not just worn, but experienced.',
+      description: 'Luxardo Fashion is a modern ethnic luxury menswear brand built around the philosophy of design discipline and selected imported fabrics. We believe that true luxury is found in the intersection of traditional craftsmanship and contemporary aesthetic precision.\n\nOur approach is defined by premium presentation and a refined customer experience, ensuring that every garment is not just worn, but experienced.',
       ctaText: 'Discover Our Story',
       ctaLink: '/our-story',
       imageUrl: 'https://images.unsplash.com/photo-1593030761757-71fae45fa0e7?q=80&w=1000&auto=format&fit=crop'
@@ -48,7 +48,7 @@ export const DEFAULT_SITE_CONTENT = {
     ecosystem: {
       label: 'The System',
       heading: 'A Complete Luxury Ecosystem',
-      subheading: 'Luxardo is more than garments; it is a disciplined system of creation, refinement, and delivery.',
+      subheading: 'Luxardo Fashion is more than garments; it is a disciplined system of creation, refinement, and delivery.',
       steps: [
         {
           step: "01",
@@ -193,43 +193,50 @@ export const DEFAULT_SITE_CONTENT = {
         title: "Our Story.",
         subtitle: "Design Sketching",
         description: "From the world's finest mills to your wardrobe. A journey of uncompromising quality, expert craftsmanship, and timeless design.",
-        image: "https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=1000&auto=format&fit=crop&sat=-100&con=20"
+        image: "https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        imageSize: "4k"
       },
       {
         title: "Global Sourcing",
         subtitle: "01 / Premium Fabric",
         description: "We import premium fabrics from across the entire world, meticulously selecting only the finest materials to ensure an unparalleled foundation for our garments.",
-        image: "https://images.unsplash.com/photo-1584227282544-763914f6b216?q=80&w=1000&auto=format&fit=crop&sat=-100&con=20"
+        image: "https://images.unsplash.com/photo-1584227282544-763914f6b216?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        imageSize: "4k"
       },
       {
         title: "Fabric Finishing",
         subtitle: "02 / Treatment",
         description: "Each fabric undergoes specialized finishing processes, enhancing its natural texture, drape, and longevity to meet our exacting luxury standards.",
-        image: "https://images.unsplash.com/photo-1618220179428-22790b46a015?q=80&w=1000&auto=format&fit=crop&sat=-100&con=20"
+        image: "https://images.unsplash.com/photo-1618220179428-22790b46a015?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        imageSize: "4k"
       },
       {
         title: "Personalized Sketching",
         subtitle: "03 / Design",
         description: "Our master designers sketch personalized, bespoke designs, translating your unique vision into detailed sartorial blueprints.",
-        image: "https://images.unsplash.com/photo-1558693154-1d8560822606?q=80&w=1000&auto=format&fit=crop&sat=-100&con=20"
+        image: "https://images.unsplash.com/photo-1558693154-1d8560822606?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        imageSize: "4k"
       },
       {
         title: "Expert Craftsmanship",
         subtitle: "04 / Implementation",
         description: "These designs are brought to life by our expert and experienced artisans, who execute every cut and stitch with decades of tailoring precision.",
-        image: "https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=1000&auto=format&fit=crop&sat=-100&con=20"
+        image: "https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        imageSize: "4k"
       },
       {
         title: "Quality Assurance",
         subtitle: "05 / Final Check",
         description: "Before completion, every piece undergoes a rigorous final check. We scrutinize every detail to guarantee absolute perfection and flawless execution.",
-        image: "https://images.unsplash.com/photo-1585421514738-01798e348b17?q=80&w=1000&auto=format&fit=crop&sat=-100&con=20"
+        image: "https://images.unsplash.com/photo-1585421514738-01798e348b17?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        imageSize: "4k"
       },
       {
         title: "Ready For You",
         subtitle: "06 / Box Packing",
         description: "The journey concludes with the ready-to-stitch fabric elegantly folded and secured in our premium box packing, ready to be transformed into your masterpiece.",
-        image: "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=1000&auto=format&fit=crop&sat=-100&con=20"
+        image: "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        imageSize: "4k"
       }
     ]
   },
@@ -386,7 +393,7 @@ export const DEFAULT_SITE_CONTENT = {
       heading: 'The Maison Concierge',
       subtitle: 'Personalized Service',
       text: 'Whether you are seeking a private style consultation or have a specific inquiry regarding our collections, our concierge team is dedicated to providing a refined and efficient response.',
-      email: 'concierge@luxardo.com',
+      email: 'Concern@Luxardofashion.com',
       phone: '+1 (800) 123-4567',
       address: '123 Luxury Avenue, New York, NY 10022'
     },
@@ -403,10 +410,10 @@ export const DEFAULT_SITE_CONTENT = {
     }
   },
   footer: {
-    about: 'Luxardo represents the pinnacle of modern luxury menswear, blending architectural precision with ethnic heritage.',
-    copyright: '© 2015 Luxardo Maison. All rights reserved.',
+    about: 'Luxardo Fashion represents the pinnacle of modern luxury menswear, blending architectural precision with ethnic heritage.',
+    copyright: '© 2015 Luxardo Fashion. All rights reserved.',
     copyrightYear: '2015',
-    copyrightText: 'Luxardo Maison. All rights reserved.',
+    copyrightText: 'Luxardo Fashion. All rights reserved',
     socialLinks: {
       instagram: 'https://instagram.com/luxardo',
       facebook: 'https://facebook.com/luxardo',
