@@ -1,106 +1,139 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { collection, addDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
 import { formatCurrency } from "../utils/currency";
 import { SectionHeader } from "../components/SectionHeader";
+
+const INDIAN_STATES = ["Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal","Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"];
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const { cartItems, cartSubtotal, clearCart } = useCart();
+  const { user, isAuthReady } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
+  const [form, setForm] = useState({ fullName:"", email:"", phone:"", addressLine1:"", addressLine2:"", city:"", state:"", postalCode:"" });
+  const [formErrors, setFormErrors] = useState({});
+
+  useEffect(() => {
+    if (isAuthReady && !user) navigate("/login", { state: { from: { pathname: "/checkout" } }, replace: true });
+  }, [isAuthReady, user, navigate]);
+
+  useEffect(() => {
+    if (user?.email) setForm(prev => ({ ...prev, email: user.email || "" }));
+  }, [user]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+    if (formErrors[name]) setFormErrors(prev => ({ ...prev, [name]: "" }));
+  };
+
+  const validate = () => {
+    const errors = {};
+    if (!form.fullName.trim()) errors.fullName = "Full name required";
+    if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = "Valid email required";
+    if (!form.phone.trim() || !/^[6-9]\d{9}$/.test(form.phone)) errors.phone = "Valid 10-digit mobile required";
+    if (!form.addressLine1.trim()) errors.addressLine1 = "Address required";
+    if (!form.city.trim()) errors.city = "City required";
+    if (!form.state) errors.state = "State required";
+    if (!form.postalCode.trim() || !/^\d{6}$/.test(form.postalCode)) errors.postalCode = "Valid 6-digit pincode required";
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handlePlaceOrder = async () => {
-    if (cartItems.length === 0) {
-      setError("Your cart is empty. Add items before checkout.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError(null);
-
+    if (cartItems.length === 0) { setError("Your cart is empty."); return; }
+    if (!validate()) { setError("Please fill all required fields correctly."); return; }
+    const currentUser = auth.currentUser;
+    if (!currentUser) { navigate("/login", { state: { from: { pathname: "/checkout" } }, replace: true }); return; }
+    setIsSubmitting(true); setError(null);
     try {
-      const orderItems = cartItems.map((item) => ({
-        productId: item.product.id,
-        title: item.product.title || item.product.name || "Product",
-        quantity: item.quantity,
-        size: item.size || "N/A",
-        price: item.product.price,
-      }));
-
-      await addDoc(collection(db, "orders"), {
+      const orderItems = cartItems.map(item => ({ productId: item.product.id, title: item.product.title || item.product.name || "Product", quantity: item.quantity, size: item.size || "N/A", price: item.product.price, subtotal: item.product.price * item.quantity }));
+      const orderData = {
+        userId: currentUser.uid,
+        userEmail: currentUser.email,
         createdAt: new Date().toISOString(),
         totalAmount: cartSubtotal,
-        status: "processing",
+        status: "pending",
+        paymentStatus: "pending",
+        paymentMethod: "COD",
         items: orderItems,
-      });
-
+        customer: { fullName: form.fullName.trim(), email: form.email.trim().toLowerCase(), phone: form.phone.trim() },
+        shippingAddress: { fullName: form.fullName.trim(), email: form.email.trim().toLowerCase(), phone: form.phone.trim(), addressLine1: form.addressLine1.trim(), addressLine2: form.addressLine2.trim(), city: form.city.trim(), state: form.state, postalCode: form.postalCode.trim(), country: "India" },
+        courierPartner: "DTDC", trackingId: null,
+      };
+      const docRef = await addDoc(collection(db, "orders"), orderData);
       clearCart();
-      navigate("/order-confirmation", { replace: true });
+      navigate("/order-confirmation", { replace: true, state: { order: { id: docRef.id, ...orderData } } });
     } catch (err) {
       console.error("Order error:", err);
-      setError("Order failed. Please try again later.");
+      if (err?.code === "permission-denied") setError("Login required. Please login again.");
+      else setError("Order failed. Please try again.");
       setIsSubmitting(false);
     }
   };
 
+  if (!isAuthReady) return <div className="section-padding min-h-[70vh] flex items-center justify-center"><p className="text-brand-secondary">Loading...</p></div>;
+
+  const inp = "w-full rounded-2xl border border-brand-divider bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-black transition";
+  const err = "text-xs text-red-500 mt-1";
+  const lbl = "block text-xs font-semibold uppercase tracking-widest text-brand-secondary mb-1";
+
   return (
     <div className="section-padding min-h-[70vh] max-w-[1200px] mx-auto">
-      <SectionHeader title="Checkout" subtitle="Review your order and place it securely." />
-
+      <SectionHeader title="Checkout" subtitle="Complete your details to place your order." />
       {cartItems.length === 0 ? (
         <div className="mt-12 rounded-xl border border-brand-divider bg-white p-10 text-center">
           <p className="text-xl font-semibold">Your cart is empty.</p>
-          <p className="mt-4 text-brand-secondary">Add products to continue to checkout.</p>
         </div>
       ) : (
         <div className="grid gap-10 lg:grid-cols-[2fr_1fr]">
-          <div className="space-y-6 rounded-3xl border border-brand-divider bg-white p-8">
-            <h2 className="text-3xl font-display">Order details</h2>
-            <div className="space-y-4">
-              {cartItems.map((item) => (
-                <div key={`${item.product.id}-${item.size || "default"}`} className="rounded-3xl border border-brand-divider p-5">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
-                    <div>
-                      <p className="font-semibold">{item.product.title || item.product.name}</p>
-                      {item.size && <p className="text-sm text-brand-secondary">Size: {item.size}</p>}
-                      <p className="text-sm text-brand-secondary">Quantity: {item.quantity}</p>
-                    </div>
-                    <p className="font-semibold">{formatCurrency(item.product.price * item.quantity)}</p>
-                  </div>
+          <div className="space-y-8">
+            <div className="rounded-3xl border border-brand-divider bg-white p-8 space-y-5">
+              <h2 className="text-2xl font-display">Contact Information</h2>
+              <div><label className={lbl}>Full Name *</label><input type="text" name="fullName" value={form.fullName} onChange={handleChange} placeholder="Your full name" className={inp} />{formErrors.fullName && <p className={err}>{formErrors.fullName}</p>}</div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div><label className={lbl}>Email *</label><input type="email" name="email" value={form.email} onChange={handleChange} placeholder="you@email.com" className={inp} />{formErrors.email && <p className={err}>{formErrors.email}</p>}</div>
+                <div><label className={lbl}>Mobile *</label><input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="10-digit mobile" maxLength={10} className={inp} />{formErrors.phone && <p className={err}>{formErrors.phone}</p>}</div>
+              </div>
+            </div>
+            <div className="rounded-3xl border border-brand-divider bg-white p-8 space-y-5">
+              <h2 className="text-2xl font-display">Delivery Address</h2>
+              <div><label className={lbl}>Address Line 1 *</label><input type="text" name="addressLine1" value={form.addressLine1} onChange={handleChange} placeholder="House/Flat no., Street" className={inp} />{formErrors.addressLine1 && <p className={err}>{formErrors.addressLine1}</p>}</div>
+              <div><label className={lbl}>Address Line 2 (Optional)</label><input type="text" name="addressLine2" value={form.addressLine2} onChange={handleChange} placeholder="Landmark" className={inp} /></div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div><label className={lbl}>City *</label><input type="text" name="city" value={form.city} onChange={handleChange} placeholder="City" className={inp} />{formErrors.city && <p className={err}>{formErrors.city}</p>}</div>
+                <div><label className={lbl}>Pincode *</label><input type="text" name="postalCode" value={form.postalCode} onChange={handleChange} placeholder="6-digit pincode" maxLength={6} className={inp} />{formErrors.postalCode && <p className={err}>{formErrors.postalCode}</p>}</div>
+              </div>
+              <div><label className={lbl}>State *</label><select name="state" value={form.state} onChange={handleChange} className={inp}><option value="">Select state</option>{INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}</select>{formErrors.state && <p className={err}>{formErrors.state}</p>}</div>
+            </div>
+            <div className="rounded-3xl border border-brand-divider bg-white p-8 space-y-4">
+              <h2 className="text-2xl font-display">Items in Order</h2>
+              {cartItems.map(item => (
+                <div key={`${item.product.id}-${item.size||"default"}`} className="rounded-2xl border border-brand-divider p-4 flex justify-between items-center">
+                  <div><p className="font-semibold">{item.product.title||item.product.name}</p>{item.size && <p className="text-sm text-brand-secondary">Size: {item.size}</p>}<p className="text-sm text-brand-secondary">Qty: {item.quantity}</p></div>
+                  <p className="font-semibold">{formatCurrency(item.product.price * item.quantity)}</p>
                 </div>
               ))}
             </div>
           </div>
-
-          <div className="space-y-6 rounded-3xl border border-brand-divider bg-white p-8">
-            <div className="space-y-2">
-              <h2 className="text-3xl font-display">Summary</h2>
-              <p className="text-brand-secondary">Confirm your order total and complete checkout.</p>
+          <div className="sticky top-24 rounded-3xl border border-brand-divider bg-white p-8 space-y-6 self-start">
+            <h2 className="text-2xl font-display">Order Summary</h2>
+            <div className="rounded-2xl bg-brand-surface p-5 space-y-3">
+              <div className="flex justify-between text-sm text-brand-secondary"><span>Subtotal</span><span>{formatCurrency(cartSubtotal)}</span></div>
+              <div className="flex justify-between text-sm text-brand-secondary"><span>Shipping</span><span className="text-green-600 font-medium">Free</span></div>
+              <div className="flex justify-between border-t border-brand-divider pt-3 text-lg font-semibold"><span>Total</span><span>{formatCurrency(cartSubtotal)}</span></div>
             </div>
-
-            <div className="rounded-3xl bg-brand-surface p-6">
-              <div className="flex items-center justify-between text-sm text-brand-secondary">
-                <span>Subtotal</span>
-                <span>{formatCurrency(cartSubtotal)}</span>
-              </div>
-              <div className="mt-4 flex items-center justify-between border-t border-brand-divider pt-4 text-xl font-semibold">
-                <span>Total</span>
-                <span>{formatCurrency(cartSubtotal)}</span>
-              </div>
+            <div className="rounded-2xl border border-brand-divider p-4 text-xs text-brand-secondary space-y-1">
+              <p>• Cash on Delivery (COD)</p><p>• Shipped via DTDC</p><p>• Delivery: 5–7 business days</p>
             </div>
-
-            {error && <div className="rounded-3xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
-
-            <button
-              type="button"
-              onClick={handlePlaceOrder}
-              disabled={isSubmitting}
-              className="btn-primary w-full px-6 py-4 text-lg font-semibold"
-            >
-              {isSubmitting ? "Placing order..." : "Place order"}
+            {error && <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
+            <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting} className="btn-primary w-full px-6 py-4 text-base font-semibold disabled:opacity-60">
+              {isSubmitting ? "Placing Order..." : "Place Order"}
             </button>
           </div>
         </div>
