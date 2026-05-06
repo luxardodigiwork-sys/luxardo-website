@@ -15,6 +15,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 
 import { storage } from '../utils/localStorage';
+import { firebaseStorage } from '../utils/firebaseStorage';
 
 function ScrollToTopOnMount() {
   const location = useLocation();
@@ -53,43 +54,63 @@ export default function Layout() {
     setOpenFooterSection(prev => prev === section ? null : section);
   };
 
-  // Initialize from localStorage
+  // Initialize from Firebase/localStorage
   useEffect(() => {
-    const updatedSiteContent = storage.getSiteContent();
-    setFooterContent(updatedSiteContent.footer);
-    
-    const savedCountry = localStorage.getItem('luxardo_country');
-    const savedLang = localStorage.getItem('luxardo_lang');
-    const savedCurrency = localStorage.getItem('luxardo_currency');
-    const firstVisitCompleted = localStorage.getItem('luxardo_first_visit_completed');
-    
-    if (savedCountry && firstVisitCompleted) {
-      const country = ALL_COUNTRIES.find(c => c.code === savedCountry);
-      if (country) setSelectedCountry(country);
-    } else {
-      // Show first visit modal
-      setShowFirstVisitModal(true);
-    }
+    const initPreferences = async () => {
+      const updatedSiteContent = storage.getSiteContent();
+      setFooterContent(updatedSiteContent.footer);
+      
+      try {
+        // Try to load from Firebase first
+        const savedPrefs = await firebaseStorage.getUserPreferences();
+        const firstVisitCompleted = await firebaseStorage.isFirstVisitComplete();
+        
+        if (savedPrefs?.country) {
+          const country = ALL_COUNTRIES.find(c => c.code === savedPrefs.country);
+          if (country) setSelectedCountry(country);
+        } else if (firstVisitCompleted) {
+          // Fallback to localStorage if Firebase doesn't have data
+          const savedCountry = localStorage.getItem('luxardo_country');
+          if (savedCountry) {
+            const country = ALL_COUNTRIES.find(c => c.code === savedCountry);
+            if (country) setSelectedCountry(country);
+          }
+        } else {
+          // Show first visit modal
+          setShowFirstVisitModal(true);
+        }
 
-    if (savedLang) {
-      setSelectedLanguage(savedLang as Language);
-    } else if (savedCountry) {
-      const country = ALL_COUNTRIES.find(c => c.code === savedCountry);
-      const defaultLang = country ? country.language : 'English (US)';
-      setSelectedLanguage(defaultLang);
-      localStorage.setItem('luxardo_lang', defaultLang);
-    } else {
-      // Default to English (US)
-      setSelectedLanguage('English (US)');
-      localStorage.setItem('luxardo_lang', 'English (US)');
-    }
+        if (savedPrefs?.language) {
+          setSelectedLanguage(savedPrefs.language as Language);
+        } else {
+          const savedLang = localStorage.getItem('luxardo_lang');
+          if (savedLang) {
+            setSelectedLanguage(savedLang as Language);
+          } else {
+            setSelectedLanguage('English (US)');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to initialize preferences:', err);
+        // Fallback to localStorage
+        const savedCountry = localStorage.getItem('luxardo_country');
+        const savedLang = localStorage.getItem('luxardo_lang');
+        const firstVisitCompleted = localStorage.getItem('luxardo_first_visit_completed');
+        
+        if (savedCountry && firstVisitCompleted) {
+          const country = ALL_COUNTRIES.find(c => c.code === savedCountry);
+          if (country) setSelectedCountry(country);
+        } else {
+          setShowFirstVisitModal(true);
+        }
 
-    if (!savedCurrency && savedCountry) {
-      const country = ALL_COUNTRIES.find(c => c.code === savedCountry);
-      if (country) {
-        localStorage.setItem('luxardo_currency', country.currency.code);
+        if (savedLang) {
+          setSelectedLanguage(savedLang as Language);
+        }
       }
-    }
+    };
+    
+    initPreferences();
   }, []);
 
   // Sync preferences with user profile
@@ -201,6 +222,8 @@ export default function Layout() {
   const handleCountrySelect = (country: Country) => {
     if (country.active) {
       setSelectedCountry(country);
+      
+      // Save to localStorage as fallback
       localStorage.setItem('luxardo_country', country.code);
       localStorage.setItem('luxardo_currency', country.currency.code);
       
@@ -208,7 +231,14 @@ export default function Layout() {
       setSelectedLanguage(defaultLang);
       localStorage.setItem('luxardo_lang', defaultLang);
       
+      // Save to Firebase if user is logged in
       if (isLoggedIn && user && user.role !== 'admin') {
+        firebaseStorage.saveUserPreferences({
+          country: country.code,
+          language: defaultLang,
+          currency: country.currency.code
+        }).catch(err => console.error('Failed to save preferences:', err));
+        
         updateUserPreferences({
           country: country.code,
           language: defaultLang,
@@ -233,6 +263,9 @@ export default function Layout() {
     localStorage.setItem('luxardo_lang', lang);
     
     if (isLoggedIn && user && user.role !== 'admin') {
+      firebaseStorage.saveUserPreferences({ language: lang })
+        .catch(err => console.error('Failed to save language preference:', err));
+      
       updateUserPreferences({ language: lang });
     }
   };
@@ -248,7 +281,18 @@ export default function Layout() {
     
     localStorage.setItem('luxardo_first_visit_completed', 'true');
     
+    // Mark first visit complete in Firebase
+    firebaseStorage.markFirstVisitComplete()
+      .catch(err => console.error('Failed to mark first visit:', err));
+    
+    // Save preferences to Firebase if user is logged in
     if (isLoggedIn && user && user.role !== 'admin') {
+      firebaseStorage.saveUserPreferences({
+        country: country.code,
+        language: defaultLang,
+        currency: country.currency.code
+      }).catch(err => console.error('Failed to save preferences:', err));
+      
       updateUserPreferences({
         country: country.code,
         language: defaultLang,

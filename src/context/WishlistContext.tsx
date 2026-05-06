@@ -3,6 +3,7 @@ import { Product } from '../types';
 import { useAuth } from './AuthContext';
 import { db } from '../firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot, query, where } from 'firebase/firestore';
+import { firebaseStorage } from '../utils/firebaseStorage';
 
 interface WishlistContextType {
   wishlist: Product[];

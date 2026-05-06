@@ -1,10 +1,12 @@
 // FILE: src/context/CartContext.tsx
-// FIX: Saves only essential cart data (not full product objects with base64 images)
-// This prevents localStorage quota exceeded crash when multiple products are added
+// FIX: Now saves cart data to Firebase instead of localStorage
+// Uses Firestore for persistent cart storage across devices
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product } from '../types';
 import { storage } from '../utils/localStorage';
+import { firebaseStorage } from '../utils/firebaseStorage';
+import { auth } from '../firebase';
 
 interface CartItem {
   product: Product;
@@ -31,26 +33,59 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-// Save only IDs and quantities — not full product objects
-const saveCartToStorage = (items: CartItem[]) => {
+// Save cart to Firebase (with fallback to sessionStorage for anonymous users)
+const saveCartToStorage = async (items: CartItem[]) => {
   try {
     const minimal: SavedCartItem[] = items.map(item => ({
       productId: item.product.id,
       quantity: item.quantity,
       size: item.size,
     }));
-    localStorage.setItem('luxardo_cart', JSON.stringify(minimal));
+    
+    if (auth.currentUser) {
+      await firebaseStorage.saveCart(items);
+    } else {
+      sessionStorage.setItem('luxardo_cart', JSON.stringify(minimal));
+    }
   } catch (e) {
-    // If even minimal save fails, clear to prevent stuck state
     console.error('Cart save failed:', e);
-    try { localStorage.removeItem('luxardo_cart'); } catch {}
+    try { 
+      const minimal = items.map(item => ({
+        productId: item.product.id,
+        quantity: item.quantity,
+        size: item.size,
+      }));
+      sessionStorage.setItem('luxardo_cart', JSON.stringify(minimal)); 
+    } catch {}
   }
 };
 
 // Restore full product objects from saved IDs
-const loadCartFromStorage = (): CartItem[] => {
+const loadCartFromStorage = async (): Promise<CartItem[]> => {
   try {
-    const raw = localStorage.getItem('luxardo_cart');
+    // Try Firebase first if user is logged in
+    if (auth.currentUser) {
+      const cartData = await firebaseStorage.getCart();
+      if (cartData) {
+        const allProducts = storage.getProducts();
+        const restored: CartItem[] = [];
+        
+        for (const saved of cartData as SavedCartItem[]) {
+          const product = allProducts.find(p => p.id === saved.productId);
+          if (product) {
+            restored.push({
+              product,
+              quantity: saved.quantity,
+              size: saved.size,
+            });
+          }
+        }
+        return restored;
+      }
+    }
+
+    // Fallback to sessionStorage for anonymous users
+    const raw = sessionStorage.getItem('luxardo_cart');
     if (!raw) return [];
 
     const parsed = JSON.parse(raw);
@@ -58,13 +93,13 @@ const loadCartFromStorage = (): CartItem[] => {
 
     // Check if old format (full product objects saved) — migrate
     if (parsed[0]?.product) {
-      // Old format: had full product object — extract minimal and re-save
       const migrated: CartItem[] = parsed.map((item: any) => ({
         product: item.product,
         quantity: item.quantity,
         size: item.size,
       }));
-      saveCartToStorage(migrated); // re-save in new format
+      // Re-save in new format
+      await saveCartToStorage(migrated);
       return migrated;
     }
 
@@ -85,18 +120,37 @@ const loadCartFromStorage = (): CartItem[] => {
     return restored;
   } catch (e) {
     console.error('Cart load failed, resetting:', e);
-    try { localStorage.removeItem('luxardo_cart'); } catch {}
+    try { sessionStorage.removeItem('luxardo_cart'); } catch {}
     return [];
   }
 };
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => loadCartFromStorage());
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Save minimal data on every cart change
+  // Load cart from Firebase on mount
   useEffect(() => {
-    saveCartToStorage(cartItems);
-  }, [cartItems]);
+    const initCart = async () => {
+      try {
+        const items = await loadCartFromStorage();
+        setCartItems(items);
+      } catch (err) {
+        console.error('Failed to initialize cart:', err);
+        setCartItems([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    initCart();
+  }, []);
+
+  // Save cart to Firebase whenever it changes (after initial load)
+  useEffect(() => {
+    if (!isLoading) {
+      saveCartToStorage(cartItems);
+    }
+  }, [cartItems, isLoading]);
 
   const addToCart = (product: Product, quantity: number = 1, size?: string) => {
     setCartItems(prev => {
@@ -131,9 +185,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  const clearCart = () => {
+  const clearCart = async () => {
     setCartItems([]);
-    try { localStorage.removeItem('luxardo_cart'); } catch {}
+    try { 
+      await firebaseStorage.clearCart();
+      sessionStorage.removeItem('luxardo_cart'); 
+    } catch {}
   };
 
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);

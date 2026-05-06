@@ -1,57 +1,207 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { auth } from '../firebase';
+import {
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  ConfirmationResult,
+} from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { ALL_COUNTRIES } from '../countries';
+
+declare global { interface Window { recaptchaVerifier?: RecaptchaVerifier; } }
+
+type Step = 'phone' | 'otp' | 'profile';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthReady, login } = useAuth();
+  const from = (location.state as any)?.from?.pathname || '/';
+
+  const [step, setStep] = useState<Step>('phone');
+  const [countryCode, setCountryCode] = useState('+91');
+  const [countryFlag, setCountryFlag] = useState('🇮🇳');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [profile, setProfile] = useState({ firstName: '', lastName: '', email: '', gender: '', age: '' });
+  const recaptchaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isAuthReady && user) {
-      // FIXED: Only admin/super_admin go to admin dashboard
-      // Regular customers go back to where they came from
-      if (user.role && ['admin', 'super_admin'].includes(user.role)) {
-        navigate('/admin/dashboard', { replace: true });
-      } else {
-        const from = (location.state as any)?.from?.pathname || '/';
-        navigate(from, { replace: true });
-      }
-    }
-  }, [user, isAuthReady, navigate, location]);
+    if (isAuthReady && user) navigate(from, { replace: true });
+  }, [user, isAuthReady]);
 
-  const handleBypassLogin = () => {
-    login({
-      id: "admin-1",
-      name: "Abhijeet Sir",
-      role: "admin",
-      isPrimeMember: true,
-      permissions: {
-        dashboard: true,
-        orders: true,
-        products: true,
-        settings: true,
-        dispatch_actions: true,
-        backend_management: true,
-        analysis_reports: true,
-        media: true,
-        content: true
-      }
-    });
-    navigate('/admin/dashboard');
+  useEffect(() => {
+    if (step === 'phone') {
+      try {
+        if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); }
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'normal' });
+        window.recaptchaVerifier.render();
+      } catch (e) { console.error('Recaptcha error:', e); }
+    }
+  }, [step]);
+
+  const handleSendOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    try {
+      const fullPhone = `${countryCode}${phone.replace(/^0+/, '')}`;
+      const verifier = window.recaptchaVerifier!;
+      const result = await signInWithPhoneNumber(auth, fullPhone, verifier);
+      setConfirmation(result);
+      setStep('otp');
+    } catch (err: any) {
+      setError('OTP bhejne me error. Phone number check karo.');
+    } finally { setLoading(false); }
   };
 
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    try {
+      const result = await confirmation!.confirm(otp);
+      const uid = result.user.uid;
+      const userDoc = await getDoc(doc(db, 'customers', uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        login({ id: uid, name: data.firstName + ' ' + data.lastName, email: data.email || '', role: 'customer', isPrimeMember: data.isPrimeMember || false, phone: data.phone });
+        navigate(from, { replace: true });
+      } else {
+        setStep('profile');
+      }
+    } catch (err: any) {
+      setError('OTP galat hai. Dobara try karo.');
+    } finally { setLoading(false); }
+  };
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    try {
+      const uid = auth.currentUser!.uid;
+      const fullPhone = `${countryCode}${phone}`;
+      const customerData = {
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        email: profile.email,
+        gender: profile.gender,
+        age: profile.age,
+        phone: fullPhone,
+        role: 'customer',
+        isPrimeMember: false,
+        createdAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, 'customers', uid), customerData);
+      login({ id: uid, name: `${profile.firstName} ${profile.lastName}`, email: profile.email, role: 'customer', isPrimeMember: false, phone: fullPhone });
+      navigate(from, { replace: true });
+    } catch (err: any) {
+      setError('Profile save karne me error.');
+    } finally { setLoading(false); }
+  };
+
+  const COUNTRY_CODES = ALL_COUNTRIES.filter(c => (c as any).dialCode).map(c => ({ code: (c as any).dialCode, flag: (c as any).flag || '', name: c.name }));
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F5F5F0]">
-      <div className="bg-white p-12 shadow-xl text-center border border-gray-100">
-        <h2 className="font-display uppercase tracking-[0.3em] text-2xl mb-8">Luxardo Access</h2>
-        <p className="text-gray-400 mb-8 text-xs tracking-widest uppercase">Bypass Mode Active</p>
-        <button
-          onClick={handleBypassLogin}
-          className="bg-black text-white px-12 py-4 text-sm uppercase tracking-widest hover:bg-gray-800 transition-all"
-        >
-          Enter Admin Portal
-        </button>
+    <div className="min-h-screen flex items-center justify-center bg-[#F5F5F0] px-4">
+      <div className="bg-white p-10 shadow-sm border border-gray-100 w-full max-w-md">
+        <h2 className="font-display uppercase tracking-[0.3em] text-xl mb-2 text-center">Luxardo</h2>
+        <p className="text-xs text-gray-400 tracking-widest uppercase text-center mb-8">
+          {step === 'phone' && 'Enter your mobile number'}
+          {step === 'otp' && 'Enter OTP'}
+          {step === 'profile' && 'Complete your profile'}
+        </p>
+
+        {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
+
+        {step === 'phone' && (
+          <form onSubmit={handleSendOTP}>
+            <div className="flex gap-2 mb-4">
+              <select
+                value={countryCode}
+                onChange={e => setCountryCode(e.target.value)}
+                className="border border-gray-200 px-2 py-3 text-sm focus:outline-none focus:border-black w-28"
+              >
+                <option value="+91">🇮🇳 +91</option>
+                <option value="+1">🇺🇸 +1</option>
+                <option value="+44">🇬🇧 +44</option>
+                <option value="+971">🇦🇪 +971</option>
+                <option value="+65">🇸🇬 +65</option>
+                <option value="+60">🇲🇾 +60</option>
+                <option value="+61">🇦🇺 +61</option>
+                <option value="+49">🇩🇪 +49</option>
+                <option value="+33">🇫🇷 +33</option>
+              </select>
+              <input
+                type="tel"
+                placeholder="Mobile number"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                required
+                className="flex-1 border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:border-black"
+              />
+            </div>
+            <div id="recaptcha-container" ref={recaptchaRef} className="mb-4 flex justify-center"></div>
+            <button type="submit" disabled={loading || !phone}
+              className="w-full bg-black text-white py-4 text-xs uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50">
+              {loading ? 'Sending...' : 'Send OTP'}
+            </button>
+          </form>
+        )}
+
+        {step === 'otp' && (
+          <form onSubmit={handleVerifyOTP}>
+            <p className="text-sm text-gray-500 mb-4 text-center">OTP sent to {countryCode} {phone}</p>
+            <input
+              type="text" placeholder="Enter 6-digit OTP" value={otp}
+              onChange={e => setOtp(e.target.value)} maxLength={6} required
+              className="w-full border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:border-black mb-4 text-center tracking-widest"
+            />
+            <button type="submit" disabled={loading || otp.length < 6}
+              className="w-full bg-black text-white py-4 text-xs uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50">
+              {loading ? 'Verifying...' : 'Verify OTP'}
+            </button>
+            <button type="button" onClick={() => setStep('phone')}
+              className="w-full mt-3 text-xs text-gray-400 underline">
+              Change number
+            </button>
+          </form>
+        )}
+
+        {step === 'profile' && (
+          <form onSubmit={handleProfileSubmit}>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <input placeholder="First name" value={profile.firstName} onChange={e => setProfile(p => ({...p, firstName: e.target.value}))} required
+                className="border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:border-black"/>
+              <input placeholder="Last name" value={profile.lastName} onChange={e => setProfile(p => ({...p, lastName: e.target.value}))} required
+                className="border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:border-black"/>
+            </div>
+            <input type="email" placeholder="Email address" value={profile.email} onChange={e => setProfile(p => ({...p, email: e.target.value}))} required
+              className="w-full border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:border-black mb-3"/>
+            <div className="flex gap-3 mb-3">
+              <input type="number" placeholder="Age" value={profile.age} onChange={e => setProfile(p => ({...p, age: e.target.value}))} required min="18" max="100"
+                className="w-1/2 border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:border-black"/>
+              <select value={profile.gender} onChange={e => setProfile(p => ({...p, gender: e.target.value}))} required
+                className="w-1/2 border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:border-black">
+                <option value="">Gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div className="border border-gray-100 px-4 py-3 text-sm text-gray-400 mb-4 bg-gray-50">
+              📱 {countryCode} {phone} (verified)
+            </div>
+            <button type="submit" disabled={loading}
+              className="w-full bg-black text-white py-4 text-xs uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50">
+              {loading ? 'Saving...' : 'Complete Setup'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
