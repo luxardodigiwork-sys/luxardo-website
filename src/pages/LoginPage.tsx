@@ -9,10 +9,12 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthReady && user) {
-      if (user.role && ["admin", "super_admin"].includes(user.role)) {
-        navigate("/admin/dashboard", { replace: true });
+      // FIXED: Only admin/super_admin go to admin dashboard
+      // Regular customers go back to where they came from
+      if (user.role && ['admin', 'super_admin'].includes(user.role)) {
+        navigate('/admin/dashboard', { replace: true });
       } else {
-        const from = (location.state as any)?.from?.pathname || "/";
+        const from = (location.state as any)?.from?.pathname || '/';
         navigate(from, { replace: true });
       }
     }
@@ -36,7 +38,7 @@ export default function LoginPage() {
         content: true
       }
     });
-    navigate("/admin/dashboard");
+    navigate('/admin/dashboard');
   };
 
   return (

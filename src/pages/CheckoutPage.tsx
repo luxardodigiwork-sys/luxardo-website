@@ -93,11 +93,14 @@ export default function CheckoutPage() {
     setIsSubmitting(true);
     setError(null);
     try {
+      // FIXED: Sign in anonymously if no Firebase Auth session exists
+      // This satisfies Firestore rules (request.auth != null) without requiring email login
       let currentUser = auth.currentUser;
       if (!currentUser) {
         const anonResult = await signInAnonymously(auth);
         currentUser = anonResult.user;
       }
+
       const orderItems = cartItems.map((item) => ({
         productId: item.product.id,
         title: item.product.title || item.product.name || "Product",
@@ -106,6 +109,7 @@ export default function CheckoutPage() {
         price: item.product.price,
         subtotal: item.product.price * item.quantity,
       }));
+
       const orderData = {
         userId: currentUser.uid,
         userEmail: currentUser.email || form.email.trim().toLowerCase(),
@@ -134,6 +138,7 @@ export default function CheckoutPage() {
         courierPartner: "DTDC",
         trackingId: null,
       };
+
       const docRef = await addDoc(collection(db, "orders"), orderData);
       clearCart();
       navigate("/order-confirmation", {
@@ -194,6 +199,7 @@ export default function CheckoutPage() {
                 </div>
               </div>
             </div>
+
             <div className="rounded-3xl border border-brand-divider bg-white p-8 space-y-5">
               <h2 className="text-2xl font-display">Delivery Address</h2>
               <div>
@@ -226,6 +232,7 @@ export default function CheckoutPage() {
                 {formErrors.state && <p className={errorClass}>{formErrors.state}</p>}
               </div>
             </div>
+
             <div className="rounded-3xl border border-brand-divider bg-white p-8 space-y-4">
               <h2 className="text-2xl font-display">Items in Order</h2>
               {cartItems.map((item) => (
@@ -242,6 +249,7 @@ export default function CheckoutPage() {
               ))}
             </div>
           </div>
+
           <div className="space-y-6">
             <div className="sticky top-24 rounded-3xl border border-brand-divider bg-white p-8 space-y-6">
               <div>
