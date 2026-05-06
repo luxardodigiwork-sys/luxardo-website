@@ -46,12 +46,6 @@ export default function CheckoutPage() {
   const [formErrors, setFormErrors] = useState<Partial<CustomerForm>>({});
 
   useEffect(() => {
-    if (isAuthReady && !user) {
-      navigate("/login", { state: { from: { pathname: "/checkout" } }, replace: true });
-    }
-  }, [isAuthReady, user, navigate]);
-
-  useEffect(() => {
     if (user?.email) {
       setForm((prev) => ({ ...prev, email: user.email || "" }));
     }
