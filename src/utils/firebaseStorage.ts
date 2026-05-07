@@ -78,7 +78,7 @@ export const firebaseStorage = {
     try {
       // For anonymous users, use localStorage temporarily
       if (!auth.currentUser) {
-        localStorage.setItem('luxardo_temp_preferences', JSON.stringify(preferences));
+        localStorage.setItem('LUXARDO FASHION_temp_preferences', JSON.stringify(preferences));
         return;
       }
 
@@ -103,7 +103,7 @@ export const firebaseStorage = {
     try {
       // For anonymous users, try localStorage first
       if (!auth.currentUser) {
-        const stored = localStorage.getItem('luxardo_temp_preferences');
+        const stored = localStorage.getItem('LUXARDO FASHION_temp_preferences');
         return stored ? JSON.parse(stored) : null;
       }
 
@@ -125,7 +125,7 @@ export const firebaseStorage = {
           quantity: item.quantity,
           size: item.size,
         }));
-        sessionStorage.setItem('luxardo_cart', JSON.stringify(minimal));
+        sessionStorage.setItem('LUXARDO FASHION_cart', JSON.stringify(minimal));
         return;
       }
 
@@ -148,7 +148,7 @@ export const firebaseStorage = {
         quantity: item.quantity,
         size: item.size,
       }));
-      sessionStorage.setItem('luxardo_cart', JSON.stringify(minimal));
+      sessionStorage.setItem('LUXARDO FASHION_cart', JSON.stringify(minimal));
     }
   },
 
@@ -156,7 +156,7 @@ export const firebaseStorage = {
     try {
       // For anonymous users, use sessionStorage
       if (!auth.currentUser) {
-        const stored = sessionStorage.getItem('luxardo_cart');
+        const stored = sessionStorage.getItem('LUXARDO FASHION_cart');
         return stored ? JSON.parse(stored) : null;
       }
 
@@ -165,7 +165,7 @@ export const firebaseStorage = {
     } catch (err) {
       console.error('Failed to get cart:', err);
       // Fallback to sessionStorage
-      const stored = sessionStorage.getItem('luxardo_cart');
+      const stored = sessionStorage.getItem('LUXARDO FASHION_cart');
       return stored ? JSON.parse(stored) : null;
     }
   },
@@ -173,7 +173,7 @@ export const firebaseStorage = {
   async clearCart(): Promise<void> {
     try {
       if (!auth.currentUser) {
-        sessionStorage.removeItem('luxardo_cart');
+        sessionStorage.removeItem('LUXARDO FASHION_cart');
         return;
       }
 
@@ -181,7 +181,7 @@ export const firebaseStorage = {
       await setDoc(cartDoc, { items: [], updatedAt: new Date().toISOString() });
     } catch (err) {
       console.error('Failed to clear cart:', err);
-      sessionStorage.removeItem('luxardo_cart');
+      sessionStorage.removeItem('LUXARDO FASHION_cart');
     }
   },
 
@@ -189,7 +189,7 @@ export const firebaseStorage = {
   async saveWishlist(items: string[]): Promise<void> {
     try {
       if (!auth.currentUser) {
-        localStorage.setItem('luxardo_temp_wishlist', JSON.stringify(items));
+        localStorage.setItem('LUXARDO FASHION_temp_wishlist', JSON.stringify(items));
         return;
       }
 
@@ -200,14 +200,14 @@ export const firebaseStorage = {
       }, { merge: true });
     } catch (err) {
       console.error('Failed to save wishlist:', err);
-      localStorage.setItem('luxardo_temp_wishlist', JSON.stringify(items));
+      localStorage.setItem('LUXARDO FASHION_temp_wishlist', JSON.stringify(items));
     }
   },
 
   async getWishlist(): Promise<string[] | null> {
     try {
       if (!auth.currentUser) {
-        const stored = localStorage.getItem('luxardo_temp_wishlist');
+        const stored = localStorage.getItem('LUXARDO FASHION_temp_wishlist');
         return stored ? JSON.parse(stored) : null;
       }
 
@@ -215,7 +215,7 @@ export const firebaseStorage = {
       return wishlistDoc.exists() ? (wishlistDoc.data() as any)?.items : null;
     } catch (err) {
       console.error('Failed to get wishlist:', err);
-      const stored = localStorage.getItem('luxardo_temp_wishlist');
+      const stored = localStorage.getItem('LUXARDO FASHION_temp_wishlist');
       return stored ? JSON.parse(stored) : null;
     }
   },
@@ -224,7 +224,7 @@ export const firebaseStorage = {
   async markFirstVisitComplete(): Promise<void> {
     try {
       if (!auth.currentUser) {
-        localStorage.setItem('luxardo_first_visit_completed', 'true');
+        localStorage.setItem('LUXARDO FASHION_first_visit_completed', 'true');
         return;
       }
 
@@ -235,21 +235,21 @@ export const firebaseStorage = {
       });
     } catch (err) {
       console.error('Failed to mark first visit:', err);
-      localStorage.setItem('luxardo_first_visit_completed', 'true');
+      localStorage.setItem('LUXARDO FASHION_first_visit_completed', 'true');
     }
   },
 
   async isFirstVisitComplete(): Promise<boolean> {
     try {
       if (!auth.currentUser) {
-        return localStorage.getItem('luxardo_first_visit_completed') === 'true';
+        return localStorage.getItem('LUXARDO FASHION_first_visit_completed') === 'true';
       }
 
       const prefDoc = await getDoc(doc(db, 'userPreferences', auth.currentUser.uid));
       return prefDoc.exists() ? (prefDoc.data() as any)?.firstVisitCompleted : false;
     } catch (err) {
       console.error('Failed to check first visit:', err);
-      return localStorage.getItem('luxardo_first_visit_completed') === 'true';
+      return localStorage.getItem('LUXARDO FASHION_first_visit_completed') === 'true';
     }
   },
 
@@ -266,12 +266,12 @@ export const firebaseStorage = {
       console.error('Failed to clear user data:', err);
     } finally {
       // Always clear localStorage fallbacks
-      sessionStorage.removeItem('luxardo_cart');
-      localStorage.removeItem('luxardo_first_visit_completed');
-      localStorage.removeItem('luxardo_temp_preferences');
-      localStorage.removeItem('luxardo_temp_wishlist');
-      localStorage.removeItem('luxardo_user');
-      localStorage.removeItem('luxardo_logged_out');
+      sessionStorage.removeItem('LUXARDO FASHION_cart');
+      localStorage.removeItem('LUXARDO FASHION_first_visit_completed');
+      localStorage.removeItem('LUXARDO FASHION_temp_preferences');
+      localStorage.removeItem('LUXARDO FASHION_temp_wishlist');
+      localStorage.removeItem('LUXARDO FASHION_user');
+      localStorage.removeItem('LUXARDO FASHION_logged_out');
     }
   },
 };

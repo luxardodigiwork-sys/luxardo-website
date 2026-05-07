@@ -511,7 +511,7 @@ export default function HomePage() {
       </section>
 
 
-      {/* 5. Luxardo experience (direct vs prime) */}
+      {/* 5. LUXARDO FASHION experience (direct vs prime) */}
       <section className="py-16 md:py-32 bg-brand-bg border-y border-brand-divider">
         <div className="max-w-[1800px] mx-auto px-4 md:px-8">
           <div className="text-center mb-12 md:mb-20 space-y-4">
@@ -523,7 +523,7 @@ export default function HomePage() {
             <div className="p-8 md:p-20 border-b md:border-b-0 md:border-r border-brand-divider bg-brand-white">
               <h3 className="text-2xl md:text-3xl font-display mb-4 md:mb-6">Direct Collection</h3>
               <p className="text-sm md:text-base text-brand-secondary font-light leading-relaxed mb-8 md:mb-12">
-                Access our curated seasonal collections. Ready to wear, crafted with the same attention to detail and premium fabrics that define the Luxardo name.
+                Access our curated seasonal collections. Ready to wear, crafted with the same attention to detail and premium fabrics that define the LUXARDO FASHION name.
               </p>
               <ul className="space-y-3 md:space-y-4 mb-8 md:mb-12 text-xs md:text-sm font-sans text-brand-black">
                 <li className="flex items-center gap-4"><span className="w-1.5 h-1.5 bg-brand-black rounded-full" /> Standard sizing</li>
@@ -583,7 +583,7 @@ export default function HomePage() {
               <span className="italic font-light text-brand-white/70">Retail Experience.</span>
             </h2>
             <p className="text-sm md:text-lg text-brand-white/70 font-light leading-relaxed mb-8 md:mb-12 max-w-lg">
-              Join our exclusive network of retail partners. Offer your clients the unparalleled craftsmanship and timeless elegance of Luxardo.
+              Join our exclusive network of retail partners. Offer your clients the unparalleled craftsmanship and timeless elegance of LUXARDO FASHION.
             </p>
           </div>
 

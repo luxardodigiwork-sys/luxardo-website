@@ -13,7 +13,7 @@ interface CountryContextType {
 
 const CountryContext = createContext<CountryContextType | null>(null);
 
-const STORAGE_KEY = 'luxardo_country_code';
+const STORAGE_KEY = 'LUXARDO FASHION_country_code';
 
 export function CountryProvider({ children }: { children: React.ReactNode }) {
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
@@ -33,8 +33,8 @@ export function CountryProvider({ children }: { children: React.ReactNode }) {
     setShowModal(false);
     localStorage.setItem(STORAGE_KEY, country.code);
     try {
-      const sessionId = localStorage.getItem('luxardo_session_id') || crypto.randomUUID();
-      localStorage.setItem('luxardo_session_id', sessionId);
+      const sessionId = localStorage.getItem('LUXARDO FASHION_session_id') || crypto.randomUUID();
+      localStorage.setItem('LUXARDO FASHION_session_id', sessionId);
       await setDoc(doc(db, 'sessions', sessionId), {
         country: country.code,
         currency: country.currency.code,

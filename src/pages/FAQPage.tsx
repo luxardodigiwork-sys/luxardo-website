@@ -41,7 +41,7 @@ export default function FAQPage() {
         },
         { 
           q: 'What is included in the ready-to-stitch box?', 
-          a: 'The box contains the main garment fabric, matching lining, high-quality interlining, signature buttons, and a technical stitch-style template to guide your tailor in achieving the Luxardo silhouette.' 
+          a: 'The box contains the main garment fabric, matching lining, high-quality interlining, signature buttons, and a technical stitch-style template to guide your tailor in achieving the LUXARDO FASHION silhouette.' 
         }
       ]
     },
@@ -50,7 +50,7 @@ export default function FAQPage() {
       items: [
         { 
           q: 'Do you ship internationally?', 
-          a: 'Yes, Luxardo ships to over 50 countries globally. International shipping rates and delivery timelines are calculated at checkout based on your specific location.' 
+          a: 'Yes, LUXARDO FASHION ships to over 50 countries globally. International shipping rates and delivery timelines are calculated at checkout based on your specific location.' 
         },
         { 
           q: 'What is the processing time for orders?', 
@@ -73,7 +73,7 @@ export default function FAQPage() {
           </p>
           <h1 className="text-5xl md:text-7xl font-display tracking-wide">FAQ</h1>
           <p className="text-xl md:text-2xl font-sans text-brand-white/80 max-w-2xl mx-auto leading-relaxed">
-            Find answers to common questions about the Luxardo experience.
+            Find answers to common questions about the LUXARDO FASHION experience.
           </p>
         </div>
       </section>

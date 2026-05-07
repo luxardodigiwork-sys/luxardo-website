@@ -45,7 +45,7 @@ const saveCartToStorage = async (items: CartItem[]) => {
     if (auth.currentUser) {
       await firebaseStorage.saveCart(items);
     } else {
-      sessionStorage.setItem('luxardo_cart', JSON.stringify(minimal));
+      sessionStorage.setItem('LUXARDO FASHION_cart', JSON.stringify(minimal));
     }
   } catch (e) {
     console.error('Cart save failed:', e);
@@ -55,7 +55,7 @@ const saveCartToStorage = async (items: CartItem[]) => {
         quantity: item.quantity,
         size: item.size,
       }));
-      sessionStorage.setItem('luxardo_cart', JSON.stringify(minimal)); 
+      sessionStorage.setItem('LUXARDO FASHION_cart', JSON.stringify(minimal)); 
     } catch {}
   }
 };
@@ -85,7 +85,7 @@ const loadCartFromStorage = async (): Promise<CartItem[]> => {
     }
 
     // Fallback to sessionStorage for anonymous users
-    const raw = sessionStorage.getItem('luxardo_cart');
+    const raw = sessionStorage.getItem('LUXARDO FASHION_cart');
     if (!raw) return [];
 
     const parsed = JSON.parse(raw);
@@ -120,7 +120,7 @@ const loadCartFromStorage = async (): Promise<CartItem[]> => {
     return restored;
   } catch (e) {
     console.error('Cart load failed, resetting:', e);
-    try { sessionStorage.removeItem('luxardo_cart'); } catch {}
+    try { sessionStorage.removeItem('LUXARDO FASHION_cart'); } catch {}
     return [];
   }
 };
@@ -189,7 +189,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCartItems([]);
     try { 
       await firebaseStorage.clearCart();
-      sessionStorage.removeItem('luxardo_cart'); 
+      sessionStorage.removeItem('LUXARDO FASHION_cart'); 
     } catch {}
   };
 

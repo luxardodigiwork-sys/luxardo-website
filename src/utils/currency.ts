@@ -1,7 +1,7 @@
 import { ALL_COUNTRIES } from '../countries';
 
 export const formatCurrency = (amount: number): string => {
-  const savedCurrencyCode = localStorage.getItem('luxardo_currency') || 'INR';
+  const savedCurrencyCode = localStorage.getItem('LUXARDO FASHION_currency') || 'INR';
   const country = ALL_COUNTRIES.find(c => c.currency.code === savedCurrencyCode);
   
   const currencyCode = country?.currency.code || 'INR';

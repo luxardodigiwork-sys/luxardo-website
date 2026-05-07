@@ -55,7 +55,7 @@ const DEFAULT_COLLECTIONS: Collection[] = [
     name: 'Premium Kurta Pajama',
     slug: 'kurta-pajama',
     shortDescription: 'Timeless elegance redefined through meticulous craftsmanship and selected fabrics.',
-    longDescription: 'The Kurta Pajama sets represent the soul of Luxardo. Each piece is a dialogue between heritage and modernity, designed for the man who values quiet confidence.',
+    longDescription: 'The Kurta Pajama sets represent the soul of LUXARDO FASHION. Each piece is a dialogue between heritage and modernity, designed for the man who values quiet confidence.',
     bannerImageUrl: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=2000',
     heroImageUrl: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=800',
     isVisible: true,
@@ -83,7 +83,7 @@ export default function AdminCollectionsPage() {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem('luxardo_admin_collections');
+    const stored = localStorage.getItem('LUXARDO FASHION_admin_collections');
     if (stored) {
       try {
         setCollections(JSON.parse(stored));
@@ -92,7 +92,7 @@ export default function AdminCollectionsPage() {
       }
     } else {
       setCollections(DEFAULT_COLLECTIONS);
-      localStorage.setItem('luxardo_admin_collections', JSON.stringify(DEFAULT_COLLECTIONS));
+      localStorage.setItem('LUXARDO FASHION_admin_collections', JSON.stringify(DEFAULT_COLLECTIONS));
     }
   }, []);
 
@@ -145,7 +145,7 @@ export default function AdminCollectionsPage() {
     updatedCollections.sort((a, b) => a.sortOrder - b.sortOrder);
 
     try {
-      localStorage.setItem('luxardo_admin_collections', JSON.stringify(updatedCollections));
+      localStorage.setItem('LUXARDO FASHION_admin_collections', JSON.stringify(updatedCollections));
       setCollections(updatedCollections);
       setEditingId(null);
       setIsAdding(false);
@@ -169,7 +169,7 @@ export default function AdminCollectionsPage() {
     if (itemToDelete) {
       const updatedCollections = collections.filter(c => c.id !== itemToDelete);
       setCollections(updatedCollections);
-      localStorage.setItem('luxardo_admin_collections', JSON.stringify(updatedCollections));
+      localStorage.setItem('LUXARDO FASHION_admin_collections', JSON.stringify(updatedCollections));
       showToast('Collection deleted successfully');
       setItemToDelete(null);
     }

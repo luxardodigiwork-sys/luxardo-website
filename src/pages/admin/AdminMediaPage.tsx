@@ -277,7 +277,7 @@ export default function AdminMediaPage() {
           </div>
           <h1 className="text-4xl sm:text-5xl font-display tracking-tight text-brand-black">Media Assets</h1>
           <p className="text-brand-secondary text-sm sm:text-base font-sans max-w-2xl leading-relaxed">
-            Centralized management for all visual assets. Upload, organize, and monitor image usage across the Luxardo platform with precision and ease.
+            Centralized management for all visual assets. Upload, organize, and monitor image usage across the LUXARDO FASHION platform with precision and ease.
           </p>
         </div>
         

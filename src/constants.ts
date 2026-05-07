@@ -70,7 +70,7 @@ export const COLLECTIONS = [
     shortName: 'Kurta',
     descriptor: 'Timeless kurtas crafted from the finest silks and linens.',
     image: 'https://images.unsplash.com/photo-1584916201218-f4242ceb4809?q=80&w=1000&auto=format&fit=crop',
-    narrative: 'The soul of Luxardo lies in our classic kurtas.',
+    narrative: 'The soul of LUXARDO FASHION lies in our classic kurtas.',
     craftsmanship: 'Precision cut and hand-finished seams.',
     packaging: 'Acid-free tissue wrapping in archival boxes.'
   },
@@ -82,7 +82,7 @@ export const COLLECTIONS = [
     image: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=1000&auto=format&fit=crop',
     narrative: 'Our Casual collection defines contemporary workwear.',
     craftsmanship: 'Precision stitching and premium cotton blends.',
-    packaging: 'Delivered in a signature Luxardo box.'
+    packaging: 'Delivered in a signature LUXARDO FASHION box.'
   }
 ];
 

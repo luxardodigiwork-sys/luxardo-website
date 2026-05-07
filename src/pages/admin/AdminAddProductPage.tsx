@@ -105,7 +105,7 @@ export default function AdminAddProductPage() {
         </Link>
         <div>
           <h1 className="text-4xl font-display uppercase tracking-tight">Add New Product</h1>
-          <p className="text-brand-secondary font-sans">Expand the Luxardo collection</p>
+          <p className="text-brand-secondary font-sans">Expand the LUXARDO FASHION collection</p>
         </div>
       </div>
 

@@ -78,7 +78,7 @@ export default function AdminPoliciesPage() {
       setIsLoading(false);
       
       // Check for last saved in localStorage if we want to be fancy
-      const savedTime = localStorage.getItem('luxardo_policies_last_saved');
+      const savedTime = localStorage.getItem('LUXARDO FASHION_policies_last_saved');
       if (savedTime) setLastSaved(savedTime);
     };
     fetchPolicies();
@@ -89,7 +89,7 @@ export default function AdminPoliciesPage() {
     storage.savePolicies(policies);
     
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    localStorage.setItem('luxardo_policies_last_saved', now);
+    localStorage.setItem('LUXARDO FASHION_policies_last_saved', now);
     
     setTimeout(() => {
       setIsSaving(false);
@@ -104,7 +104,7 @@ export default function AdminPoliciesPage() {
   };
 
   const confirmReset = () => {
-    localStorage.removeItem('luxardo_policies');
+    localStorage.removeItem('LUXARDO FASHION_policies');
     const data = storage.getPolicies();
     setPolicies(data);
     setShowSuccess(true);

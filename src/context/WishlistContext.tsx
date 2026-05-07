@@ -17,7 +17,7 @@ const WishlistContext = createContext<WishlistContextType | undefined>(undefined
 export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [wishlist, setWishlist] = useState<Product[]>(() => {
-    const savedWishlist = localStorage.getItem('luxardo_wishlist');
+    const savedWishlist = localStorage.getItem('LUXARDO FASHION_wishlist');
     if (savedWishlist) {
       try {
         return JSON.parse(savedWishlist);
@@ -79,7 +79,7 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [user?.id]); // Sirf user.id change par trigger hoga
 
   useEffect(() => {
-    localStorage.setItem('luxardo_wishlist', JSON.stringify(wishlist));
+    localStorage.setItem('LUXARDO FASHION_wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
 
   const addToWishlist = async (product: Product) => {

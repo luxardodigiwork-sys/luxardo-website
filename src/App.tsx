@@ -151,7 +151,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-brand-bg flex flex-col gap-6 items-center justify-center font-display uppercase tracking-widest text-sm text-brand-black">
         <div className="w-12 h-12 border-t-2 border-r-2 border-brand-black rounded-full animate-spin"></div>
-        <p className="animate-pulse">Loading Luxardo...</p>
+        <p className="animate-pulse">Loading LUXARDO FASHION...</p>
       </div>
     );
   }

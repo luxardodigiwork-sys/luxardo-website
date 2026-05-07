@@ -51,7 +51,7 @@ export default function CraftsmanshipPage() {
           >
             <div className="flex items-center gap-4 mb-8">
               <span className="w-8 h-[1px] bg-brand-black"></span>
-              <span className="text-[10px] uppercase tracking-[0.3em] font-bold text-brand-black">The Luxardo Standard</span>
+              <span className="text-[10px] uppercase tracking-[0.3em] font-bold text-brand-black">The LUXARDO FASHION Standard</span>
             </div>
             
             <div className="space-y-8 md:space-y-12">

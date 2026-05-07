@@ -28,7 +28,7 @@ export default function AnalysisLayout() {
             <div className="bg-brand-black text-white p-1.5 rounded-lg">
               <BarChart3 size={18} />
             </div>
-            <h1 className="font-display text-xl tracking-widest uppercase">Luxardo</h1>
+            <h1 className="font-display text-xl tracking-widest uppercase">LUXARDO FASHION</h1>
           </div>
           <p className="text-[10px] text-brand-secondary uppercase tracking-[0.2em] font-bold">Analysis Portal</p>
         </div>
@@ -68,7 +68,7 @@ export default function AnalysisLayout() {
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
         {/* Mobile Header */}
         <header className="md:hidden bg-white border-b border-brand-divider p-4 flex justify-between items-center">
-          <h1 className="font-display text-xl tracking-widest uppercase">Luxardo Analysis</h1>
+          <h1 className="font-display text-xl tracking-widest uppercase">LUXARDO FASHION Analysis</h1>
           <div className="flex items-center gap-2">
             <NotificationCenter />
             <button onClick={handleLogout} className="text-brand-secondary p-2">
@@ -88,7 +88,7 @@ export default function AnalysisLayout() {
 
         {/* Footer Status */}
         <footer className="bg-white border-t border-brand-divider py-3 px-6 flex justify-between items-center text-[10px] text-brand-secondary uppercase tracking-widest font-bold">
-          <div>Luxardo Analysis Portal v1.0</div>
+          <div>LUXARDO FASHION Analysis Portal v1.0</div>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-green-500" /> System Online</span>
             <span>{new Date().toLocaleDateString()}</span>

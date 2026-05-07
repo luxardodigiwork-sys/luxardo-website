@@ -32,7 +32,7 @@ export default function PrimeMembershipSuccessPage() {
             </div>
             <h1 className="text-5xl md:text-7xl font-display tracking-tight">Welcome to Prime</h1>
             <p className="font-sans text-brand-secondary text-lg max-w-xl mx-auto leading-relaxed">
-              Your membership has been successfully activated. You now have full access to the inner circle of LUXARDO.
+              Your membership has been successfully activated. You now have full access to the inner circle of LUXARDO FASHION.
             </p>
           </div>
 

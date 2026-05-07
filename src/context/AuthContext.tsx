@@ -75,21 +75,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             };
 
             setUser(userData);
-            localStorage.setItem('luxardo_user', JSON.stringify(userData));
-            localStorage.removeItem('luxardo_logged_out');
+            localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(userData));
+            localStorage.removeItem('LUXARDO FASHION_logged_out');
           } else {
-            const cached = localStorage.getItem('luxardo_user');
+            const cached = localStorage.getItem('LUXARDO FASHION_user');
             if (cached) {
               try {
                 const parsedUser = JSON.parse(cached);
                 if (parsedUser?.id === firebaseUser.uid) {
                   setUser(parsedUser);
                 } else {
-                  localStorage.removeItem('luxardo_user');
+                  localStorage.removeItem('LUXARDO FASHION_user');
                   setUser(null);
                 }
               } catch {
-                localStorage.removeItem('luxardo_user');
+                localStorage.removeItem('LUXARDO FASHION_user');
                 setUser(null);
               }
             } else {
@@ -97,8 +97,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         } else {
-          const cached = localStorage.getItem('luxardo_user');
-          const wasLoggedOut = localStorage.getItem('luxardo_logged_out');
+          const cached = localStorage.getItem('LUXARDO FASHION_user');
+          const wasLoggedOut = localStorage.getItem('LUXARDO FASHION_logged_out');
 
           if (cached && !wasLoggedOut) {
             try {
@@ -107,11 +107,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (parsedUser?.id && adminRoles.includes(parsedUser.role)) {
                 setUser(parsedUser);
               } else {
-                localStorage.removeItem('luxardo_user');
+                localStorage.removeItem('LUXARDO FASHION_user');
                 setUser(null);
               }
             } catch {
-              localStorage.removeItem('luxardo_user');
+              localStorage.removeItem('LUXARDO FASHION_user');
               setUser(null);
             }
           } else {
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         console.error('Auth state change error:', err);
         try {
-          const cached = localStorage.getItem('luxardo_user');
+          const cached = localStorage.getItem('LUXARDO FASHION_user');
           if (cached) {
             const parsedUser = JSON.parse(cached);
             if (parsedUser?.id) setUser(parsedUser);
@@ -139,8 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = (userData: User) => {
     setUser(userData);
-    localStorage.setItem('luxardo_user', JSON.stringify(userData));
-    localStorage.removeItem('luxardo_logged_out');
+    localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(userData));
+    localStorage.removeItem('LUXARDO FASHION_logged_out');
   };
 
   const logout = async () => {
@@ -152,12 +152,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Firebase sign out error:', err);
     } finally {
       setUser(null);
-      localStorage.removeItem('luxardo_user');
-      localStorage.setItem('luxardo_logged_out', 'true');
+      localStorage.removeItem('LUXARDO FASHION_user');
+      localStorage.setItem('LUXARDO FASHION_logged_out', 'true');
       try {
-        sessionStorage.removeItem('luxardo_cart');
-        localStorage.removeItem('luxardo_temp_preferences');
-        localStorage.removeItem('luxardo_temp_wishlist');
+        sessionStorage.removeItem('LUXARDO FASHION_cart');
+        localStorage.removeItem('LUXARDO FASHION_temp_preferences');
+        localStorage.removeItem('LUXARDO FASHION_temp_wishlist');
       } catch {}
     }
   };
@@ -167,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const updatedUser = { ...user, ...preferences };
     setUser(updatedUser);
-    localStorage.setItem('luxardo_user', JSON.stringify(updatedUser));
+    localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(updatedUser));
 
     if (auth.currentUser && user.role === 'customer') {
       const updateData: Record<string, any> = {};

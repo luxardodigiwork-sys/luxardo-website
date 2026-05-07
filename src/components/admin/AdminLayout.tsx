@@ -60,7 +60,7 @@ export default function AdminLayout() {
       <aside className="w-64 bg-white border-r border-brand-divider flex-col hidden md:flex h-screen sticky top-0">
         <div className="p-6 border-b border-brand-divider flex justify-between items-center">
           <div>
-            <h1 className="font-display text-2xl tracking-widest uppercase">Luxardo</h1>
+            <h1 className="font-display text-2xl tracking-widest uppercase">LUXARDO FASHION</h1>
             <p className="text-xs text-brand-secondary uppercase tracking-widest mt-1">Admin Panel</p>
           </div>
         </div>
@@ -123,7 +123,7 @@ export default function AdminLayout() {
             >
               <div className="p-6 border-b border-brand-divider flex justify-between items-center">
                 <div>
-                  <h1 className="font-display text-2xl tracking-widest uppercase">Luxardo</h1>
+                  <h1 className="font-display text-2xl tracking-widest uppercase">LUXARDO FASHION</h1>
                   <p className="text-xs text-brand-secondary uppercase tracking-widest mt-1">Admin Panel</p>
                 </div>
                 <button onClick={() => setIsMobileMenuOpen(false)} className="text-brand-secondary hover:text-brand-black">
@@ -181,7 +181,7 @@ export default function AdminLayout() {
             <button onClick={() => setIsMobileMenuOpen(true)} className="text-brand-black">
               <Menu size={24} />
             </button>
-            <h1 className="font-display text-xl tracking-widest uppercase">Luxardo Admin</h1>
+            <h1 className="font-display text-xl tracking-widest uppercase">LUXARDO FASHION Admin</h1>
           </div>
           <div className="flex items-center gap-4">
             <button onClick={handleLogout} className="text-brand-secondary">

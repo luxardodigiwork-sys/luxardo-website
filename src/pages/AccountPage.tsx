@@ -5,8 +5,12 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { storage } from '../utils/localStorage';
+import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../firebase';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { formatCurrency } from '../utils/currency';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db, auth } from '../firebase';
 import { 
   User, 
   Package, 
@@ -35,7 +39,9 @@ export default function AccountPage() {
   const [trackedOrder, setTrackedOrder] = useState<{ id: string; status: string } | null>(null);
   const [globalSettings, setGlobalSettings] = useState(storage.getPrimeGlobalSettings());
 
-  const orders = storage.getOrders().filter(o => o.userId === user?.id);
+  // Naya Firebase Fetch Logic
+  const [orders, setOrders] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
 
   const handleTrackOrder = (orderId: string) => {
     setTrackingInput(orderId);
@@ -54,6 +60,42 @@ export default function AccountPage() {
     }
   }, [user, navigate]);
 
+  // Fetch orders from Firestore
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!user?.id) return;
+      setOrdersLoading(true);
+      try {
+        const uid = auth.currentUser?.uid || user.id;
+        const ordersRef = collection(db, 'orders');
+        const q = query(ordersRef, where('userId', '==', uid));
+        const snapshot = await getDocs(q);
+        const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        fetched.sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setOrders(fetched);
+
+        // Extract unique addresses from orders for Saved Addresses
+        const addrs: any[] = [];
+        const seen = new Set();
+        fetched.forEach((o: any) => {
+          if (o.shippingAddress) {
+            const key = `${o.shippingAddress.addressLine1}-${o.shippingAddress.postalCode}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              addrs.push(o.shippingAddress);
+            }
+          }
+        });
+        setSavedAddresses(addrs);
+      } catch (err) {
+        console.error('Failed to fetch orders:', err);
+      } finally {
+        setOrdersLoading(false);
+      }
+    };
+    fetchOrders();
+  }, [user]);
+
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab) {
@@ -64,6 +106,32 @@ export default function AccountPage() {
   useEffect(() => {
     setGlobalSettings(storage.getPrimeGlobalSettings());
   }, []);
+
+  // Firebase se orders lane ka Effect
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!user) return;
+      setOrdersLoading(true);
+      try {
+        const uid = auth.currentUser?.uid || user.id;
+        const ordersRef = collection(db, 'orders');
+        const q = query(ordersRef, where('userId', '==', uid));
+        const snapshot = await getDocs(q);
+        
+        const fetchedOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Latest order pehle dikhane ke liye sort karein
+        fetchedOrders.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        
+        setOrders(fetchedOrders);
+      } catch (error) {
+        console.error("Orders fetch karne mein error:", error);
+      } finally {
+        setOrdersLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [user]);
 
   if (!user) return null;
 
@@ -185,8 +253,8 @@ export default function AccountPage() {
                         <p className="font-sans text-brand-black">{user.country || 'Not provided'}</p>
                       </div>
                       <div className="space-y-1">
-                        <p className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Account Created</p>
-                        <p className="font-sans text-brand-black">{user.createdAt || 'Unknown'}</p>
+                        <p className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Total Orders</p>
+                        <p className="font-sans text-brand-black">{orders.length > 0 ? `${orders.length} order${orders.length > 1 ? 's' : ''}` : 'No orders yet'}</p>
                       </div>
                     </div>
                   </div>
@@ -204,6 +272,17 @@ export default function AccountPage() {
                   <h3 className="text-3xl font-display">My Orders</h3>
                   
                   {(() => {
+                    if (ordersLoading) {
+                      return (
+                        <div className="bg-brand-white border border-brand-divider p-12 text-center space-y-6">
+                          <div className="w-8 h-8 border-4 border-brand-divider border-t-brand-black rounded-full animate-spin mx-auto"></div>
+                          <p className="font-sans text-brand-secondary max-w-lg mx-auto leading-relaxed">
+                            Loading your orders...
+                          </p>
+                        </div>
+                      );
+                    }
+
                     if (orders.length === 0) {
                       return (
                         <div className="bg-brand-white border border-brand-divider p-12 text-center space-y-6">
@@ -229,7 +308,7 @@ export default function AccountPage() {
                               <div className="flex gap-8">
                                 <div className="space-y-1">
                                   <p className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Order ID</p>
-                                  <p className="font-sans text-brand-black font-bold">#{order.id}</p>
+                                  <p className="font-sans text-brand-black font-bold">LX-{order.id.slice(-8).toUpperCase()}</p>
                                 </div>
                                 <div className="space-y-1">
                                   <p className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Date</p>
@@ -237,7 +316,7 @@ export default function AccountPage() {
                                 </div>
                                 <div className="space-y-1">
                                   <p className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Total Amount</p>
-                                  <p className="font-sans text-brand-black">{formatCurrency(order.totalAmount)}</p>
+                                  <p className="font-sans text-brand-black">{formatCurrency(order.totalAmount || order.total)}</p>
                                 </div>
                               </div>
                               <div className="flex gap-4">
@@ -249,14 +328,14 @@ export default function AccountPage() {
                             </div>
                             
                             <div className="space-y-4">
-                              {order.items.map((item, idx) => (
+                              {order.items?.map((item: any, idx: number) => (
                                 <div key={idx} className="flex items-center gap-6">
                                   <Link to={`/product/${item.productId}`} className="w-20 h-24 bg-brand-bg overflow-hidden block shrink-0">
-                                    <img src={storage.getProducts().find(p => p.id === item.productId)?.image} alt={item.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" />
+                                    <img src={storage.getProducts().find(p => p.id === item.productId)?.image || item.image} alt={item.title || item.name || "Product"} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" />
                                   </Link>
                                   <div className="flex-1">
                                     <Link to={`/product/${item.productId}`}>
-                                      <h4 className="font-display text-lg hover:text-brand-secondary transition-colors">{item.name}</h4>
+                                      <h4 className="font-display text-lg hover:text-brand-secondary transition-colors">{item.name || item.title}</h4>
                                     </Link>
                                     <p className="text-sm font-sans text-brand-secondary">Qty: {item.quantity}</p>
                                   </div>
@@ -524,10 +603,10 @@ export default function AccountPage() {
                                       )}
                                     </div>
                                     
-                                    <div className="relative z-10 flex items-center justify-center w-8 h-8 bg-brand-white border-2 rounded-full order-1 md:order-2 shrink-0
+                                    <div className={`relative z-10 flex items-center justify-center w-8 h-8 bg-brand-white border-2 rounded-full order-1 md:order-2 shrink-0
                                       ${isCompleted ? 'border-brand-black' : 'border-brand-divider'}
                                       ${isCurrent ? 'ring-4 ring-brand-black/10' : ''}
-                                    ">
+                                    `}>
                                       {isCompleted && <div className="w-2.5 h-2.5 bg-brand-black rounded-full"></div>}
                                     </div>
                                     
@@ -563,11 +642,11 @@ export default function AccountPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-brand-white p-8 border border-brand-black space-y-4 relative">
                       <span className="absolute top-4 right-4 text-[10px] uppercase tracking-widest font-bold bg-brand-black text-brand-white px-2 py-1">Default</span>
-                      <h4 className="font-sans font-bold text-brand-black">Alexander Wright</h4>
+                      <h4 className="font-sans font-bold text-brand-black">{user.name}</h4>
                       <p className="font-sans text-brand-secondary text-sm leading-relaxed">
-                        123 Luxury Lane, Suite 400<br />
-                        Mumbai, Maharashtra 400001<br />
-                        India
+                        Address saving feature <br />
+                        will be available soon.<br />
+                        Thank you for your patience.
                       </p>
                       <div className="pt-4 flex gap-4">
                         <button className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary hover:text-brand-black">Edit</button>

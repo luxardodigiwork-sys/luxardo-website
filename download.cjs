@@ -7,7 +7,7 @@ if (!fs.existsSync(publicDir)){
     fs.mkdirSync(publicDir);
 }
 
-https.get('https://www.luxardofashion.in/Img/LOGOn.png', (res) => {
+https.get('https://www.LUXARDO FASHIONfashion.in/Img/LOGOn.png', (res) => {
   if (res.statusCode !== 200) {
     console.error(`Failed to get image, status code: ${res.statusCode}`);
     return;

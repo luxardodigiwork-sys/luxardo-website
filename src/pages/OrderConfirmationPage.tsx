@@ -41,7 +41,7 @@ export default function OrderConfirmationPage() {
       <div className="space-y-10 max-w-2xl mx-auto mt-8">
         <div className="space-y-4">
           <p className="text-lg font-sans text-brand-black">
-            Thank you for choosing <strong>LUXARDO</strong>. Your order{' '}
+            Thank you for choosing <strong>LUXARDO FASHION</strong>. Your order{' '}
             <span className="font-bold">{displayOrderId}</span> has been placed and
             is being prepared with care.
           </p>
@@ -136,8 +136,8 @@ export default function OrderConfirmationPage() {
 
         <p className="text-xs text-brand-secondary">
           For queries:{' '}
-          <a href="mailto:support@luxardofashion.com" className="underline">
-            support@luxardofashion.com
+          <a href="mailto:support@LUXARDO FASHIONfashion.com" className="underline">
+            support@LUXARDO FASHIONfashion.com
           </a>
         </p>
       </div>

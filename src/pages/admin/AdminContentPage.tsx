@@ -722,7 +722,7 @@ export default function AdminContentPage() {
         </div>
       </FormSection>
 
-      <FormSection title="The Observation" description="The core insight that led to the creation of Luxardo.">
+      <FormSection title="The Observation" description="The core insight that led to the creation of LUXARDO FASHION.">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           <div className="space-y-8">
             <FormField label="Heading">
@@ -759,7 +759,7 @@ export default function AdminContentPage() {
         </div>
       </FormSection>
 
-      <FormSection title="The Industry Gap" description="The problem Luxardo solves.">
+      <FormSection title="The Industry Gap" description="The problem LUXARDO FASHION solves.">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           <div className="space-y-8">
             <FormField label="Heading">
@@ -898,7 +898,7 @@ export default function AdminContentPage() {
                 onChange={(e) => updateNestedContent('craftsmanship', 'hero', 'felt', e.target.value)}
               />
             </FormField>
-            <FormField label="Found (Luxardo Solution)">
+            <FormField label="Found (LUXARDO FASHION Solution)">
               <TextArea
                 rows={3}
                 value={content.craftsmanship.hero?.found || ''}
@@ -950,7 +950,7 @@ export default function AdminContentPage() {
         </div>
       </FormSection>
 
-      <FormSection title="Process Steps" description="The 4-step journey of creating a Luxardo piece.">
+      <FormSection title="Process Steps" description="The 4-step journey of creating a LUXARDO FASHION piece.">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {(content.craftsmanship.process || []).map((step: any, index: number) => (
             <div key={index} className="p-8 border border-brand-divider bg-brand-bg/50 space-y-8">
@@ -1326,7 +1326,7 @@ export default function AdminContentPage() {
       className="space-y-12"
     >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <FormSection title="Contact Information" description="How clients can reach the Luxardo concierge.">
+        <FormSection title="Contact Information" description="How clients can reach the LUXARDO FASHION concierge.">
           <div className="space-y-8">
             <FormField label="Email Address">
               <div className="relative">
@@ -1421,7 +1421,7 @@ export default function AdminContentPage() {
         </FormSection>
       </div>
 
-      <FormSection title="Social Media Links" description="Connect with Luxardo across digital platforms.">
+      <FormSection title="Social Media Links" description="Connect with LUXARDO FASHION across digital platforms.">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {Object.entries(content.contact.socials || {}).map(([platform, url]: [string, any]) => (
             <FormField key={platform} label={`${platform.charAt(0).toUpperCase() + platform.slice(1)} URL`}>

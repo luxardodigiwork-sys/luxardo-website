@@ -1,6 +1,6 @@
 import https from 'https';
 
-https.get('https://www.luxardofashion.in/', (res) => {
+https.get('https://www.LUXARDO FASHIONfashion.in/', (res) => {
   let data = '';
   res.on('data', (chunk) => {
     data += chunk;

@@ -12,18 +12,18 @@ import {
 
 // Keys for localStorage
 const KEYS = {
-  PRODUCTS: 'luxardo_products',
-  ORDERS: 'luxardo_orders',
-  USERS: 'luxardo_users',
-  SITE_CONTENT: 'luxardo_site_content',
-  PRIME_CONTENT: 'luxardo_prime_content',
-  POLICIES: 'luxardo_policies',
-  DASHBOARD_STATS: 'luxardo_dashboard_stats',
-  DUMMY_ADMIN: 'luxardo_dummy_admin',
-  MEDIA: 'luxardo_media',
-  BACKEND_USERS: 'luxardo_backend_users',
-  BACKEND_SETTINGS: 'luxardo_backend_settings',
-  PRIME_GLOBAL_SETTINGS: 'luxardo_prime_global_settings'
+  PRODUCTS: 'LUXARDO FASHION_products',
+  ORDERS: 'LUXARDO FASHION_orders',
+  USERS: 'LUXARDO FASHION_users',
+  SITE_CONTENT: 'LUXARDO FASHION_site_content',
+  PRIME_CONTENT: 'LUXARDO FASHION_prime_content',
+  POLICIES: 'LUXARDO FASHION_policies',
+  DASHBOARD_STATS: 'LUXARDO FASHION_dashboard_stats',
+  DUMMY_ADMIN: 'LUXARDO FASHION_dummy_admin',
+  MEDIA: 'LUXARDO FASHION_media',
+  BACKEND_USERS: 'LUXARDO FASHION_backend_users',
+  BACKEND_SETTINGS: 'LUXARDO FASHION_backend_settings',
+  PRIME_GLOBAL_SETTINGS: 'LUXARDO FASHION_prime_global_settings'
 };
 
 // Initial mock users
@@ -182,7 +182,7 @@ const INITIAL_BACKEND_USERS: BackendUser[] = [
     id: 'dispatch-1',
     fullName: 'Arjun Singh',
     username: 'arjun_dispatch',
-    email: 'arjun@luxardo.com',
+    email: 'arjun@LUXARDO FASHION.com',
     password: 'dispatch123',
     role: 'dispatch',
     status: 'active',
@@ -410,12 +410,12 @@ export const storage = {
     }
     
     // Migration from old HOME_CONTENT if exists
-    const oldHomeData = localStorage.getItem('luxardo_home_content');
+    const oldHomeData = localStorage.getItem('LUXARDO FASHION_home_content');
     if (oldHomeData) {
       const homeContent = JSON.parse(oldHomeData);
       const newContent = { ...DEFAULT_SITE_CONTENT, homepage: { ...DEFAULT_SITE_CONTENT.homepage, ...homeContent } };
       localStorage.setItem(KEYS.SITE_CONTENT, JSON.stringify(newContent));
-      localStorage.removeItem('luxardo_home_content');
+      localStorage.removeItem('LUXARDO FASHION_home_content');
       return newContent;
     }
 
@@ -482,11 +482,11 @@ export const storage = {
 
   // Bespoke Requests
   getBespokeRequests: (): any[] => {
-    const data = localStorage.getItem('luxardo_bespoke_requests');
+    const data = localStorage.getItem('LUXARDO FASHION_bespoke_requests');
     return data ? JSON.parse(data) : [];
   },
   saveBespokeRequests: (requests: any[]) => {
-    localStorage.setItem('luxardo_bespoke_requests', JSON.stringify(requests));
+    localStorage.setItem('LUXARDO FASHION_bespoke_requests', JSON.stringify(requests));
   },
   addBespokeRequest: (request: any) => {
     const requests = storage.getBespokeRequests();
@@ -496,11 +496,11 @@ export const storage = {
 
   // Wholesale Inquiries
   getWholesaleInquiries: (): any[] => {
-    const data = localStorage.getItem('luxardo_wholesale_inquiries');
+    const data = localStorage.getItem('LUXARDO FASHION_wholesale_inquiries');
     return data ? JSON.parse(data) : [];
   },
   saveWholesaleInquiries: (inquiries: any[]) => {
-    localStorage.setItem('luxardo_wholesale_inquiries', JSON.stringify(inquiries));
+    localStorage.setItem('LUXARDO FASHION_wholesale_inquiries', JSON.stringify(inquiries));
   },
   addWholesaleInquiry: (inquiry: any) => {
     const inquiries = storage.getWholesaleInquiries();
@@ -510,11 +510,11 @@ export const storage = {
 
   // Contact Messages
   getContactMessages: (): any[] => {
-    const data = localStorage.getItem('luxardo_contact_messages');
+    const data = localStorage.getItem('LUXARDO FASHION_contact_messages');
     return data ? JSON.parse(data) : [];
   },
   saveContactMessages: (messages: any[]) => {
-    localStorage.setItem('luxardo_contact_messages', JSON.stringify(messages));
+    localStorage.setItem('LUXARDO FASHION_contact_messages', JSON.stringify(messages));
   },
   addContactMessage: (message: any) => {
     const messages = storage.getContactMessages();
@@ -555,11 +555,11 @@ export const storage = {
 
   // Saved Address
   getSavedAddress: (userId: string) => {
-    const data = localStorage.getItem(`luxardo_saved_address_${userId}`);
+    const data = localStorage.getItem(`LUXARDO FASHION_saved_address_${userId}`);
     return data ? JSON.parse(data) : null;
   },
   saveAddress: (userId: string, address: any) => {
-    localStorage.setItem(`luxardo_saved_address_${userId}`, JSON.stringify(address));
+    localStorage.setItem(`LUXARDO FASHION_saved_address_${userId}`, JSON.stringify(address));
   },
 
   // Media

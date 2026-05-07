@@ -1,4 +1,4 @@
-name: Deploy Luxardo to Firebase
+name: Deploy LUXARDO FASHION to Firebase
 on:
   push:
     branches: [main]
@@ -28,4 +28,4 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           channelId: live
-          projectId: luxardo-fashion-website
+          projectId: LUXARDO FASHION-fashion-website

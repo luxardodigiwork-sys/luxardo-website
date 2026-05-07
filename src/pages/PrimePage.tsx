@@ -182,7 +182,7 @@ export default function PrimePage() {
       {/* 4. Comparison */}
       <section className="section-padding bg-brand-white border-y border-brand-divider">
         <div className="max-w-4xl mx-auto">
-          <SectionHeader title="The Luxardo Standard" subtitle="Compare Membership Tiers" />
+          <SectionHeader title="The LUXARDO FASHION Standard" subtitle="Compare Membership Tiers" />
           
           <div className="mt-12 overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -250,10 +250,10 @@ export default function PrimePage() {
         <div className="max-w-3xl mx-auto px-6 space-y-8">
           <Star className="w-12 h-12 mx-auto text-brand-white/50" />
           <blockquote className="text-2xl md:text-4xl font-display leading-snug">
-            "Luxardo Prime is not just a membership; it is an initiation into a world where craftsmanship and personal expression converge flawlessly."
+            "LUXARDO FASHION Prime is not just a membership; it is an initiation into a world where craftsmanship and personal expression converge flawlessly."
           </blockquote>
           <div className="text-[11px] uppercase tracking-[0.25em] font-bold text-brand-white/60">
-            — The Luxardo Standard
+            — The LUXARDO FASHION Standard
           </div>
         </div>
       </section>
@@ -263,7 +263,7 @@ export default function PrimePage() {
         <div className="max-w-2xl mx-auto space-y-12 px-6">
           <h2 className="text-4xl font-display">Begin Your Journey</h2>
           <p className="font-sans text-brand-secondary leading-relaxed">
-            Step into the inner circle of LUXARDO. Experience the pinnacle of modern ethnic luxury through our Prime Member Services.
+            Step into the inner circle of LUXARDO FASHION. Experience the pinnacle of modern ethnic luxury through our Prime Member Services.
           </p>
           <div className="pt-8">
             {user?.isPrimeMember ? (

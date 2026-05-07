@@ -225,7 +225,7 @@ export function CustomerAuth() {
           <div className="flex items-center justify-center gap-2 mb-6">
             <Globe className="w-5 h-5 text-brand-black opacity-80" />
             <span className="font-display text-sm uppercase tracking-widest text-brand-black">
-              Luxardo Customer Portal
+              LUXARDO FASHION Customer Portal
             </span>
           </div>
 

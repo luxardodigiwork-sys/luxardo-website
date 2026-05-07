@@ -232,7 +232,7 @@ export default function AdminPrimeMembersPage() {
         <div className="space-y-1.5">
           <h1 className="text-4xl font-display tracking-tight text-brand-black">Prime Members</h1>
           <p className="text-brand-secondary text-sm font-sans max-w-md leading-relaxed">
-            Oversee the exclusive circle of Luxardo Prime members, managing their status, privileges, and bespoke service access.
+            Oversee the exclusive circle of LUXARDO FASHION Prime members, managing their status, privileges, and bespoke service access.
           </p>
         </div>
         

@@ -54,7 +54,7 @@ export default function TrackOrderPage() {
       events.unshift({
         date: processDate.toLocaleDateString(),
         time: processDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        location: 'LUXARDO Production Facility',
+        location: 'LUXARDO FASHION Production Facility',
         status: 'Processing',
         description: 'Your order is being reviewed by our tailoring team.'
       });
@@ -67,7 +67,7 @@ export default function TrackOrderPage() {
       events.unshift({
         date: packedDate.toLocaleDateString(),
         time: packedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        location: 'LUXARDO Dispatch Facility',
+        location: 'LUXARDO FASHION Dispatch Facility',
         status: 'Packed',
         description: 'Order carefully packed and ready for courier pickup.'
       });

@@ -40,7 +40,7 @@ export const DEFAULT_SITE_CONTENT = {
     intro: {
       label: 'The Maison',
       heading: 'Design Discipline',
-      description: 'Luxardo Fashion is a modern ethnic luxury menswear brand built around the philosophy of design discipline and selected imported fabrics. We believe that true luxury is found in the intersection of traditional craftsmanship and contemporary aesthetic precision.\n\nOur approach is defined by premium presentation and a refined customer experience, ensuring that every garment is not just worn, but experienced.',
+      description: 'LUXARDO FASHION Fashion is a modern ethnic luxury menswear brand built around the philosophy of design discipline and selected imported fabrics. We believe that true luxury is found in the intersection of traditional craftsmanship and contemporary aesthetic precision.\n\nOur approach is defined by premium presentation and a refined customer experience, ensuring that every garment is not just worn, but experienced.',
       ctaText: 'Discover Our Story',
       ctaLink: '/our-story',
       imageUrl: 'https://images.unsplash.com/photo-1593030761757-71fae45fa0e7?q=80&w=1000&auto=format&fit=crop'
@@ -48,7 +48,7 @@ export const DEFAULT_SITE_CONTENT = {
     ecosystem: {
       label: 'The System',
       heading: 'A Complete Luxury Ecosystem',
-      subheading: 'Luxardo Fashion is more than garments; it is a disciplined system of creation, refinement, and delivery.',
+      subheading: 'LUXARDO FASHION Fashion is more than garments; it is a disciplined system of creation, refinement, and delivery.',
       steps: [
         {
           step: "01",
@@ -160,8 +160,8 @@ export const DEFAULT_SITE_CONTENT = {
     },
     partnership: {
       label: 'Collaboration',
-      heading: 'Join Luxardo',
-      text: 'We invite global retailers, luxury boutiques, and visionary collaborators to connect with the Luxardo ecosystem. Together, we can redefine the modern ethnic luxury landscape.',
+      heading: 'Join LUXARDO FASHION',
+      text: 'We invite global retailers, luxury boutiques, and visionary collaborators to connect with the LUXARDO FASHION ecosystem. Together, we can redefine the modern ethnic luxury landscape.',
       ctaLabel: 'Wholesale & Partnerships',
       img: 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1200&auto=format&fit=crop'
     },
@@ -169,7 +169,7 @@ export const DEFAULT_SITE_CONTENT = {
       label: 'Craftsmanship',
       heading: 'The Return of Discipline',
       content1: 'In an era of mass production, many men feel that modern fashion has sacrificed individuality and structure for speed. The soul of a garment is often lost in the noise of the assembly line.',
-      content2: 'Luxardo was created as a response to this void. We are here to bring back discipline, design, and thoughtful refinement. Our mission is to close the gap between superficial fashion and a true premium menswear experience.',
+      content2: 'LUXARDO FASHION was created as a response to this void. We are here to bring back discipline, design, and thoughtful refinement. Our mission is to close the gap between superficial fashion and a true premium menswear experience.',
       imageUrl1: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1000&auto=format&fit=crop',
       imageUrl2: 'https://images.unsplash.com/photo-1558655146-d09347e92766?q=80&w=1000&auto=format&fit=crop'
     },
@@ -244,7 +244,7 @@ export const DEFAULT_SITE_CONTENT = {
     hero: {
       title: 'Our Story',
       subtitle: 'The Maison Heritage',
-      description: 'Luxardo exists to close the gap between superficial fashion and a true premium menswear experience.',
+      description: 'LUXARDO FASHION exists to close the gap between superficial fashion and a true premium menswear experience.',
       imageUrl: 'https://images.unsplash.com/photo-1593030761757-71fae45fa0e7?q=80&w=2000&auto=format&fit=crop'
     },
     observation: {
@@ -263,7 +263,7 @@ export const DEFAULT_SITE_CONTENT = {
       imageUrl: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=1200&auto=format&fit=crop'
     },
     discovery: {
-      label: 'The Luxardo Discovery',
+      label: 'The LUXARDO FASHION Discovery',
       heading: 'The Return to Discipline.',
       text: 'We found that true luxury comes from a return to the fundamentals: thoughtful design, selected imported fabrics, refined tailoring, and hand-finished character.',
       points: [
@@ -273,7 +273,7 @@ export const DEFAULT_SITE_CONTENT = {
       ]
     },
     narrative: {
-      heading: 'Luxardo exists to close the gap between superficial fashion and a true premium menswear experience.',
+      heading: 'LUXARDO FASHION exists to close the gap between superficial fashion and a true premium menswear experience.',
       text: 'We are here for the man who understands that his wardrobe is an extension of his discipline. We are here to provide the expertise, taste, and structural quality that the modern market has forgotten.'
     }
   },
@@ -281,7 +281,7 @@ export const DEFAULT_SITE_CONTENT = {
     hero: {
       feel: 'You seek garments that reflect your personal ambition and unique presence.',
       felt: 'Yet, modern menswear often feels mass-produced, lacking true identity and structure.',
-      found: 'Luxardo delivers architecturally constructed, premium ready-to-stitch ensembles designed for your exact identity.',
+      found: 'LUXARDO FASHION delivers architecturally constructed, premium ready-to-stitch ensembles designed for your exact identity.',
       image: 'https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=2148&auto=format&fit=crop'
     },
     visualDepth: {
@@ -317,7 +317,7 @@ export const DEFAULT_SITE_CONTENT = {
     },
     prime: {
       title: "The Prime Reserve",
-      description: "Our most exclusive limited-edition drops and rarest fabrics are reserved strictly for Luxardo Prime members. Never mass-produced. Never repeated."
+      description: "Our most exclusive limited-edition drops and rarest fabrics are reserved strictly for LUXARDO FASHION Prime members. Never mass-produced. Never repeated."
     },
     identity: "This is not just clothing. It is a constructed identity.",
     cta: {
@@ -329,16 +329,16 @@ export const DEFAULT_SITE_CONTENT = {
     hero: {
       title: 'Wholesale & Partnerships',
       subtitle: 'Global Expansion',
-      description: 'We invite global retailers, luxury boutiques, and visionary collaborators to connect with the Luxardo ecosystem.',
+      description: 'We invite global retailers, luxury boutiques, and visionary collaborators to connect with the LUXARDO FASHION ecosystem.',
       imageUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1200&auto=format&fit=crop'
     },
     intro: {
-      heading: 'Partner with the Luxardo Ecosystem',
-      text: 'We invite global retailers, luxury boutiques, and visionary collaborators to connect with the Luxardo ecosystem. Together, we can redefine the modern ethnic luxury landscape.'
+      heading: 'Partner with the LUXARDO FASHION Ecosystem',
+      text: 'We invite global retailers, luxury boutiques, and visionary collaborators to connect with the LUXARDO FASHION ecosystem. Together, we can redefine the modern ethnic luxury landscape.'
     },
     trust: {
       heading: 'A Disciplined Global Network',
-      text: 'Luxardo has established a robust wholesale infrastructure that supports premium retail partners across major metropolitan hubs. Our system is designed for reliability, consistency, and shared growth.',
+      text: 'LUXARDO FASHION has established a robust wholesale infrastructure that supports premium retail partners across major metropolitan hubs. Our system is designed for reliability, consistency, and shared growth.',
       imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1000&auto=format&fit=crop',
       stats: {
         cities: '12+',
@@ -347,7 +347,7 @@ export const DEFAULT_SITE_CONTENT = {
     },
     standards: {
       label: 'The Standard',
-      heading: 'Why Partner With Luxardo',
+      heading: 'Why Partner With LUXARDO FASHION',
       items: [
         { title: 'Modern Ethnic Luxury', desc: 'A refined positioning that bridges traditional heritage with contemporary sartorial discipline, offering a distinct aesthetic for the modern gentleman.' },
         { title: 'Selected Imported Fabrics', desc: 'Uncompromising material sourcing. We utilize only premium imported textiles chosen for their structural integrity and sensory refinement.' },
@@ -360,7 +360,7 @@ export const DEFAULT_SITE_CONTENT = {
     collaboration: {
       label: 'Selective Collaboration',
       heading: 'Curated Retail Partnerships',
-      text: 'Luxardo is not open to everyone. We are building long-term partnerships exclusively with retail spaces that value premium menswear, presentation discipline, and an elevated client experience.',
+      text: 'LUXARDO FASHION is not open to everyone. We are building long-term partnerships exclusively with retail spaces that value premium menswear, presentation discipline, and an elevated client experience.',
       imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1000&auto=format&fit=crop',
       partners: [
         'Premium Boutiques',
@@ -374,7 +374,7 @@ export const DEFAULT_SITE_CONTENT = {
       label: 'Partner Privileges',
       heading: 'Partnership Benefits',
       items: [
-        { title: 'Curated Collections', desc: 'Access to curated Luxardo collections and a selective product assortment tailored for premium retail spaces.' },
+        { title: 'Curated Collections', desc: 'Access to curated LUXARDO FASHION collections and a selective product assortment tailored for premium retail spaces.' },
         { title: 'Visual Presentation', desc: 'Premium visual presentation support and trust-building product presentation standards to elevate your floor displays.' },
         { title: 'Brand Consistency', desc: 'Consistent brand language and product identity across all touchpoints, ensuring a unified luxury experience for your clients.' },
         { title: 'Dedicated Support', desc: 'Dedicated wholesale relationship support to assist with orders, product knowledge, and seamless operational logistics.' },
@@ -393,7 +393,7 @@ export const DEFAULT_SITE_CONTENT = {
       heading: 'The Maison Concierge',
       subtitle: 'Personalized Service',
       text: 'Whether you are seeking a private style consultation or have a specific inquiry regarding our collections, our concierge team is dedicated to providing a refined and efficient response.',
-      email: 'Concern@Luxardofashion.com',
+      email: 'connect@luxardofashion.com',
       phone: '+1 (800) 123-4567',
       address: '123 Luxury Avenue, New York, NY 10022'
     },
@@ -403,21 +403,21 @@ export const DEFAULT_SITE_CONTENT = {
       saturday: { label: 'Saturday', time: '11:00 AM - 6:00 PM IST' }
     },
     socials: {
-      instagram: 'https://instagram.com/luxardo',
-      facebook: 'https://facebook.com/luxardo',
-      twitter: 'https://twitter.com/luxardo',
-      pinterest: 'https://pinterest.com/luxardo'
+      instagram: 'https://instagram.com/LUXARDO FASHION',
+      facebook: 'https://facebook.com/LUXARDO FASHION',
+      twitter: 'https://twitter.com/LUXARDO FASHION',
+      pinterest: 'https://pinterest.com/LUXARDO FASHION'
     }
   },
   footer: {
-    about: 'Luxardo Fashion represents the pinnacle of modern luxury menswear, blending architectural precision with ethnic heritage.',
-    copyright: '© 2015 Luxardo Fashion. All rights reserved.',
+    about: 'LUXARDO FASHION Fashion represents the pinnacle of modern luxury menswear, blending architectural precision with ethnic heritage.',
+    copyright: '© 2015 LUXARDO FASHION Fashion. All rights reserved.',
     copyrightYear: '2015',
-    copyrightText: 'Luxardo Fashion. All rights reserved',
+    copyrightText: 'LUXARDO FASHION Fashion. All rights reserved',
     socialLinks: {
-      instagram: 'https://instagram.com/luxardo',
-      facebook: 'https://facebook.com/luxardo',
-      twitter: 'https://twitter.com/luxardo'
+      instagram: 'https://instagram.com/LUXARDO FASHION',
+      facebook: 'https://facebook.com/LUXARDO FASHION',
+      twitter: 'https://twitter.com/LUXARDO FASHION'
     }
   }
 };

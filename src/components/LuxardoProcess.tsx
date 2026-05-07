@@ -5,7 +5,7 @@ import { SectionHeader } from './SectionHeader';
 const processSteps = [
   {
     title: 'Imported Fabric Selection',
-    text: 'Every Luxardo garment begins with carefully selected imported fabrics chosen for texture, durability, and refined appearance.',
+    text: 'Every LUXARDO FASHION garment begins with carefully selected imported fabrics chosen for texture, durability, and refined appearance.',
     img: 'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=1000&auto=format&fit=crop',
   },
   {
@@ -25,7 +25,7 @@ const processSteps = [
   },
   {
     title: 'Finishing Inspection',
-    text: 'Every garment passes through careful inspection to ensure finishing standards meet Luxardo expectations.',
+    text: 'Every garment passes through careful inspection to ensure finishing standards meet LUXARDO FASHION expectations.',
     img: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1000&auto=format&fit=crop',
   },
   {
@@ -40,12 +40,12 @@ const processSteps = [
   }
 ];
 
-export const LuxardoProcess: React.FC = () => {
+export const LUXARDO FASHIONProcess: React.FC = () => {
   return (
     <section className="section-padding bg-brand-white">
       <SectionHeader 
-        title="The Luxardo Process" 
-        subtitle="From fabric selection to final presentation, every Luxardo garment follows a refined process designed to maintain quality, structure, and modern ethnic elegance." 
+        title="The LUXARDO FASHION Process" 
+        subtitle="From fabric selection to final presentation, every LUXARDO FASHION garment follows a refined process designed to maintain quality, structure, and modern ethnic elegance." 
       />
       
       <div className="max-w-[1400px] mx-auto space-y-32 md:space-y-48 mt-24">

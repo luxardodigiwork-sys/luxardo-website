@@ -101,7 +101,7 @@ export default function AdminLoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-bg rounded-full mb-6">
             <Lock size={24} className="text-brand-black" />
           </div>
-          <h1 className="text-3xl font-display mb-2 uppercase tracking-widest">Luxardo Admin</h1>
+          <h1 className="text-3xl font-display mb-2 uppercase tracking-widest">LUXARDO FASHION Admin</h1>
           <p className="text-brand-secondary text-sm">
             {step === 'login' && 'Enter your credentials to access the panel'}
             {step === 'request_reset' && 'Recover your master access'}
@@ -140,7 +140,7 @@ export default function AdminLoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full border border-brand-divider p-4 pl-12 focus:outline-none focus:border-brand-black transition-colors"
-                  placeholder="admin@luxardo.com"
+                  placeholder="admin@LUXARDO FASHION.com"
                   required
                 />
               </div>
@@ -198,7 +198,7 @@ export default function AdminLoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full border border-brand-divider p-4 pl-12 focus:outline-none focus:border-brand-black transition-colors"
-                  placeholder="admin@luxardo.com"
+                  placeholder="admin@LUXARDO FASHION.com"
                   required
                 />
               </div>

@@ -12,7 +12,7 @@ import { GoogleGenAI } from "@google/genai";
 const app = express();
 const PUBLIC_PORT = Number(process.env.PUBLIC_PORT || 3000);
 const ADMIN_PORT = Number(process.env.ADMIN_PORT || 24678);
-const JWT_SECRET = process.env.JWT_SECRET || "luxardo-super-secret-key-2026";
+const JWT_SECRET = process.env.JWT_SECRET || "LUXARDO FASHION-super-secret-key-2026";
 
 const adminRoutePrefixes = [
   "/admin",
@@ -37,7 +37,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Initialize SQLite Database
-const db = new Database("luxardo.db");
+const db = new Database("LUXARDO FASHION.db");
 
 // Create tables
 db.exec(`
@@ -127,7 +127,7 @@ db.exec(`
 
 // Seed default admin and permissions if not exists
 const seedData = () => {
-  const adminEmail = "luxardodigiwork@gmail.com";
+  const adminEmail = "LUXARDO FASHIONdigiwork@gmail.com";
   const adminPassword = "7976672811";
 
   const stmt = db.prepare("SELECT * FROM users WHERE role = ?");
@@ -190,7 +190,7 @@ const seedData = () => {
   );
 
   // Seed default customer user
-  const customerEmail = "testuser@luxardo.com";
+  const customerEmail = "testuser@LUXARDO FASHION.com";
   const customerPassword = "311001";
   const existingCustomer = userStmt.get(customerEmail) as any;
   if (!existingCustomer) {
@@ -873,7 +873,7 @@ app.post("/api/admin/chat", authenticate, async (req: any, res) => {
       return res.status(400).json({ error: "Invalid messages format" });
     }
 
-    const systemInstruction = `You are the Luxardo Admin Panel Assistant. You help the store owner and staff navigate and use the admin panel. 
+    const systemInstruction = `You are the LUXARDO FASHION Admin Panel Assistant. You help the store owner and staff navigate and use the admin panel. 
 You know everything about the admin panel. Here is the structure and functionality:
 - Dashboard (/admin/dashboard): Overview of store performance, recent orders, and key metrics.
 - Products (/admin/products): Manage inventory, add/edit/remove products, set prices, and stock levels.

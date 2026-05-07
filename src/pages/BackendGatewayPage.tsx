@@ -183,7 +183,7 @@ export default function BackendGatewayPage() {
                   <Lock size={24} />
                 </div>
                 <h1 className="text-4xl md:text-5xl font-bold text-black tracking-tight mb-4 uppercase">
-                  Luxardo Backend
+                  LUXARDO FASHION Backend
                 </h1>
                 <p className="text-gray-500 font-medium text-lg max-w-md mx-auto">
                   Secure operational access for internal teams
@@ -473,7 +473,7 @@ export default function BackendGatewayPage() {
         {/* Footer */}
         <div className="mt-20 text-center">
           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.3em]">
-            Luxardo Internal Systems &copy; {new Date().getFullYear()}
+            LUXARDO FASHION Internal Systems &copy; {new Date().getFullYear()}
           </p>
           <div className="flex justify-center gap-6 mt-6">
             <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">

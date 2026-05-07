@@ -72,7 +72,7 @@ export default function CartPage() {
             
             <div className="bg-brand-white p-12 border border-brand-divider space-y-12">
               <div className="space-y-4">
-                <h4 className="text-[11px] uppercase tracking-[0.25em] font-bold text-brand-black">The Luxardo Experience</h4>
+                <h4 className="text-[11px] uppercase tracking-[0.25em] font-bold text-brand-black">The LUXARDO FASHION Experience</h4>
                 <p className="text-lg font-display italic text-brand-secondary">Every order is an invitation into our world of modern ethnic luxury.</p>
               </div>
               
@@ -84,7 +84,7 @@ export default function CartPage() {
                   </div>
                   <div className="space-y-4">
                     <p className="text-sm font-sans text-brand-secondary leading-relaxed">
-                      Arrives in our signature LUXARDO matte black presentation box, featuring acid-free archival tissue and a hand-pressed wax seal.
+                      Arrives in our signature LUXARDO FASHION matte black presentation box, featuring acid-free archival tissue and a hand-pressed wax seal.
                     </p>
                     <ul className="text-[11px] uppercase tracking-widest font-bold text-brand-secondary space-y-3">
                       <li className="flex items-center gap-2"><Check size={12} /> Premium packaging included</li>

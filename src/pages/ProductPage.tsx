@@ -103,7 +103,7 @@ export default function ProductPage() {
   const handleShare = async () => {
     const shareData = {
       title: product.name,
-      text: `Check out ${product.name} at Luxardo`,
+      text: `Check out ${product.name} at LUXARDO FASHION`,
       url: window.location.href,
     };
     if (navigator.share) {

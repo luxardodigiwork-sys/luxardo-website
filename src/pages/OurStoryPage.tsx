@@ -20,7 +20,7 @@ export default function OurStoryPage() {
         <div className="absolute inset-0 opacity-50">
           <img 
             src={content.hero.imageUrl} 
-            alt="Luxardo Story" 
+            alt="LUXARDO FASHION Story" 
             className="w-full h-full object-cover "
             referrerPolicy="no-referrer"
           />
@@ -32,7 +32,7 @@ export default function OurStoryPage() {
             animate={{ opacity: 1, scale: 1 }}
             className="flex justify-center"
           >
-            <img src="https://www.luxardofashion.in/Img/LOGOn.png" alt="Luxardo" className="h-16 md:h-24 invert brightness-0" />
+            <img src="https://www.LUXARDO FASHIONfashion.in/Img/LOGOn.png" alt="LUXARDO FASHION" className="h-16 md:h-24 invert brightness-0" />
           </motion.div>
           <div className="space-y-6">
             <motion.p 

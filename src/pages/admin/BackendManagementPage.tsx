@@ -1179,7 +1179,7 @@ export default function BackendManagementPage() {
                             })
                           }
                           className="w-full pl-12 pr-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:outline-none focus:border-black focus:bg-white transition-all"
-                          placeholder="e.g. arjun@luxardo.in"
+                          placeholder="e.g. arjun@LUXARDO FASHION.in"
                           required
                         />
                       </div>

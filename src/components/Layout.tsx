@@ -70,7 +70,7 @@ export default function Layout() {
           if (country) setSelectedCountry(country);
         } else if (firstVisitCompleted) {
           // Fallback to localStorage if Firebase doesn't have data
-          const savedCountry = localStorage.getItem('luxardo_country');
+          const savedCountry = localStorage.getItem('LUXARDO FASHION_country');
           if (savedCountry) {
             const country = ALL_COUNTRIES.find(c => c.code === savedCountry);
             if (country) setSelectedCountry(country);
@@ -83,7 +83,7 @@ export default function Layout() {
         if (savedPrefs?.language) {
           setSelectedLanguage(savedPrefs.language as Language);
         } else {
-          const savedLang = localStorage.getItem('luxardo_lang');
+          const savedLang = localStorage.getItem('LUXARDO FASHION_lang');
           if (savedLang) {
             setSelectedLanguage(savedLang as Language);
           } else {
@@ -93,9 +93,9 @@ export default function Layout() {
       } catch (err) {
         console.error('Failed to initialize preferences:', err);
         // Fallback to localStorage
-        const savedCountry = localStorage.getItem('luxardo_country');
-        const savedLang = localStorage.getItem('luxardo_lang');
-        const firstVisitCompleted = localStorage.getItem('luxardo_first_visit_completed');
+        const savedCountry = localStorage.getItem('LUXARDO FASHION_country');
+        const savedLang = localStorage.getItem('LUXARDO FASHION_lang');
+        const firstVisitCompleted = localStorage.getItem('LUXARDO FASHION_first_visit_completed');
         
         if (savedCountry && firstVisitCompleted) {
           const country = ALL_COUNTRIES.find(c => c.code === savedCountry);
@@ -119,9 +119,9 @@ export default function Layout() {
       let needsUpdate = false;
       const updates: { country?: string; language?: string; currency?: string } = {};
 
-      const localCountry = localStorage.getItem('luxardo_country');
-      const localLang = localStorage.getItem('luxardo_lang');
-      const localCurrency = localStorage.getItem('luxardo_currency');
+      const localCountry = localStorage.getItem('LUXARDO FASHION_country');
+      const localLang = localStorage.getItem('LUXARDO FASHION_lang');
+      const localCurrency = localStorage.getItem('LUXARDO FASHION_currency');
 
       if (user.country && user.country !== localCountry) {
         let country = ALL_COUNTRIES.find(c => c.code === user.country);
@@ -134,8 +134,8 @@ export default function Layout() {
         }
         if (country) {
           setSelectedCountry(country);
-          localStorage.setItem('luxardo_country', country.code);
-          localStorage.setItem('luxardo_first_visit_completed', 'true');
+          localStorage.setItem('LUXARDO FASHION_country', country.code);
+          localStorage.setItem('LUXARDO FASHION_first_visit_completed', 'true');
           setShowFirstVisitModal(false);
         }
       } else if (!user.country && localCountry) {
@@ -145,14 +145,14 @@ export default function Layout() {
 
       if (user.language && user.language !== localLang) {
         setSelectedLanguage(user.language as Language);
-        localStorage.setItem('luxardo_lang', user.language);
+        localStorage.setItem('LUXARDO FASHION_lang', user.language);
       } else if (!user.language && localLang) {
         updates.language = localLang;
         needsUpdate = true;
       }
 
       if (user.currency && user.currency !== localCurrency) {
-        localStorage.setItem('luxardo_currency', user.currency);
+        localStorage.setItem('LUXARDO FASHION_currency', user.currency);
       } else if (!user.currency && localCurrency) {
         updates.currency = localCurrency;
         needsUpdate = true;
@@ -224,12 +224,12 @@ export default function Layout() {
       setSelectedCountry(country);
       
       // Save to localStorage as fallback
-      localStorage.setItem('luxardo_country', country.code);
-      localStorage.setItem('luxardo_currency', country.currency.code);
+      localStorage.setItem('LUXARDO FASHION_country', country.code);
+      localStorage.setItem('LUXARDO FASHION_currency', country.currency.code);
       
       const defaultLang = country.language;
       setSelectedLanguage(defaultLang);
-      localStorage.setItem('luxardo_lang', defaultLang);
+      localStorage.setItem('LUXARDO FASHION_lang', defaultLang);
       
       // Save to Firebase if user is logged in
       if (isLoggedIn && user && user.role !== 'admin') {
@@ -260,7 +260,7 @@ export default function Layout() {
 
   const handleLanguageSelect = (lang: Language) => {
     setSelectedLanguage(lang);
-    localStorage.setItem('luxardo_lang', lang);
+    localStorage.setItem('LUXARDO FASHION_lang', lang);
     
     if (isLoggedIn && user && user.role !== 'admin') {
       firebaseStorage.saveUserPreferences({ language: lang })
@@ -272,14 +272,14 @@ export default function Layout() {
 
   const handleFirstVisitSelect = (country: Country) => {
     setSelectedCountry(country);
-    localStorage.setItem('luxardo_country', country.code);
-    localStorage.setItem('luxardo_currency', country.currency.code);
+    localStorage.setItem('LUXARDO FASHION_country', country.code);
+    localStorage.setItem('LUXARDO FASHION_currency', country.currency.code);
     
     const defaultLang = country.language;
     setSelectedLanguage(defaultLang);
-    localStorage.setItem('luxardo_lang', defaultLang);
+    localStorage.setItem('LUXARDO FASHION_lang', defaultLang);
     
-    localStorage.setItem('luxardo_first_visit_completed', 'true');
+    localStorage.setItem('LUXARDO FASHION_first_visit_completed', 'true');
     
     // Mark first visit complete in Firebase
     firebaseStorage.markFirstVisitComplete()
@@ -526,7 +526,7 @@ export default function Layout() {
             <div className="flex items-center gap-4">
               <User className="w-5 h-5" />
               <div>
-                <p className="text-[11px] uppercase tracking-widest font-bold mb-1">Welcome to Luxardo</p>
+                <p className="text-[11px] uppercase tracking-widest font-bold mb-1">Welcome to LUXARDO FASHION</p>
                 <p className="text-sm font-sans opacity-80">Please log in to access your exclusive benefits.</p>
               </div>
             </div>
@@ -708,7 +708,7 @@ export default function Layout() {
           <p className="flex-1 text-[10px] uppercase tracking-[0.25em] font-bold text-brand-white/60 flex flex-wrap items-center justify-center gap-2 text-center">
             <span>@2015</span>
             <Logo className="h-2.5 w-auto" dark />
-            <span>{footerContent?.copyrightText || 'Luxardo Maison. All rights reserved.'}</span>
+            <span>{footerContent?.copyrightText || 'LUXARDO FASHION Maison. All rights reserved.'}</span>
           </p>
           <div className="flex-1 flex justify-center md:justify-end gap-6">
             {footerContent?.socialLinks?.instagram && (

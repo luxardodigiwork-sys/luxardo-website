@@ -22,7 +22,7 @@
 
 #### 2. **AuthContext Migration**
 ```
-📍 Before: localStorage.setItem('luxardo_user') ❌
+📍 Before: localStorage.setItem('LUXARDO FASHION_user') ❌
 📍 After: Firebase Auth + Firestore (.users/{uid}) ✅
 ```
 
@@ -34,7 +34,7 @@
 
 #### 3. **CartContext Migration**
 ```
-📍 Before: localStorage.setItem('luxardo_cart') ❌
+📍 Before: localStorage.setItem('LUXARDO FASHION_cart') ❌
 📍 After: Firestore (.carts/{uid}) for logged-in users ✅
          sessionStorage for anonymous users 📦
 ```
@@ -47,7 +47,7 @@
 
 #### 4. **User Preferences (Language/Country/Currency)**
 ```
-📍 Before: localStorage.getItem('luxardo_country/lang/currency') ❌
+📍 Before: localStorage.getItem('LUXARDO FASHION_country/lang/currency') ❌
 📍 After: Firestore (.userPreferences/{uid}) ✅
          localStorage fallback for anonymous users
 ```
