@@ -15,6 +15,12 @@ declare global { interface Window { recaptchaVerifier?: RecaptchaVerifier; } }
 
 type Step = 'phone' | 'otp' | 'profile';
 
+// Test accounts — hidden from UI, only work when exact number is entered
+const TEST_ACCOUNTS: Record<string, { otp: string; role: string; name: string; email: string }> = {
+  '+915799957999': { otp: '999755', role: 'customer', name: 'Test User', email: 'testuser@luxardo.com' },
+  '+915700057000': { otp: '999755', role: 'admin', name: 'Test Admin', email: 'testadmin@luxardo.com' },
+};
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -23,7 +29,7 @@ export default function LoginPage() {
 
   const [step, setStep] = useState<Step>('phone');
   const [countryCode, setCountryCode] = useState('+91');
-  const [countryFlag, setCountryFlag] = useState('🇮🇳');
+  const [countryFlag, setCountryFlag] = useState('\u{1F1EE}\u{1F1F3}');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
@@ -31,13 +37,15 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [profile, setProfile] = useState({ firstName: '', lastName: '', email: '', gender: '', age: '' });
   const recaptchaRef = useRef<HTMLDivElement>(null);
+  const [isTestAccount, setIsTestAccount] = useState(false);
+  const [testAccountData, setTestAccountData] = useState<typeof TEST_ACCOUNTS[string] | null>(null);
 
   useEffect(() => {
     if (isAuthReady && user) navigate(from, { replace: true });
   }, [user, isAuthReady]);
 
   useEffect(() => {
-    if (step === 'phone') {
+    if (step === 'phone' && !isTestAccount) {
       try {
         if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); }
         window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'normal' });
@@ -51,6 +59,17 @@ export default function LoginPage() {
     setError(''); setLoading(true);
     try {
       const fullPhone = `${countryCode}${phone.replace(/^0+/, '')}`;
+
+      // Check if this is a test account
+      const testData = TEST_ACCOUNTS[fullPhone];
+      if (testData) {
+        setIsTestAccount(true);
+        setTestAccountData(testData);
+        setStep('otp');
+        setLoading(false);
+        return;
+      }
+
       const verifier = window.recaptchaVerifier!;
       const result = await signInWithPhoneNumber(auth, fullPhone, verifier);
       setConfirmation(result);
@@ -64,6 +83,32 @@ export default function LoginPage() {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
+      // Test account bypass
+      if (isTestAccount && testAccountData) {
+        if (otp === testAccountData.otp) {
+          const testId = `test-${testAccountData.role}-${Date.now()}`;
+          login({
+            id: testId,
+            name: testAccountData.name,
+            email: testAccountData.email,
+            role: testAccountData.role,
+            isPrimeMember: false,
+            phone: `${countryCode}${phone}`,
+          });
+          if (testAccountData.role === 'admin') {
+            navigate('/admin/dashboard', { replace: true });
+          } else {
+            navigate(from, { replace: true });
+          }
+          setLoading(false);
+          return;
+        } else {
+          setError('OTP galat hai. Dobara try karo.');
+          setLoading(false);
+          return;
+        }
+      }
+
       const result = await confirmation!.confirm(otp);
       const uid = result.user.uid;
       const userDoc = await getDoc(doc(db, 'customers', uid));
@@ -126,15 +171,15 @@ export default function LoginPage() {
                 onChange={e => setCountryCode(e.target.value)}
                 className="border border-gray-200 px-2 py-3 text-sm focus:outline-none focus:border-black w-28"
               >
-                <option value="+91">🇮🇳 +91</option>
-                <option value="+1">🇺🇸 +1</option>
-                <option value="+44">🇬🇧 +44</option>
-                <option value="+971">🇦🇪 +971</option>
-                <option value="+65">🇸🇬 +65</option>
-                <option value="+60">🇲🇾 +60</option>
-                <option value="+61">🇦🇺 +61</option>
-                <option value="+49">🇩🇪 +49</option>
-                <option value="+33">🇫🇷 +33</option>
+                <option value="+91">{'\u{1F1EE}\u{1F1F3}'} +91</option>
+                <option value="+1">{'\u{1F1FA}\u{1F1F8}'} +1</option>
+                <option value="+44">{'\u{1F1EC}\u{1F1E7}'} +44</option>
+                <option value="+971">{'\u{1F1E6}\u{1F1EA}'} +971</option>
+                <option value="+65">{'\u{1F1F8}\u{1F1EC}'} +65</option>
+                <option value="+60">{'\u{1F1F2}\u{1F1FE}'} +60</option>
+                <option value="+61">{'\u{1F1E6}\u{1F1FA}'} +61</option>
+                <option value="+49">{'\u{1F1E9}\u{1F1EA}'} +49</option>
+                <option value="+33">{'\u{1F1EB}\u{1F1F7}'} +33</option>
               </select>
               <input
                 type="tel"
@@ -165,7 +210,7 @@ export default function LoginPage() {
               className="w-full bg-black text-white py-4 text-xs uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50">
               {loading ? 'Verifying...' : 'Verify OTP'}
             </button>
-            <button type="button" onClick={() => setStep('phone')}
+            <button type="button" onClick={() => { setStep('phone'); setIsTestAccount(false); setTestAccountData(null); }}
               className="w-full mt-3 text-xs text-gray-400 underline">
               Change number
             </button>
@@ -194,7 +239,7 @@ export default function LoginPage() {
               </select>
             </div>
             <div className="border border-gray-100 px-4 py-3 text-sm text-gray-400 mb-4 bg-gray-50">
-              📱 {countryCode} {phone} (verified)
+              {'\u{1F4F1}'} {countryCode} {phone} (verified)
             </div>
             <button type="submit" disabled={loading}
               className="w-full bg-black text-white py-4 text-xs uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50">
