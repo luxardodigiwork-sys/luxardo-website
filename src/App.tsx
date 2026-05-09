@@ -111,11 +111,6 @@ const ProtectedBackendRoute = ({
 };
 
 export default function App() {
-  const [isInitializing, setIsInitializing] = useState(true);
-
-  useEffect(() => {
-  setIsInitializing(false);
-}, []);
 
   useEffect(() => {
     if ("scrollRestoration" in history) {
@@ -123,13 +118,13 @@ export default function App() {
     }
 
     const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      duration: 2.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -8 * t)),
       orientation: "vertical",
       gestureOrientation: "vertical",
       smoothWheel: true,
-      wheelMultiplier: 1.2,
-      touchMultiplier: 1.5,
+      wheelMultiplier: 0.8,
+      touchMultiplier: 1.0,
       infinite: false,
     });
 
@@ -147,14 +142,7 @@ export default function App() {
     };
   }, []);
 
-  if (isInitializing) {
-    return (
-      <div className="min-h-screen bg-brand-bg flex flex-col gap-6 items-center justify-center font-display uppercase tracking-widest text-sm text-brand-black">
-        <div className="w-12 h-12 border-t-2 border-r-2 border-brand-black rounded-full animate-spin"></div>
-        <p className="animate-pulse">Loading LUXARDO FASHION...</p>
-      </div>
-    );
-  }
+
 
   return (
     <AuthProvider>
@@ -231,15 +219,8 @@ export default function App() {
             </Route>
 
             <Route path="/backend" element={<BackendGatewayPage />} />
-            <Route
-              path="/admin-access"
-              caseSensitive={false}
-              element={<Navigate to="/backend" replace />}
-            />
-            <Route
-              path="/ADMIN-ACCESS"
-              element={<Navigate to="/backend" replace />}
-            />
+            <Route path="/admin-access" caseSensitive={false} element={<Navigate to="/admin/login" replace />} />
+            <Route path="/ADMIN-ACCESS" element={<Navigate to="/admin/login" replace />} />
             <Route
               path="/analysis/login"
               element={<Navigate to="/backend" replace />}

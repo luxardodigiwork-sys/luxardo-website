@@ -6,3 +6,19 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local secrets
+.env.local
+.env*.local
+serviceAccount.json
+*-firebase-adminsdk-*.json
+
+# Local secrets
+.env.local
+.env*.local
+serviceAccount.json
+*-firebase-adminsdk-*.json
+LUXARDO FASHION.db
+*.db
+src/pages/admin/*.old
+luxardo-production-setup.sh

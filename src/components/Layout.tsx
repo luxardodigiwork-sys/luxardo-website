@@ -9,7 +9,6 @@ import { Country, Language } from '../types';
 import { COUNTRIES, LANGUAGES, COLLECTIONS } from '../constants';
 import { ALL_COUNTRIES } from '../countries';
 import Logo from './Logo';
-import { FirstVisitModal } from './FirstVisitModal';
 import { SearchOverlay } from './SearchOverlay';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -37,7 +36,6 @@ export default function Layout() {
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<Language>('English (US)');
   const [showRegionModal, setShowRegionModal] = useState(false);
-  const [showFirstVisitModal, setShowFirstVisitModal] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showCollectionsDropdown, setShowCollectionsDropdown] = useState(false);
@@ -77,9 +75,7 @@ export default function Layout() {
           }
         } else {
           // Show first visit modal
-          setShowFirstVisitModal(true);
         }
-
         if (savedPrefs?.language) {
           setSelectedLanguage(savedPrefs.language as Language);
         } else {
@@ -100,10 +96,7 @@ export default function Layout() {
         if (savedCountry && firstVisitCompleted) {
           const country = ALL_COUNTRIES.find(c => c.code === savedCountry);
           if (country) setSelectedCountry(country);
-        } else {
-          setShowFirstVisitModal(true);
         }
-
         if (savedLang) {
           setSelectedLanguage(savedLang as Language);
         }
@@ -116,57 +109,31 @@ export default function Layout() {
   // Sync preferences with user profile
   useEffect(() => {
     if (isAuthReady && user && user.role !== 'admin') {
-      let needsUpdate = false;
-      const updates: { country?: string; language?: string; currency?: string } = {};
-
       const localCountry = localStorage.getItem('LUXARDO FASHION_country');
       const localLang = localStorage.getItem('LUXARDO FASHION_lang');
       const localCurrency = localStorage.getItem('LUXARDO FASHION_currency');
 
       if (user.country && user.country !== localCountry) {
-        let country = ALL_COUNTRIES.find(c => c.code === user.country);
-        if (!country) {
-          country = ALL_COUNTRIES.find(c => c.name === user.country);
-          if (country) {
-            updates.country = country.code;
-            needsUpdate = true;
-          }
-        }
+        const country = ALL_COUNTRIES.find(c => c.code === user.country) ||
+                        ALL_COUNTRIES.find(c => c.name === user.country);
         if (country) {
           setSelectedCountry(country);
           localStorage.setItem('LUXARDO FASHION_country', country.code);
           localStorage.setItem('LUXARDO FASHION_first_visit_completed', 'true');
-          setShowFirstVisitModal(false);
         }
-      } else if (!user.country && localCountry) {
-        updates.country = localCountry;
-        needsUpdate = true;
       }
-
       if (user.language && user.language !== localLang) {
         setSelectedLanguage(user.language as Language);
         localStorage.setItem('LUXARDO FASHION_lang', user.language);
-      } else if (!user.language && localLang) {
-        updates.language = localLang;
-        needsUpdate = true;
       }
-
       if (user.currency && user.currency !== localCurrency) {
         localStorage.setItem('LUXARDO FASHION_currency', user.currency);
-      } else if (!user.currency && localCurrency) {
-        updates.currency = localCurrency;
-        needsUpdate = true;
-      }
-
-      if (needsUpdate) {
-      // updateUserPreferences(); // इसे अभी के लिए बंद कर दें
       }
     }
-  }, [isAuthReady, user, updateUserPreferences]);
+  }, [isAuthReady, user]);
 
   // Login Reminder Logic
   useEffect(() => {
-    if (isLoggedIn || showFirstVisitModal || showLoginReminder || reminderCount >= 3) return;
 
     const delay = reminderCount === 0 ? 5000 : 30000;
     
@@ -182,15 +149,20 @@ export default function Layout() {
     }, delay);
 
     return () => clearTimeout(timer);
-  }, [isLoggedIn, showFirstVisitModal, reminderCount, showLoginReminder]);
 
+  }, [isLoggedIn, showLoginReminder, reminderCount]);
   // Close menu on route change and handle scroll lock during transition
   useEffect(() => {
     setIsMenuOpen(false);
     
-    // Stop lenis during page transition to prevent janky scrolling
+    // Stop lenis briefly during page transition, then restart
     if ((window as any).lenis) {
       (window as any).lenis.stop();
+      setTimeout(() => {
+        if ((window as any).lenis) {
+          (window as any).lenis.start();
+        }
+      }, 100);
     }
   }, [location.pathname]);
 
@@ -209,7 +181,7 @@ export default function Layout() {
 
   // Lock body scroll when any modal/overlay is open
   useEffect(() => {
-    if (isMenuOpen || isSearchOpen || showFirstVisitModal || showRegionModal) {
+    if (isMenuOpen || isSearchOpen || showRegionModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -217,8 +189,7 @@ export default function Layout() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isMenuOpen, isSearchOpen, showFirstVisitModal, showRegionModal]);
-
+  }, [isMenuOpen, isSearchOpen, showRegionModal]);
   const handleCountrySelect = (country: Country) => {
     if (country.active) {
       setSelectedCountry(country);
@@ -270,42 +241,6 @@ export default function Layout() {
     }
   };
 
-  const handleFirstVisitSelect = (country: Country) => {
-    setSelectedCountry(country);
-    localStorage.setItem('LUXARDO FASHION_country', country.code);
-    localStorage.setItem('LUXARDO FASHION_currency', country.currency.code);
-    
-    const defaultLang = country.language;
-    setSelectedLanguage(defaultLang);
-    localStorage.setItem('LUXARDO FASHION_lang', defaultLang);
-    
-    localStorage.setItem('LUXARDO FASHION_first_visit_completed', 'true');
-    
-    // Mark first visit complete in Firebase
-    firebaseStorage.markFirstVisitComplete()
-      .catch(err => console.error('Failed to mark first visit:', err));
-    
-    // Save preferences to Firebase if user is logged in
-    if (isLoggedIn && user && user.role !== 'admin') {
-      firebaseStorage.saveUserPreferences({
-        country: country.code,
-        language: defaultLang,
-        currency: country.currency.code
-      }).catch(err => console.error('Failed to save preferences:', err));
-      
-      updateUserPreferences({
-        country: country.code,
-        language: defaultLang,
-        currency: country.currency.code
-      });
-    }
-    
-    setShowFirstVisitModal(false);
-    // Redirect to home if not already there
-    if (location.pathname !== '/') {
-      navigate('/');
-    }
-  };
 
   const navItems = [
     { name: 'HOME', path: '/' },
@@ -321,11 +256,11 @@ export default function Layout() {
     path: `/collections/${col.id}`
   }));
 
+
   return (
-    <div className="min-h-screen bg-brand-bg text-brand-black selection:bg-brand-black selection:text-brand-white flex flex-col">
+    <div className="min-h-screen w-full max-w-full bg-brand-bg text-brand-black selection:bg-brand-black selection:text-brand-white flex flex-col overflow-x-hidden">
       {/* First Visit Modal */}
       <AnimatePresence>
-        {showFirstVisitModal && <FirstVisitModal onSelect={handleFirstVisitSelect} />}
       </AnimatePresence>
 
       {/* Top Bar (Layer 1) */}
@@ -733,4 +668,6 @@ export default function Layout() {
       <SearchOverlay isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </div>
   );
+
+
 }

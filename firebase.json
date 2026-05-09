@@ -18,7 +18,7 @@
   },
   "storage": [
     {
-      "bucket": "LUXARDO FASHION-website.appspot.com",
+      "bucket": "luxardo-fashion-website.firebasestorage.app",
       "rules": "storage.rules"
     }
   ]

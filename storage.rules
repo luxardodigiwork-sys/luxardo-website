@@ -1,9 +1,29 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.uid == '0Frc6Dy2MqN0zc0UFkmqvpELFnr1' ||
+        request.auth.token.admin == true
+      );
     }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function isImage() { return request.resource.contentType.matches('image/.*'); }
+    function isPdfOrImage() {
+      return request.resource.contentType.matches('image/.*')
+          || request.resource.contentType.matches('application/pdf');
+    }
+    function maxSize(mb) { return request.resource.size < mb * 1024 * 1024; }
+
+    match /uploads/{p=**} { allow read: if true; allow write: if isAdmin() && maxSize(50); }
+    match /products/{p=**} { allow read: if true; allow write: if isAdmin() && isImage() && maxSize(50); }
+    match /media/{p=**} { allow read: if true; allow write: if isAdmin() && maxSize(50); }
+    match /content/{p=**} { allow read: if true; allow write: if isAdmin() && maxSize(50); }
+    match /collections/{p=**} { allow read: if true; allow write: if isAdmin() && isImage() && maxSize(50); }
+    match /users/{uid}/{p=**} { allow read: if true; allow write: if isOwner(uid) && isImage() && maxSize(5); }
+    match /orders/{uid}/{p=**} { allow read: if isOwner(uid) || isAdmin(); allow write: if isAdmin() && maxSize(15); }
+    match /bespoke/{uid}/{p=**} { allow read: if isOwner(uid) || isAdmin(); allow write: if isOwner(uid) && maxSize(10); }
+    match /{p=**} { allow read, write: if false; }
   }
 }

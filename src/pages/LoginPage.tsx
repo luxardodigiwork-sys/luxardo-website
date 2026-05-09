@@ -17,8 +17,8 @@ type Step = 'phone' | 'otp' | 'profile';
 
 // Test accounts — hidden from UI, only work when exact number is entered
 const TEST_ACCOUNTS: Record<string, { otp: string; role: string; name: string; email: string }> = {
-  '+915799957999': { otp: '999755', role: 'customer', name: 'Test User', email: 'testuser@LUXARDO FASHION.com' },
-  '+915700057000': { otp: '999755', role: 'admin', name: 'Test Admin', email: 'testadmin@LUXARDO FASHION.com' },
+  // REMOVED: Hardcoded test accounts (security)
+  
 };
 
 export default function LoginPage() {

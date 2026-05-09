@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
@@ -34,7 +34,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   login: (userData: User) => void;
   updateUserPreferences: (preferences: Partial<User>) => void;
-  loginAdmin: (username: string, password: string) => Promise<void>;
+  loginAdmin: (email: string, password: string) => Promise<void>;
   resetPassword: (email: string, resetCode: string, newPassword: string) => Promise<void>;
   upgradeToPrime: () => void;
 }
@@ -50,21 +50,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         if (firebaseUser) {
           const customerDoc = await getDoc(doc(db, 'customers', firebaseUser.uid));
-
           if (customerDoc.exists()) {
             const data = customerDoc.data();
             const userData: User = {
               id: firebaseUser.uid,
-              name: data.firstName
-                ? `${data.firstName} ${data.lastName || ''}`.trim()
-                : data.name || 'User',
+              name: data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : data.name || 'User',
               email: data.email || firebaseUser.email || '',
               role: data.role || 'customer',
               isPrimeMember: data.isPrimeMember || false,
               phone: data.phone || firebaseUser.phoneNumber || '',
-              country: data.country,
-              language: data.language,
-              currency: data.currency,
+              country: data.country, language: data.language, currency: data.currency,
               createdAt: data.createdAt,
               membershipActivation: data.membershipActivation,
               membershipExpiry: data.membershipExpiry,
@@ -73,67 +68,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               primePrivileges: data.primePrivileges,
               notes: data.notes,
             };
-
             setUser(userData);
             localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(userData));
             localStorage.removeItem('LUXARDO FASHION_logged_out');
           } else {
-            const cached = localStorage.getItem('LUXARDO FASHION_user');
-            if (cached) {
-              try {
-                const parsedUser = JSON.parse(cached);
-                if (parsedUser?.id === firebaseUser.uid) {
-                  setUser(parsedUser);
-                } else {
-                  localStorage.removeItem('LUXARDO FASHION_user');
-                  setUser(null);
-                }
-              } catch {
-                localStorage.removeItem('LUXARDO FASHION_user');
-                setUser(null);
-              }
-            } else {
-              setUser(null);
-            }
+            const fallback: User = {
+              id: firebaseUser.uid,
+              name: firebaseUser.displayName || 'User',
+              email: firebaseUser.email || '',
+              role: 'customer',
+              isPrimeMember: false,
+              phone: firebaseUser.phoneNumber || '',
+            };
+            setUser(fallback);
+            localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(fallback));
           }
         } else {
-          const cached = localStorage.getItem('LUXARDO FASHION_user');
-          const wasLoggedOut = localStorage.getItem('LUXARDO FASHION_logged_out');
-
-          if (cached && !wasLoggedOut) {
-            try {
-              const parsedUser = JSON.parse(cached);
-              const adminRoles = ['admin', 'super_admin', 'dispatch', 'owner', 'analysis'];
-              if (parsedUser?.id && adminRoles.includes(parsedUser.role)) {
-                setUser(parsedUser);
-              } else {
-                localStorage.removeItem('LUXARDO FASHION_user');
-                setUser(null);
-              }
-            } catch {
-              localStorage.removeItem('LUXARDO FASHION_user');
-              setUser(null);
-            }
-          } else {
-            setUser(null);
-          }
+          setUser(null);
+          localStorage.removeItem('LUXARDO FASHION_user');
         }
       } catch (err) {
-        console.error('Auth state change error:', err);
-        try {
-          const cached = localStorage.getItem('LUXARDO FASHION_user');
-          if (cached) {
-            const parsedUser = JSON.parse(cached);
-            if (parsedUser?.id) setUser(parsedUser);
-          }
-        } catch {
-          setUser(null);
-        }
+        console.error('Auth error:', err);
       } finally {
         setIsAuthReady(true);
       }
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -144,92 +103,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    try {
-      if (auth.currentUser) {
-        await signOut(auth);
-      }
-    } catch (err) {
-      console.error('Firebase sign out error:', err);
-    } finally {
-      setUser(null);
-      localStorage.removeItem('LUXARDO FASHION_user');
-      localStorage.setItem('LUXARDO FASHION_logged_out', 'true');
-      try {
-        sessionStorage.removeItem('LUXARDO FASHION_cart');
-        localStorage.removeItem('LUXARDO FASHION_temp_preferences');
-        localStorage.removeItem('LUXARDO FASHION_temp_wishlist');
-      } catch {}
-    }
+    try { if (auth.currentUser) await signOut(auth); } catch (err) {}
+    setUser(null);
+    localStorage.removeItem('LUXARDO FASHION_user');
+    localStorage.setItem('LUXARDO FASHION_logged_out', 'true');
   };
 
   const updateUserPreferences = (preferences: Partial<User>) => {
     if (!user) return;
-
-    const updatedUser = { ...user, ...preferences };
-    setUser(updatedUser);
-    localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(updatedUser));
-
+    const updated = { ...user, ...preferences };
+    setUser(updated);
+    localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(updated));
     if (auth.currentUser && user.role === 'customer') {
-      const updateData: Record<string, any> = {};
-      if (preferences.country !== undefined) updateData.country = preferences.country;
-      if (preferences.language !== undefined) updateData.language = preferences.language;
-      if (preferences.currency !== undefined) updateData.currency = preferences.currency;
-      if (preferences.isPrimeMember !== undefined) updateData.isPrimeMember = preferences.isPrimeMember;
-      if (preferences.membershipActivation !== undefined) updateData.membershipActivation = preferences.membershipActivation;
-      if (preferences.membershipExpiry !== undefined) updateData.membershipExpiry = preferences.membershipExpiry;
-      if (preferences.primePrivileges !== undefined) updateData.primePrivileges = preferences.primePrivileges;
-
-      if (Object.keys(updateData).length > 0) {
-        updateData.lastUpdated = new Date().toISOString();
-        setDoc(doc(db, 'customers', auth.currentUser.uid), updateData, { merge: true })
-          .catch((err) => console.error('Failed to sync preferences to Firestore:', err));
-      }
+      const updateData: Record<string, any> = { lastUpdated: new Date().toISOString() };
+      Object.keys(preferences).forEach(k => {
+        if ((preferences as any)[k] !== undefined) updateData[k] = (preferences as any)[k];
+      });
+      setDoc(doc(db, 'customers', auth.currentUser.uid), updateData, { merge: true })
+        .catch(e => console.error('Sync error:', e));
     }
   };
 
-  const loginAdmin = async (username: string, password: string) => {
-    console.log('Admin login:', username);
-    const adminUser: User = {
-      id: 'admin',
-      name: 'Admin',
-      email: username,
-      role: 'admin',
-      isPrimeMember: false,
-    };
-    login(adminUser);
+  const loginAdmin = async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const resetPassword = async (email: string, resetCode: string, newPassword: string) => {
-    console.log('Reset password for', email, resetCode, newPassword);
+  const resetPassword = async (email: string, code: string, newPassword: string) => {
+    console.log('Reset password for', email);
   };
 
   const upgradeToPrime = () => {
-    if (user) {
-      updateUserPreferences({ isPrimeMember: true });
-    }
+    if (user) updateUserPreferences({ isPrimeMember: true });
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoggedIn: !!user,
-        isAuthReady,
-        logout,
-        login,
-        updateUserPreferences,
-        loginAdmin,
-        resetPassword,
-        upgradeToPrime,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user, isLoggedIn: !!user, isAuthReady, logout, login,
+      updateUserPreferences, loginAdmin, resetPassword, upgradeToPrime,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 }

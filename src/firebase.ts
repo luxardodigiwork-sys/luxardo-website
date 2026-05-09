@@ -3,18 +3,15 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// Aapki direct API keys yahan set hain
 const firebaseConfig = {
-  apiKey: "AIzaSyAfqktiFGPeb4gxk83SzeEb6XhVGBDwrsY",
-  authDomain: "LUXARDO FASHION-fashion-website.firebaseapp.com",
-  projectId: "LUXARDO FASHION-fashion-website",
-  storageBucket: "LUXARDO FASHION-fashion-website.firebasestorage.app",
-  messagingSenderId: "654297681314",
-  appId: "1:654297681314:web:64381a856ae8d3f36236fb",
-  measurementId: "G-4B6F1EXHKT"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase Tools
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
