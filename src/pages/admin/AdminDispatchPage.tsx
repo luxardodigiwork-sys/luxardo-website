@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { storage } from '../../utils/localStorage';
+import { subscribeOrders, updateOrderStatusInFirestore } from '../../utils/ordersFirestore';
 import { formatCurrency } from '../../utils/currency';
 import { Order, BackendUser } from '../../types';
 
@@ -32,6 +33,10 @@ export default function AdminDispatchPage() {
   useEffect(() => {
     const fetchData = () => {
       const ordersData = storage.getOrders();
+      // Day 2: Subscribe to Firestore real-time orders (replaces static read)
+      const unsub = subscribeOrders((firestoreOrders) => setOrders(firestoreOrders));
+      // Cleanup on unmount handled by useEffect return value (added below)
+      (window as any).__unsubOrders = unsub;
       const usersData = storage.getBackendUsers();
       setOrders(ordersData);
       setBackendUsers(usersData.filter(u => u.role === 'dispatch'));

@@ -9,6 +9,8 @@ import { Country, Language } from '../types';
 import { COUNTRIES, LANGUAGES, COLLECTIONS } from '../constants';
 import { ALL_COUNTRIES } from '../countries';
 import Logo from './Logo';
+import WhatsAppButton from './WhatsAppButton';
+import Animated3DHeader from './Animated3DHeader';
 import { SearchOverlay } from './SearchOverlay';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -281,12 +283,12 @@ export default function Layout() {
       </div>
 
       {/* Main Header (Layer 2) */}
-      <header className={`sticky top-0 z-40 bg-brand-bg/95 backdrop-blur-md border-b border-brand-divider transition-all duration-500 ${isScrolled ? 'py-1.5 md:py-2 shadow-sm' : 'py-2.5 md:py-3.5'}`}>
+      <header className={`sticky top-0 z-40 bg-brand-bg/95 backdrop-blur-md border-b border-brand-divider transition-all duration-500 ${isScrolled ? 'py-1 md:py-1.5 shadow-md scale-[0.98]' : 'py-3 md:py-4'}`}>
         <div className="max-w-[1800px] mx-auto px-4 md:px-12 flex items-center justify-between">
           {/* Left: Logo */}
           <div className="flex-1 flex items-center">
             <Link to="/" className="flex items-center">
-              <Logo className={`transition-all duration-500 ${isScrolled ? 'h-[28px] md:h-[36px] w-[120px] md:w-[157px]' : 'h-[36px] md:h-[48px] w-[157px] md:w-[210px]'}`} />
+              <Logo className={`transition-all duration-500 ${isScrolled ? 'h-[24px] md:h-[30px] w-[100px] md:w-[140px]' : 'h-[40px] md:h-[52px] w-[170px] md:w-[220px]'}`} />
             </Link>
           </div>
           
@@ -666,6 +668,7 @@ export default function Layout() {
       </footer>
 
       <SearchOverlay isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <WhatsAppButton />
     </div>
   );
 

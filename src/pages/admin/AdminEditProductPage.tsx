@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { storage } from '../../utils/localStorage';
+import { saveProductToFirestore, deleteProductFromFirestore } from '../../utils/productsFirestore';
 import { Product } from '../../types';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 
@@ -93,6 +94,7 @@ export default function AdminEditProductPage() {
           updatedAt: new Date().toISOString()
         } : p
       );
+      try { await saveProductToFirestore(updatedProduct); } catch(e) { console.error(e); }
       storage.saveProducts(updatedProducts);
       navigate('/admin/products');
     } catch (error: any) {

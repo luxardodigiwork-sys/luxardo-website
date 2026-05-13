@@ -125,3 +125,5 @@ export const verifyRazorpayPayment = functions.https.onRequest(async (req, res) 
     res.status(500).send("Internal Server Error.");
   }
 });
+// Email notifications (Day 3)
+export { sendOrderEmail } from "./emailSender";

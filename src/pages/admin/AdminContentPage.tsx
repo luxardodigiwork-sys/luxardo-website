@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, Image as ImageIcon, Plus, Trash2, Link as LinkIcon, Phone, Mail, MapPin, Layout as LayoutIcon, BookOpen, Scissors, Globe, MessageSquare, Info, RotateCcw, ChevronRight, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { storage } from '../../utils/localStorage';
+import { saveSiteContentToFirestore } from '../../utils/siteContentSync';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 import { ConfirmModal } from '../../components/admin/ConfirmModal';
 
@@ -76,6 +77,12 @@ export default function AdminContentPage() {
     setIsSaving(true);
     try {
       storage.saveSiteContent(content);
+      // Sub-phase 2.1: Also save to Firestore (visible to all visitors after refresh)
+      try {
+        await saveSiteContentToFirestore(content);
+      } catch (firestoreErr) {
+        console.error('Firestore save failed (localStorage saved):', firestoreErr);
+      }
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (error: any) {

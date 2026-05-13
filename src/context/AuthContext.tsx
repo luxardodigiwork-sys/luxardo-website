@@ -3,6 +3,8 @@ import { onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebas
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
+const MASTER_ADMIN_EMAIL = 'luxardodigiwork@gmail.com';
+
 interface User {
   id: string;
   name: string;
@@ -49,7 +51,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
-          const customerDoc = await getDoc(doc(db, 'customers', firebaseUser.uid));
+          // 🔐 AUTO-PROVISION ADMIN: If master email logs in but no customer doc, create one with role:admin
+          const isMasterAdmin = firebaseUser.email?.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+          const customerRef = doc(db, 'customers', firebaseUser.uid);
+          let customerDoc = await getDoc(customerRef);
+
+          if (!customerDoc.exists() && isMasterAdmin) {
+            console.log('[AuthContext] Master admin login — auto-provisioning customer doc with role:admin');
+            const adminData = {
+              id: firebaseUser.uid,
+              name: 'Admin',
+              email: firebaseUser.email,
+              role: 'admin',
+              isPrimeMember: false,
+              createdAt: new Date().toISOString(),
+              permissions: {
+                products: true, orders: true, content: true, media: true,
+                customers: true, dispatch: true, settings: true,
+              },
+            };
+            await setDoc(customerRef, adminData);
+            customerDoc = await getDoc(customerRef);
+          }
+
           if (customerDoc.exists()) {
             const data = customerDoc.data();
             const userData: User = {
@@ -88,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.removeItem('LUXARDO FASHION_user');
         }
       } catch (err) {
-        console.error('Auth error:', err);
+        console.error('Auth state change error:', err);
       } finally {
         setIsAuthReady(true);
       }

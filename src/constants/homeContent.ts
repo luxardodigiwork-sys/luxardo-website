@@ -9,11 +9,11 @@ export const DEFAULT_SITE_CONTENT = {
       primaryCtaLink: '/collections',
       secondaryCtaText: 'PRIME MEMBER',
       secondaryCtaLink: '/prime-membership',
-      imageUrl: 'https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=2148&auto=format&fit=crop',
+      imageUrl: 'https://images.unsplash.com/photo-1542060748-10c28b62716f?q=80&w=2148&auto=format&fit=crop',
       slides: [
         {
           id: 1,
-          imageUrl: 'https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=2148&auto=format&fit=crop',
+          imageUrl: 'https://images.unsplash.com/photo-1542060748-10c28b62716f?q=80&w=2148&auto=format&fit=crop',
           heading: 'Modern Ethnic Menswear',
           subtext: 'Premium fabrics. Structured silhouettes.',
           cta: 'Shop Now',
@@ -90,7 +90,7 @@ export const DEFAULT_SITE_CONTENT = {
           step: "07",
           title: "Final Dispatch Check",
           desc: "A final verification of the complete package before it is released for global dispatch.",
-          img: "https://images.unsplash.com/photo-1556740734-7f96267b118a?q=80&w=1000&auto=format&fit=crop"
+          img: "https://images.unsplash.com/photo-1598532163257-ae3c6b2524b6?q=80&w=1000&auto=format&fit=crop"
         }
       ]
     },
@@ -103,31 +103,31 @@ export const DEFAULT_SITE_CONTENT = {
         {
           id: 'three-piece-suit',
           title: '3 Piece Suit',
-          image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=1000&auto=format&fit=crop',
+          image: 'https://images.unsplash.com/photo-1565689876697-e467b6c54da2?q=80&w=1000&auto=format&fit=crop',
           link: '/collections/three-piece-suit'
         },
         {
           id: 'tuxedo',
           title: 'Tuxedo',
-          image: 'https://images.unsplash.com/photo-1593030761757-71fae46af504?q=80&w=1000&auto=format&fit=crop',
+          image: 'https://images.unsplash.com/photo-1605007493699-af65834f8a00?q=80&w=1000&auto=format&fit=crop',
           link: '/collections/tuxedo'
         },
         {
           id: 'jodhpuri',
           title: 'Jodhpuri',
-          image: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=1000&auto=format&fit=crop',
+          image: 'https://images.unsplash.com/photo-1612423284934-2850a4ea6b0f?q=80&w=1000&auto=format&fit=crop',
           link: '/collections/jodhpuri'
         },
         {
           id: 'koti-pant',
           title: 'Koti Pant',
-          image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1000&auto=format&fit=crop',
+          image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1000&auto=format&fit=crop',
           link: '/collections/koti-pant'
         },
         {
           id: 'koti-kurta',
           title: 'Koti Kurta',
-          image: 'https://images.unsplash.com/photo-1621335829175-95f437384d7c?q=80&w=1000&auto=format&fit=crop',
+          image: 'https://images.unsplash.com/photo-1558655146-d09347e92766?q=80&w=1000&auto=format&fit=crop',
           link: '/collections/koti-kurta'
         },
         {
@@ -139,7 +139,7 @@ export const DEFAULT_SITE_CONTENT = {
         {
           id: 'casual',
           title: 'Casual',
-          image: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=1000&auto=format&fit=crop',
+          image: 'https://images.unsplash.com/photo-1584916201218-f4242ceb4809?q=80&w=1000&auto=format&fit=crop',
           link: '/collections/casual'
         }
       ]
@@ -163,14 +163,14 @@ export const DEFAULT_SITE_CONTENT = {
       heading: 'Join LUXARDO FASHION',
       text: 'We invite global retailers, luxury boutiques, and visionary collaborators to connect with the LUXARDO FASHION ecosystem. Together, we can redefine the modern ethnic luxury landscape.',
       ctaLabel: 'Wholesale & Partnerships',
-      img: 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1200&auto=format&fit=crop'
+      img: 'https://images.unsplash.com/photo-1607083206968-13611e3d76db?q=80&w=1200&auto=format&fit=crop'
     },
     ourStory: {
       label: 'Craftsmanship',
       heading: 'The Return of Discipline',
       content1: 'In an era of mass production, many men feel that modern fashion has sacrificed individuality and structure for speed. The soul of a garment is often lost in the noise of the assembly line.',
       content2: 'LUXARDO FASHION was created as a response to this void. We are here to bring back discipline, design, and thoughtful refinement. Our mission is to close the gap between superficial fashion and a true premium menswear experience.',
-      imageUrl1: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1000&auto=format&fit=crop',
+      imageUrl1: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1000&auto=format&fit=crop',
       imageUrl2: 'https://images.unsplash.com/photo-1558655146-d09347e92766?q=80&w=1000&auto=format&fit=crop'
     },
     prime: {
@@ -193,35 +193,35 @@ export const DEFAULT_SITE_CONTENT = {
         title: "Our Story.",
         subtitle: "Design Sketching",
         description: "From the world's finest mills to your wardrobe. A journey of uncompromising quality, expert craftsmanship, and timeless design.",
-        image: "https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        image: "https://images.unsplash.com/photo-1542060748-10c28b62716f?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
         imageSize: "4k"
       },
       {
         title: "Global Sourcing",
         subtitle: "01 / Premium Fabric",
         description: "We import premium fabrics from across the entire world, meticulously selecting only the finest materials to ensure an unparalleled foundation for our garments.",
-        image: "https://images.unsplash.com/photo-1584227282544-763914f6b216?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        image: "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
         imageSize: "4k"
       },
       {
         title: "Fabric Finishing",
         subtitle: "02 / Treatment",
         description: "Each fabric undergoes specialized finishing processes, enhancing its natural texture, drape, and longevity to meet our exacting luxury standards.",
-        image: "https://images.unsplash.com/photo-1618220179428-22790b46a015?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        image: "https://images.unsplash.com/photo-1612423284934-2850a4ea6b0f?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
         imageSize: "4k"
       },
       {
         title: "Personalized Sketching",
         subtitle: "03 / Design",
         description: "Our master designers sketch personalized, bespoke designs, translating your unique vision into detailed sartorial blueprints.",
-        image: "https://images.unsplash.com/photo-1558693154-1d8560822606?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        image: "https://images.unsplash.com/photo-1549388604-817d15aa0110?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
         imageSize: "4k"
       },
       {
         title: "Expert Craftsmanship",
         subtitle: "04 / Implementation",
         description: "These designs are brought to life by our expert and experienced artisans, who execute every cut and stitch with decades of tailoring precision.",
-        image: "https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
+        image: "https://images.unsplash.com/photo-1542060748-10c28b62716f?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
         imageSize: "4k"
       },
       {
@@ -260,7 +260,7 @@ export const DEFAULT_SITE_CONTENT = {
       content1: 'We felt the same frustration. We saw many clients who felt that high-end garments looked expensive in photographs but lacked real craftsmanship and structural integrity when worn.',
       content2: 'The industry had created a gap between superficial luxury and true premium experience. A gap where the "luxury" label was used to mask average tailoring and uninspired fabric choices.',
       quote: 'We realized that true luxury doesn\'t shout; it whispers through the precision of its construction.',
-      imageUrl: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=1200&auto=format&fit=crop'
+      imageUrl: 'https://images.unsplash.com/photo-1584916201218-f4242ceb4809?q=80&w=1200&auto=format&fit=crop'
     },
     discovery: {
       label: 'The LUXARDO FASHION Discovery',
@@ -282,7 +282,7 @@ export const DEFAULT_SITE_CONTENT = {
       feel: 'You seek garments that reflect your personal ambition and unique presence.',
       felt: 'Yet, modern menswear often feels mass-produced, lacking true identity and structure.',
       found: 'LUXARDO FASHION delivers architecturally constructed, premium ready-to-stitch ensembles designed for your exact identity.',
-      image: 'https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=2148&auto=format&fit=crop'
+      image: 'https://images.unsplash.com/photo-1542060748-10c28b62716f?q=80&w=2148&auto=format&fit=crop'
     },
     visualDepth: {
       layer1: 'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=2148&auto=format&fit=crop',
@@ -303,12 +303,12 @@ export const DEFAULT_SITE_CONTENT = {
       {
         title: "03. Artisan Crafting",
         description: "Handcrafted embroidery inspired by armory structure, sketched and designed by masters.",
-        image: "https://images.unsplash.com/photo-1551482850-13a8261e4115?q=80&w=2000"
+        image: "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=2000"
       },
       {
         title: "04. Ready-to-Stitch",
         description: "Delivered as a pristine, ready-to-stitch package with a clear vision of the final garment.",
-        image: "https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=2000"
+        image: "https://images.unsplash.com/photo-1542060748-10c28b62716f?q=80&w=2000"
       }
     ],
     differentiation: {
@@ -330,7 +330,7 @@ export const DEFAULT_SITE_CONTENT = {
       title: 'Wholesale & Partnerships',
       subtitle: 'Global Expansion',
       description: 'We invite global retailers, luxury boutiques, and visionary collaborators to connect with the LUXARDO FASHION ecosystem.',
-      imageUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1200&auto=format&fit=crop'
+      imageUrl: 'https://images.unsplash.com/photo-1607083206968-13611e3d76db?q=80&w=1200&auto=format&fit=crop'
     },
     intro: {
       heading: 'Partner with the LUXARDO FASHION Ecosystem',

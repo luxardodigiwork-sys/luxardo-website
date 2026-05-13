@@ -47,6 +47,8 @@ function CountryModalBridge() {
   return <FirstVisitModal onSelect={setCountry} />;
 }
 import { CartProvider } from "./context/CartContext";
+import { syncSiteContentFromFirestore, subscribeSiteContent } from "./utils/siteContentSync";
+import { fetchProductsFromFirestore } from "./utils/productsFirestore";
 
 import RegisterPage from "./pages/RegisterPage";
 
@@ -111,6 +113,18 @@ const ProtectedBackendRoute = ({
 };
 
 export default function App() {
+  // Sub-phase 2.5: Real-time site content sync from Firestore
+  useEffect(() => {
+    syncSiteContentFromFirestore();
+    fetchProductsFromFirestore();
+    
+    const unsubSiteContent = subscribeSiteContent(() => {
+      window.dispatchEvent(new Event('siteContentUpdated'));
+    });
+    
+    return () => unsubSiteContent();
+  }, []);
+
 
   useEffect(() => {
     if ("scrollRestoration" in history) {

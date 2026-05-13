@@ -5,6 +5,7 @@ import { Globe, Sparkles, PenTool, BadgeCheck, Package } from 'lucide-react';
 import { Country, Language, Product } from '../types';
 import { storage } from '../utils/localStorage';
 import { useAuth } from '../context/AuthContext';
+import HomeOurStorySection from '../components/HomeOurStorySection';
 import { DEFAULT_SITE_CONTENT } from '../constants/homeContent';
 
 const HERO_SLIDES = [
@@ -354,119 +355,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 1.5. Our Threads. Our Story. (3D Scrubbing Experience) */}
-      <section ref={storyRef} className="bg-brand-white relative h-[300vh]">
-        {/* Sticky Container */}
-        <div className="sticky top-0 h-screen w-full overflow-hidden flex flex-col">
-          {/* Desktop Layout */}
-          <div className="hidden md:flex max-w-[1400px] mx-auto w-full h-full items-center px-6 md:px-12">
-            {/* Left: Sketch Image */}
-            <div className="w-1/2 h-full flex items-center justify-center p-12">
-              <div className="w-full max-w-md aspect-[3/4] relative">
-                <AnimatePresence mode="wait">
-                  <motion.img
-                    key={activeStoryStep}
-                    src={storySteps[activeStoryStep].image}
-                    initial={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
-                    animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
-                    exit={{ opacity: 0, filter: "blur(10px)", scale: 1.05 }}
-                    transition={{ duration: 0.6, ease: "easeInOut" }}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                </AnimatePresence>
-                {/* Decorative Sketch Frame */}
-                <div className="absolute inset-0 border border-brand-black/5 pointer-events-none"></div>
-              </div>
-            </div>
-            
-            {/* Right: Crossfading Text */}
-            <div className="w-1/2 relative h-[60vh] flex items-center pl-16">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeStoryStep}
-                  initial={{ opacity: 0, y: 40 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -40 }}
-                  transition={{ duration: 0.5, ease: "easeOut" }}
-                  className="absolute w-full pr-12"
-                >
-                  {/* Large Background Number */}
-                  <div className="absolute -left-8 -top-20 text-[180px] lg:text-[220px] font-display text-brand-black/[0.03] font-bold pointer-events-none select-none leading-none z-0">
-                    {activeStoryStep === 0 ? 'EST' : `0${activeStoryStep}`}
-                  </div>
-
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-4 mb-8">
-                      <span className="w-12 h-[1px] bg-brand-secondary/50"></span>
-                      <span className="text-[10px] uppercase tracking-[0.4em] font-bold text-brand-secondary">
-                        {storySteps[activeStoryStep].subtitle}
-                      </span>
-                    </div>
-                    <h3 className="text-4xl lg:text-6xl font-display tracking-tight text-brand-black mb-8 leading-[1.1]">
-                      {activeStoryStep === 0 ? (
-                        <span className="font-bold text-brand-black">Our Story.</span>
-                      ) : (
-                        storySteps[activeStoryStep].title
-                      )}
-                    </h3>
-                    <p className="text-lg text-brand-secondary/80 font-light leading-relaxed max-w-md">
-                      {storySteps[activeStoryStep].description}
-                    </p>
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* Mobile Layout */}
-          <div className="md:hidden w-full h-full flex flex-col relative bg-brand-white pt-16">
-            {/* Top: Sketch Image */}
-            <div className="h-[40vh] w-full relative px-6 flex items-center justify-center">
-              <AnimatePresence mode="wait">
-                <motion.img
-                  key={activeStoryStep}
-                  src={storySteps[activeStoryStep].image}
-                  initial={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
-                  animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
-                  exit={{ opacity: 0, filter: "blur(10px)", scale: 1.05 }}
-                  transition={{ duration: 0.6, ease: "easeInOut" }}
-                  className="absolute inset-0 w-full h-full object-cover p-4"
-                  referrerPolicy="no-referrer"
-                />
-              </AnimatePresence>
-            </div>
-            
-            {/* Bottom: Crossfading Text */}
-            <div className="h-[60vh] w-full relative px-6 pt-8">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeStoryStep}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.4, ease: "easeOut" }}
-                  className="absolute w-[calc(100%-3rem)]"
-                >
-                  <span className="text-[10px] uppercase tracking-[0.4em] font-bold text-brand-secondary mb-3 block">
-                    {storySteps[activeStoryStep].subtitle}
-                  </span>
-                  <h3 className="text-3xl font-display tracking-tight text-brand-black mb-3">
-                    {activeStoryStep === 0 ? (
-                      <span className="font-bold text-brand-black">Our Story.</span>
-                    ) : (
-                      storySteps[activeStoryStep].title
-                    )}
-                  </h3>
-                  <p className="text-sm text-brand-secondary/80 font-light leading-relaxed mb-4">
-                    {storySteps[activeStoryStep].description}
-                  </p>
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Our Story — 3D Smooth Scroll Experience */}
+      <HomeOurStorySection />
 
       {/* Stats Section */}
       <section className="bg-brand-white pb-16 md:pb-24 pt-8 md:pt-12 overflow-hidden">

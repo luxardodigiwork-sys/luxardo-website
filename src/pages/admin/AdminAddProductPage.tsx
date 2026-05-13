@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { storage } from '../../utils/localStorage';
+import { saveProductToFirestore } from '../../utils/productsFirestore';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 
 export default function AdminAddProductPage() {
