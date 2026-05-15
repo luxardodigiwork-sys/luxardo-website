@@ -42,12 +42,11 @@ const FALLBACK_STORY_STEPS = [
 ];
 
 export default function HomeOurStorySection() {
-  const storyRef = useRef(null);
+  const storyRef = useRef<HTMLElement>(null);
   const [activeStoryStep, setActiveStoryStep] = useState(0);
 
   const siteContent = storage.getSiteContent();
-  const siteStorySteps = siteContent && siteContent.homepage && siteContent.homepage.storySteps;
-  
+  const siteStorySteps = siteContent?.homepage?.storySteps;
   const STORY_STEPS = (siteStorySteps && siteStorySteps.length > 0)
     ? siteStorySteps
     : FALLBACK_STORY_STEPS;
@@ -67,153 +66,110 @@ export default function HomeOurStorySection() {
   const currentStep = STORY_STEPS[activeStoryStep];
   const isFirst = activeStoryStep === 0;
 
-  return React.createElement(
-    "section",
-    { ref: storyRef, className: "bg-brand-bg relative h-[300vh]" },
-    React.createElement(
-      "div",
-      { className: "sticky top-0 h-screen w-full overflow-hidden flex flex-col" },
-      // Desktop layout
-      React.createElement(
-        "div",
-        { className: "hidden md:flex max-w-[1400px] mx-auto w-full h-full items-center px-6 md:px-12" },
-        // Left: image
-        React.createElement(
-          "div",
-          { className: "w-1/2 h-full flex items-center justify-center p-12" },
-          React.createElement(
-            "div",
-            { className: "w-full max-w-md aspect-[3/4] relative" },
-            React.createElement(
-              AnimatePresence,
-              { mode: "wait" },
-              React.createElement(motion.img, {
-                key: activeStoryStep,
-                src: currentStep.image,
-                initial: { opacity: 0, filter: "blur(10px)", scale: 0.95 },
-                animate: { opacity: 1, filter: "blur(0px)", scale: 1 },
-                exit: { opacity: 0, filter: "blur(10px)", scale: 1.05 },
-                transition: { duration: 0.6, ease: "easeInOut" },
-                className: "absolute inset-0 w-full h-full object-cover shadow-2xl",
-                referrerPolicy: "no-referrer"
-              })
-            ),
-            React.createElement("div", {
-              className: "absolute inset-0 border border-brand-black/5 pointer-events-none"
-            })
-          )
-        ),
-        // Right: text
-        React.createElement(
-          "div",
-          { className: "w-1/2 relative h-[60vh] flex items-center pl-16" },
-          React.createElement(
-            AnimatePresence,
-            { mode: "wait" },
-            React.createElement(
-              motion.div,
-              {
-                key: activeStoryStep,
-                initial: { opacity: 0, y: 40 },
-                animate: { opacity: 1, y: 0 },
-                exit: { opacity: 0, y: -40 },
-                transition: { duration: 0.5, ease: "easeOut" },
-                className: "absolute w-full pr-12"
-              },
-              React.createElement(
-                "div",
-                { className: "absolute -left-8 -top-20 text-[180px] lg:text-[220px] font-display text-brand-black/[0.03] font-bold pointer-events-none select-none leading-none z-0" },
-                isFirst ? "EST" : ("0" + activeStoryStep)
-              ),
-              React.createElement(
-                "div",
-                { className: "relative z-10" },
-                React.createElement(
-                  "div",
-                  { className: "flex items-center gap-4 mb-8" },
-                  React.createElement("span", { className: "w-12 h-[1px] bg-brand-secondary/50" }),
-                  React.createElement(
-                    "span",
-                    { className: "text-[10px] uppercase tracking-[0.4em] font-bold text-brand-secondary" },
-                    currentStep.subtitle
-                  )
-                ),
-                React.createElement(
-                  "h3",
-                  { className: "text-4xl lg:text-6xl font-display tracking-tight text-brand-black mb-8 leading-[1.1]" },
-                  isFirst
-                    ? React.createElement("span", { className: "font-bold text-brand-black" }, "Our Story.")
-                    : currentStep.title
-                ),
-                React.createElement(
-                  "p",
-                  { className: "text-lg text-brand-secondary/80 font-light leading-relaxed max-w-md" },
-                  currentStep.description
-                )
-              )
-            )
-          )
-        )
-      ),
-      // Mobile layout
-      React.createElement(
-        "div",
-        { className: "md:hidden w-full h-full flex flex-col relative bg-brand-bg pt-16" },
-        React.createElement(
-          "div",
-          { className: "h-[40vh] w-full relative px-6 flex items-center justify-center" },
-          React.createElement(
-            AnimatePresence,
-            { mode: "wait" },
-            React.createElement(motion.img, {
-              key: activeStoryStep,
-              src: currentStep.image,
-              initial: { opacity: 0, filter: "blur(10px)", scale: 0.95 },
-              animate: { opacity: 1, filter: "blur(0px)", scale: 1 },
-              exit: { opacity: 0, filter: "blur(10px)", scale: 1.05 },
-              transition: { duration: 0.6, ease: "easeInOut" },
-              className: "absolute inset-0 w-full h-full object-cover p-4",
-              referrerPolicy: "no-referrer"
-            })
-          )
-        ),
-        React.createElement(
-          "div",
-          { className: "h-[60vh] w-full relative px-6 pt-8" },
-          React.createElement(
-            AnimatePresence,
-            { mode: "wait" },
-            React.createElement(
-              motion.div,
-              {
-                key: activeStoryStep,
-                initial: { opacity: 0, x: 20 },
-                animate: { opacity: 1, x: 0 },
-                exit: { opacity: 0, x: -20 },
-                transition: { duration: 0.4, ease: "easeOut" },
-                className: "absolute w-[calc(100%-3rem)]"
-              },
-              React.createElement(
-                "span",
-                { className: "text-[10px] uppercase tracking-[0.4em] font-bold text-brand-secondary mb-3 block" },
-                currentStep.subtitle
-              ),
-              React.createElement(
-                "h3",
-                { className: "text-3xl font-display tracking-tight text-brand-black mb-3" },
-                isFirst
-                  ? React.createElement("span", { className: "font-bold text-brand-black" }, "Our Story.")
-                  : currentStep.title
-              ),
-              React.createElement(
-                "p",
-                { className: "text-sm text-brand-secondary/80 font-light leading-relaxed mb-4" },
-                currentStep.description
-              )
-            )
-          )
-        )
-      )
-    )
+  return (
+    <section ref={storyRef} className="bg-brand-bg relative h-[300vh]">
+      <div className="sticky top-0 h-screen w-full overflow-hidden flex flex-col">
+
+        {/* Desktop layout */}
+        <div className="hidden md:flex max-w-[1400px] mx-auto w-full h-full items-center px-6 md:px-12">
+
+          {/* Left: image */}
+          <div className="w-1/2 h-full flex items-center justify-center p-12">
+            <div className="w-full max-w-md aspect-[3/4] relative">
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={activeStoryStep}
+                  src={currentStep.image}
+                  initial={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
+                  animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+                  exit={{ opacity: 0, filter: "blur(10px)", scale: 1.05 }}
+                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                  className="absolute inset-0 w-full h-full object-cover shadow-2xl"
+                  referrerPolicy="no-referrer"
+                />
+              </AnimatePresence>
+              <div className="absolute inset-0 border border-brand-black/5 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Right: text */}
+          <div className="w-1/2 relative h-[60vh] flex items-center pl-16">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeStoryStep}
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -40 }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+                className="absolute w-full pr-12"
+              >
+                <div className="absolute -left-8 -top-20 text-[180px] lg:text-[220px] font-display text-brand-black/[0.03] font-bold pointer-events-none select-none leading-none z-0">
+                  {isFirst ? "EST" : ("0" + activeStoryStep)}
+                </div>
+                <div className="relative z-10">
+                  <div className="flex items-center gap-4 mb-8">
+                    <span className="w-12 h-[1px] bg-brand-secondary/50" />
+                    <span className="text-[10px] uppercase tracking-[0.4em] font-bold text-brand-secondary">
+                      {currentStep.subtitle}
+                    </span>
+                  </div>
+                  <h3 className="text-4xl lg:text-6xl font-display tracking-tight text-brand-black mb-8 leading-[1.1]">
+                    {isFirst
+                      ? <span className="font-bold text-brand-black">Our Story.</span>
+                      : currentStep.title}
+                  </h3>
+                  <p className="text-lg text-brand-secondary/80 font-light leading-relaxed max-w-md">
+                    {currentStep.description}
+                  </p>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Mobile layout */}
+        <div className="md:hidden w-full h-full flex flex-col relative bg-brand-bg pt-16">
+          <div className="h-[40vh] w-full relative px-6 flex items-center justify-center">
+            <AnimatePresence mode="wait">
+              <motion.img
+                key={activeStoryStep}
+                src={currentStep.image}
+                initial={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
+                animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+                exit={{ opacity: 0, filter: "blur(10px)", scale: 1.05 }}
+                transition={{ duration: 0.6, ease: "easeInOut" }}
+                className="absolute inset-0 w-full h-full object-cover p-4"
+                referrerPolicy="no-referrer"
+              />
+            </AnimatePresence>
+          </div>
+          <div className="h-[60vh] w-full relative px-6 pt-8">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeStoryStep}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="absolute w-[calc(100%-3rem)]"
+              >
+                <span className="text-[10px] uppercase tracking-[0.4em] font-bold text-brand-secondary mb-3 block">
+                  {currentStep.subtitle}
+                </span>
+                <h3 className="text-3xl font-display tracking-tight text-brand-black mb-3">
+                  {isFirst
+                    ? <span className="font-bold text-brand-black">Our Story.</span>
+                    : currentStep.title}
+                </h3>
+                <p className="text-sm text-brand-secondary/80 font-light leading-relaxed mb-4">
+                  {currentStep.description}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+
+      </div>
+    </section>
   );
 }

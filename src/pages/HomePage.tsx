@@ -67,9 +67,7 @@ export default function HomePage() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentCollectionSlide, setCurrentCollectionSlide] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
-
   const [isCollectionHovered, setIsCollectionHovered] = useState(false);
-  const [activeStoryStep, setActiveStoryStep] = useState(0);
   const [wholesaleLoading, setWholesaleLoading] = useState(false);
   const [wholesaleSuccess, setWholesaleSuccess] = useState(false);
 
@@ -122,27 +120,15 @@ export default function HomePage() {
     }
   };
 
-  const storyRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress: storyScrollY } = useScroll({
-    target: storyRef,
-    offset: ["start start", "end end"]
-  });
+  // ? FIX: Window scroll use karo — storyRef unattached tha, crash fix
+  const { scrollYProgress: windowScrollY } = useScroll();
+  const statsY = useTransform(windowScrollY, [0.3, 0.6], ["40px", "-40px"]);
 
   const siteContent = storage.getSiteContent();
   const heroSlides = siteContent.homepage.hero.slides || HERO_SLIDES;
-  const storySteps = siteContent.homepage.storySteps || DEFAULT_SITE_CONTENT.homepage.storySteps;
-
-  useMotionValueEvent(storyScrollY, "change", (latest) => {
-    const step = Math.min(Math.floor(latest * storySteps.length), storySteps.length - 1);
-    if (step !== activeStoryStep) {
-      setActiveStoryStep(step);
-    }
-  });
-
-  const statsY = useTransform(storyScrollY, [0, 1], ["50px", "-50px"]);
 
   useEffect(() => {
-    if (isHovered || siteContent.homepage.hero.mediaType === 'video') return; // Don't auto-slide if video is enabled
+    if (isHovered || siteContent.homepage.hero.mediaType === 'video') return;
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
     }, 5000);
@@ -355,13 +341,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Our Story â€” 3D Smooth Scroll Experience */}
+      {/* Our Story — 3D Smooth Scroll Experience */}
       <HomeOurStorySection />
 
       {/* Stats Section */}
       <section className="bg-brand-white pb-16 md:pb-24 pt-8 md:pt-12 overflow-hidden">
         <div className="max-w-[1400px] mx-auto px-6 md:px-12">
-          {/* Scrolling Stats Section */}
           <motion.div 
             style={{ y: statsY }}
             className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 md:gap-8 pt-8 md:pt-12 border-t border-brand-black/10"
@@ -399,7 +384,6 @@ export default function HomePage() {
           </motion.div>
         </div>
       </section>
-
 
       {/* 5. LUXARDO FASHION experience (direct vs prime) */}
       <section className="py-16 md:py-32 bg-brand-bg border-y border-brand-divider">
@@ -444,7 +428,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 6. Partner with us (Improved & Moved) */}
+      {/* 6. Partner with us */}
       <section className="relative py-20 md:py-32 overflow-hidden bg-brand-black">
         <motion.div 
           initial={{ scale: 1.1 }}
@@ -477,7 +461,6 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Form Section */}
           <div className="bg-brand-white/5 backdrop-blur-md border border-brand-white/10 p-8 md:p-12">
             <h3 className="text-2xl font-display text-brand-white mb-8">Apply for Partnership</h3>
             <form onSubmit={handleWholesaleSubmit} className="space-y-6">
@@ -524,13 +507,11 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 7. Vision & Mission (Structured & Compact Design) */}
+      {/* 7. Vision & Mission */}
       <section className="py-12 md:py-24 bg-brand-white">
         <div className="max-w-[1200px] mx-auto px-4 md:px-12">
-          {/* Architectural Grid Container */}
           <div className="grid grid-cols-1 lg:grid-cols-2 border border-brand-black/20 relative">
             
-            {/* Decorative corner markers to emphasize "structure" */}
             <div className="absolute -top-1 -left-1 w-2 h-2 border-t border-l border-brand-black"></div>
             <div className="absolute -top-1 -right-1 w-2 h-2 border-t border-r border-brand-black"></div>
             <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b border-l border-brand-black"></div>
@@ -544,7 +525,6 @@ export default function HomePage() {
               transition={{ duration: 0.8 }}
               className="p-6 md:p-12 lg:p-16 border-b lg:border-b-0 lg:border-r border-brand-black/20 bg-[#FAFAFA] flex flex-col justify-center relative overflow-hidden"
             >
-              {/* Subtle background grid pattern for "architectural precision" */}
               <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
               
               <div className="relative z-10">
@@ -608,4 +588,3 @@ export default function HomePage() {
     </div>
   );
 }
-
