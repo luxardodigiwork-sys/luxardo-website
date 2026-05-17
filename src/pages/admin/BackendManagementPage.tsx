@@ -169,8 +169,8 @@ export default function BackendManagementPage() {
     setIsLoading(true);
     try {
       const [usersRes, permsRes] = await Promise.all([
-        fetch("/api/backend-users"),
-        fetch("/api/role-permissions"),
+        fetch("/api/backend-users", { credentials: 'include' }),
+        fetch("/api/role-permissions", { credentials: 'include' }),
       ]);
 
       if (usersRes.ok && permsRes.ok) {

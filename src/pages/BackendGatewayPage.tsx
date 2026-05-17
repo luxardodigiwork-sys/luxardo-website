@@ -62,23 +62,9 @@ export default function BackendGatewayPage() {
 
     try {
       await loginAdmin(username, password);
-      // Explicit redirect after successful login to ensure it happens immediately
-      const res = await fetch("/api/auth/me");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.user.role === "dispatch") {
-          navigate("/dispatch/dashboard");
-        } else if (["owner", "analysis"].includes(data.user.role)) {
-          navigate(`/${data.user.role}/dashboard`);
-        } else if (
-          data.user.role === "super_admin" ||
-          data.user.role === "admin"
-        ) {
-          navigate("/admin/dashboard");
-        }
-      }
+      // Navigation handled by useEffect watching user state
     } catch (err: any) {
-      setError(err.message || `Invalid ${selectedRole} ID or Password`);
+      setError(err.message || `Invalid ${selectedRole} credentials`);
       setIsLoading(false);
     }
   };

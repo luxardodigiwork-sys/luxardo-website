@@ -128,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try { if (auth.currentUser) await signOut(auth); } catch (err) {}
+    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch (err) {}
     setUser(null);
     localStorage.removeItem('LUXARDO FASHION_user');
     localStorage.setItem('LUXARDO FASHION_logged_out', 'true');
@@ -149,11 +150,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginAdmin = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Invalid credentials or unauthorized access');
+    const userData: User = {
+      id: String(data.user.id),
+      name: data.user.full_name || data.user.email,
+      email: data.user.email,
+      role: data.user.role,
+      isPrimeMember: false,
+      permissions: data.user.permissions || {},
+      forcePasswordReset: data.user.force_password_reset === 1,
+    };
+    login(userData);
   };
 
-  const resetPassword = async (email: string, code: string, newPassword: string) => {
-    console.log('Reset password for', email);
+  const resetPassword = async (email: string, resetCode: string, newPassword: string) => {
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code: resetCode, newPassword }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to reset password');
   };
 
   const upgradeToPrime = () => {

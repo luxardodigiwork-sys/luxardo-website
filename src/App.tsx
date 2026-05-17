@@ -19,6 +19,7 @@ import CraftsmanshipPage from "./pages/CraftsmanshipPage";
 import OurStoryPage from "./pages/OurStoryPage";
 import WholesalePage from "./pages/WholesalePage";
 import ContactPage from "./pages/ContactPage";
+import AboutPage from "./pages/AboutPage";
 import FAQPage from "./pages/FAQPage";
 import ShippingPolicyPage from "./pages/ShippingPolicyPage";
 import ReturnsPolicyPage from "./pages/ReturnsPolicyPage";
@@ -168,6 +169,7 @@ export default function App() {
             <Route path="/admin/login" element={<AdminLoginPage />} />
 
             <Route path="/admin">
+              <Route element={<ProtectedAdminRoute />}>
               <Route element={<AdminLayout />}>
                 <Route
                   index
@@ -207,6 +209,7 @@ export default function App() {
                   element={<AdminBackendManagementPage />}
                 />
                 <Route path="settings" element={<AdminSettingsPage />} />
+              </Route>
               </Route>
             </Route>
 
@@ -351,6 +354,7 @@ export default function App() {
               <Route path="our-story" element={<OurStoryPage />} />
               <Route path="wholesale" element={<WholesalePage />} />
               <Route path="contact" element={<ContactPage />} />
+              <Route path="about" element={<AboutPage />} />
               <Route path="faq" element={<FAQPage />} />
               <Route
                 path="policies/shipping"
