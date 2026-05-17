@@ -77,6 +77,7 @@ import BackendGatewayPage from "./pages/BackendGatewayPage";
 import DispatchLayout from "./components/dispatch/DispatchLayout";
 
 import AdminLayout from "./components/admin/AdminLayout";
+import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
 
 import OwnerLayout from "./components/owner/OwnerLayout";
 import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
