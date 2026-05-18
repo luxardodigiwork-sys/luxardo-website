@@ -84,6 +84,11 @@ export default function AdminAddProductPage() {
         updatedAt: new Date().toISOString()
       };
 
+      try {
+        await saveProductToFirestore(newProduct);
+      } catch (firestoreErr) {
+        print('Firestore save failed, falling back to localStorage');
+      }
       storage.saveProducts([...products, newProduct]);
       navigate('/admin/products');
     } catch (error: any) {
@@ -119,7 +124,7 @@ export default function AdminAddProductPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Product ID (Unique)</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="text"
                   required
                   value={formData.id}
@@ -130,7 +135,7 @@ export default function AdminAddProductPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Product Name</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="text"
                   required
                   value={formData.name}
@@ -144,7 +149,7 @@ export default function AdminAddProductPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Slug (URL)</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="text"
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
@@ -172,7 +177,7 @@ export default function AdminAddProductPage() {
             <h3 className="text-[11px] uppercase tracking-widest font-bold border-b border-brand-divider pb-4">Product Story & Details</h3>
             <div className="space-y-2">
               <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Details</label>
-              <textarea
+              <textarea id="prod-text-field" aria-label="Product Description Field"
                 rows={4}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -182,7 +187,7 @@ export default function AdminAddProductPage() {
             </div>
             <div className="space-y-2">
               <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Product Story</label>
-              <textarea
+              <textarea id="prod-text-field" aria-label="Product Description Field"
                 rows={4}
                 value={formData.productStory}
                 onChange={(e) => setFormData({ ...formData, productStory: e.target.value })}
@@ -199,7 +204,7 @@ export default function AdminAddProductPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Garment Format</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={2}
                   value={formData.garmentFormat || ''}
                   onChange={(e) => setFormData({ ...formData, garmentFormat: e.target.value })}
@@ -210,7 +215,7 @@ export default function AdminAddProductPage() {
 
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Composition</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={2}
                   value={formData.composition || ''}
                   onChange={(e) => setFormData({ ...formData, composition: e.target.value })}
@@ -221,7 +226,7 @@ export default function AdminAddProductPage() {
 
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Washing care</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={3}
                   value={formData.washingCare || ''}
                   onChange={(e) => setFormData({ ...formData, washingCare: e.target.value })}
@@ -232,7 +237,7 @@ export default function AdminAddProductPage() {
 
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Shipping</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={3}
                   value={formData.shipping || ''}
                   onChange={(e) => setFormData({ ...formData, shipping: e.target.value })}
@@ -243,7 +248,7 @@ export default function AdminAddProductPage() {
 
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Returns</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={2}
                   value={formData.returns || ''}
                   onChange={(e) => setFormData({ ...formData, returns: e.target.value })}
@@ -260,7 +265,7 @@ export default function AdminAddProductPage() {
             <div className="flex items-center justify-between">
               <label className="text-sm font-sans text-brand-black">Available as Ready-to-Stitch</label>
               <label className="relative inline-flex items-center cursor-pointer">
-                <input 
+                <input id="prod-input-field" aria-label="Product Configuration Field" 
                   type="checkbox" 
                   className="sr-only peer"
                   checked={formData.readyToStitch}
@@ -272,7 +277,7 @@ export default function AdminAddProductPage() {
             {formData.readyToStitch && (
               <div className="space-y-2 pt-4 border-t border-brand-divider">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Ready-to-Stitch Details</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={3}
                   value={formData.readyToStitchInfo}
                   onChange={(e) => setFormData({ ...formData, readyToStitchInfo: e.target.value })}
@@ -413,7 +418,7 @@ export default function AdminAddProductPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Price (INR)</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="number"
                   required
                   value={formData.price}
@@ -423,7 +428,7 @@ export default function AdminAddProductPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Stock</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="number"
                   required
                   value={formData.stock}
@@ -433,7 +438,7 @@ export default function AdminAddProductPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Low Stock Threshold</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="number"
                   value={formData.lowStockThreshold}
                   onChange={(e) => setFormData({ ...formData, lowStockThreshold: Number(e.target.value) })}
@@ -449,7 +454,7 @@ export default function AdminAddProductPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Collection</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="text"
                   value={formData.collection}
                   onChange={(e) => setFormData({ ...formData, collection: e.target.value })}
@@ -473,7 +478,7 @@ export default function AdminAddProductPage() {
               <div className="flex items-center justify-between pt-4 border-t border-brand-divider">
                 <label className="text-sm font-sans text-brand-black">Featured Product</label>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
+                  <input id="prod-input-field" aria-label="Product Configuration Field" 
                     type="checkbox" 
                     className="sr-only peer"
                     checked={formData.featured}

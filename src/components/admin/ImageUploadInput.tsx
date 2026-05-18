@@ -18,7 +18,7 @@ export const ImageUploadInput = ({
   value,
   onChange,
   placeholder,
-  storagePath = 'uploads',
+  storagePath = 'products',
   maxSizeMB = 50,
   quality = 'original',
 }: ImageUploadInputProps) => {

@@ -5,17 +5,13 @@ service firebase.storage {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.uid == '0Frc6Dy2MqN0zc0UFkmqvpELFnr1' ||
-        request.auth.token.admin == true
+        request.auth.token.admin == true ||
+        request.auth.token.email == 'Luxardodigiwork@gmail.com'
       );
     }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
     function isImage() { return request.resource.contentType.matches('image/.*'); }
-    function isPdfOrImage() {
-      return request.resource.contentType.matches('image/.*')
-          || request.resource.contentType.matches('application/pdf');
-    }
     function maxSize(mb) { return request.resource.size < mb * 1024 * 1024; }
-
     match /uploads/{p=**} { allow read: if true; allow write: if isAdmin() && maxSize(50); }
     match /products/{p=**} { allow read: if true; allow write: if isAdmin() && isImage() && maxSize(50); }
     match /media/{p=**} { allow read: if true; allow write: if isAdmin() && maxSize(50); }

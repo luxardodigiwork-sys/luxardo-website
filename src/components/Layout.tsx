@@ -9,6 +9,8 @@ import { Country, Language } from '../types';
 import { COUNTRIES, LANGUAGES, COLLECTIONS } from '../constants';
 import { ALL_COUNTRIES } from '../countries';
 import Logo from './Logo';
+import ComplianceFooter from './ComplianceFooter';
+import { BUSINESS_CONFIG } from '../constants/businessConfig';
 import WhatsAppButton from './WhatsAppButton';
 import Animated3DHeader from './Animated3DHeader';
 import { SearchOverlay } from './SearchOverlay';
@@ -570,102 +572,7 @@ export default function Layout() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-brand-black text-brand-white pt-16 md:pt-24 pb-8 md:pb-8 px-6 md:px-16 relative overflow-hidden mt-auto">
-        {/* Large Watermark Logo */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] opacity-[0.03] pointer-events-none flex justify-center">
-          <Logo className="w-full" dark />
-        </div>
-
-        <div className="max-w-[1800px] mx-auto flex flex-col md:grid md:grid-cols-3 md:gap-16 mb-16 md:mb-20 relative z-10">
-          <div className="flex flex-col border-b border-brand-white/10 md:border-none py-4 md:py-0">
-            <button 
-              onClick={() => toggleFooterSection('maison')}
-              className="w-full flex justify-between items-center md:pointer-events-none"
-            >
-              <h4 className="text-[11px] md:text-[13px] uppercase tracking-[0.25em] font-bold text-brand-white">Maison</h4>
-              <div className="md:hidden text-brand-white/60">
-                {openFooterSection === 'maison' ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              </div>
-            </button>
-            <div className={`overflow-hidden transition-all duration-300 md:!max-h-none md:!opacity-100 md:!mt-8 ${openFooterSection === 'maison' ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
-              <ul className="space-y-3 md:space-y-4 text-xs md:text-sm font-sans text-brand-white/60">
-                <li><Link to="/prime-membership" className="hover:text-brand-white transition-colors">Prime Member</Link></li>
-                <li><Link to="/craftsmanship" className="hover:text-brand-white transition-colors">Craftsmanship</Link></li>
-                <li><Link to="/our-story" className="hover:text-brand-white transition-colors">Our Story</Link></li>
-                <li><Link to="/contact" className="hover:text-brand-white transition-colors">Contact</Link></li>
-                <li><Link to="/faq" className="hover:text-brand-white transition-colors">FAQ</Link></li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="flex flex-col border-b border-brand-white/10 md:border-none py-4 md:py-0">
-            <button 
-              onClick={() => toggleFooterSection('legal')}
-              className="w-full flex justify-between items-center md:pointer-events-none"
-            >
-              <h4 className="text-[11px] md:text-[13px] uppercase tracking-[0.25em] font-bold text-brand-white">Legal</h4>
-              <div className="md:hidden text-brand-white/60">
-                {openFooterSection === 'legal' ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              </div>
-            </button>
-            <div className={`overflow-hidden transition-all duration-300 md:!max-h-none md:!opacity-100 md:!mt-8 ${openFooterSection === 'legal' ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
-              <ul className="space-y-3 md:space-y-4 text-xs md:text-sm font-sans text-brand-white/60">
-                <li><Link to="/policies/shipping" className="hover:text-brand-white transition-colors">Shipping Policy</Link></li>
-                <li><Link to="/policies/returns" className="hover:text-brand-white transition-colors">Returns Policy</Link></li>
-                <li><Link to="/policies/privacy" className="hover:text-brand-white transition-colors">Privacy Policy</Link></li>
-                <li><Link to="/policies/terms" className="hover:text-brand-white transition-colors">Terms & Conditions</Link></li>
-                <li><Link to="/policies/membership-terms" className="hover:text-brand-white transition-colors">Membership Terms</Link></li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="flex flex-col py-8 md:py-0 space-y-8 md:space-y-12">
-            <div className="space-y-6 md:space-y-8">
-              <h4 className="text-[10px] md:text-[11px] uppercase tracking-[0.25em] font-bold text-brand-white">Newsletter</h4>
-              <div className="flex border-b border-brand-white/20 pb-3 md:pb-4 group">
-                <input type="email" placeholder="Email Address" className="bg-transparent w-full text-xs md:text-sm font-sans text-brand-white focus:outline-none placeholder:text-brand-white/40" />
-                <button className="text-brand-white hover:text-brand-white/60 transition-colors">
-                  <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3 md:space-y-4">
-              <h4 className="text-[10px] md:text-[11px] uppercase tracking-[0.25em] font-bold text-brand-white">Region</h4>
-              <button onClick={() => setShowRegionModal(true)} className="flex items-center gap-2 text-xs md:text-sm font-sans text-brand-white/60 hover:text-brand-white transition-colors">
-                <Globe className="w-3.5 h-3.5 md:w-4 md:h-4" /> {selectedCountry?.name || 'Select Region'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="max-w-[1800px] w-full mx-auto pt-8 border-t border-brand-white/10 flex flex-col md:flex-row justify-between items-center gap-6 relative z-10">
-          <div className="flex-1 flex justify-center md:justify-start">
-          </div>
-          <p className="flex-1 text-[10px] uppercase tracking-[0.25em] font-bold text-brand-white/60 flex flex-wrap items-center justify-center gap-2 text-center">
-            <span>@2015</span>
-            <Logo className="h-2.5 w-auto" dark />
-            <span>{footerContent?.copyrightText || 'LUXARDO FASHION Maison. All rights reserved.'}</span>
-          </p>
-          <div className="flex-1 flex justify-center md:justify-end gap-6">
-            {footerContent?.socialLinks?.instagram && (
-              <a href={footerContent.socialLinks?.instagram} target="_blank" rel="noopener noreferrer" className="text-brand-white/60 hover:text-brand-white transition-colors">
-                <Instagram className="w-5 h-5" />
-              </a>
-            )}
-            {footerContent?.socialLinks?.facebook && (
-              <a href={footerContent.socialLinks?.facebook} target="_blank" rel="noopener noreferrer" className="text-brand-white/60 hover:text-brand-white transition-colors">
-                <Facebook className="w-5 h-5" />
-              </a>
-            )}
-            {footerContent?.socialLinks?.twitter && (
-              <a href={footerContent.socialLinks?.twitter} target="_blank" rel="noopener noreferrer" className="text-brand-white/60 hover:text-brand-white transition-colors">
-                <Twitter className="w-5 h-5" />
-              </a>
-            )}
-          </div>
-        </div>
-      </footer>
+      <ComplianceFooter />
 
       <SearchOverlay isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
       <WhatsAppButton />

@@ -1,71 +1,12 @@
 import { Country, Language, Product } from './types';
-
 export const COUNTRIES: Country[] = [
-  {
-    name: 'India',
-    code: 'IN',
-    currency: { code: 'INR', symbol: '₹', rate: 1 },
-    active: true,
-    language: 'English (US)'
-  },
-  {
-    name: 'United States',
-    code: 'US',
-    currency: { code: 'USD', symbol: '$', rate: 0.012 },
-    active: true,
-    language: 'English (US)'
-  },
-  {
-    name: 'United Kingdom',
-    code: 'GB',
-    currency: { code: 'GBP', symbol: '£', rate: 0.0095 },
-    active: true,
-    language: 'English (US)'
-  },
-  {
-    name: 'United Arab Emirates',
-    code: 'AE',
-    currency: { code: 'AED', symbol: 'د.إ', rate: 0.044 },
-    active: true,
-    language: 'Arabic'
-  },
-  {
-    name: 'France',
-    code: 'FR',
-    currency: { code: 'EUR', symbol: '€', rate: 0.011 },
-    active: true,
-    language: 'French'
-  },
-
-  // Coming Soon Countries
-  {
-    name: 'Canada',
-    code: 'CA',
-    currency: { code: 'CAD', symbol: 'C$', rate: 0.016 },
-    active: false,
-    language: 'English (US)'
-  },
-  {
-    name: 'Australia',
-    code: 'AU',
-    currency: { code: 'AUD', symbol: 'A$', rate: 0.018 },
-    active: false,
-    language: 'English (US)'
-  },
-  {
-    name: 'Singapore',
-    code: 'SG',
-    currency: { code: 'SGD', symbol: 'S$', rate: 0.016 },
-    active: false,
-    language: 'English (US)'
-  }
+  { name: 'India', code: 'IN', currency: { code: 'INR', symbol: '₹', rate: 1 }, active: true, language: 'English (US)' },
+  { name: 'United States', code: 'US', currency: { code: 'USD', symbol: '$', rate: 0.012 }, active: true, language: 'English (US)' },
+  { name: 'United Kingdom', code: 'GB', currency: { code: 'GBP', symbol: '£', rate: 0.0095 }, active: true, language: 'English (US)' },
+  { name: 'United Arab Emirates', code: 'AE', currency: { code: 'AED', symbol: 'د.إ', rate: 0.044 }, active: true, language: 'Arabic' },
+  { name: 'France', code: 'FR', currency: { code: 'EUR', symbol: '€', rate: 0.011 }, active: true, language: 'French' },
 ];
-
-export const LANGUAGES: Language[] = [
-  'English (US)',
-  'French',
-  'Arabic'
-];
+export const LANGUAGES: Language[] = ['English (US)', 'French', 'Arabic'];
 
 export const COLLECTIONS = [
   {
@@ -73,86 +14,148 @@ export const COLLECTIONS = [
     fullName: '3 Piece Suit',
     shortName: '3 Piece Suit',
     descriptor: 'Complete tailored ensembles for the discerning gentleman.',
-    image: '',
+    image: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=1200&auto=format&fit=crop',
     narrative: 'The ultimate expression of tailored perfection.',
-    craftsmanship: 'Three-layer construction for a flawless fit.',
-    packaging: 'Archival box with premium garment protection.'
+    craftsmanship: 'Three-layer canvas construction for a flawless drape.',
+    packaging: 'Archival garment carrier with custom hangers.',
   },
-
   {
     id: 'tuxedo',
     fullName: 'Tuxedo',
     shortName: 'Tuxedo',
     descriptor: 'The pinnacle of formal evening wear.',
-    image: '',
-    narrative: 'Crafted for prestigious evenings and ceremonial occasions.',
-    craftsmanship: 'Traditional canvassing and hand-finished satin detailing.',
-    packaging: 'Structured garment carrier with signature presentation.'
+    image: 'https://images.unsplash.com/photo-1598808503746-f34c53b9323e?q=80&w=1200&auto=format&fit=crop',
+    narrative: 'Crafted for the most prestigious occasions.',
+    craftsmanship: 'Traditional canvassing and satin peak lapels.',
+    packaging: 'Structured carrier with archival hangers.',
   },
-
   {
     id: 'jodhpuri',
     fullName: 'Jodhpuri',
     shortName: 'Jodhpuri',
-    descriptor: 'Royal silhouettes inspired by Indian heritage tailoring.',
-    image: '',
-    narrative: 'A commanding expression of culture and modern luxury.',
-    craftsmanship: 'Structured shoulders with artisanal finishing.',
-    packaging: 'Luxury archival preservation box.'
+    descriptor: 'Regal Jodhpuri jackets for a commanding presence.',
+    image: 'https://images.unsplash.com/photo-1622519407650-3df9883f76a5?q=80&w=1200&auto=format&fit=crop',
+    narrative: 'A symbol of heritage and authority.',
+    craftsmanship: 'Structured shoulders and hand-carved buttons.',
+    packaging: 'Signature archival box with certificate.',
   },
-
   {
     id: 'koti-pant',
     fullName: 'Koti Pant',
     shortName: 'Koti Pant',
-    descriptor: 'Modern Indo-western tailoring for contemporary occasions.',
-    image: '',
-    narrative: 'Minimal elegance blended with heritage aesthetics.',
-    craftsmanship: 'Sharp silhouettes with premium construction.',
-    packaging: 'Premium signature packaging experience.'
+    descriptor: 'Indo-western fusion featuring tailored kotis and trousers.',
+    image: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=1200&auto=format&fit=crop',
+    narrative: 'For the modern trendsetter.',
+    craftsmanship: 'Sharp silhouettes in premium wool-silk blends.',
+    packaging: 'Signature archival box.',
   },
-
   {
     id: 'koti-kurta',
     fullName: 'Koti Kurta',
     shortName: 'Koti Kurta',
-    descriptor: 'Traditional layering redefined with modern precision.',
-    image: '',
-    narrative: 'Crafted for timeless festive sophistication.',
-    craftsmanship: 'Hand-finished detailing with elevated tailoring.',
-    packaging: 'Wrapped in signature luxury dust protection.'
+    descriptor: 'Traditional silhouettes with a modern koti layer.',
+    image: 'https://images.unsplash.com/photo-1621335829175-95f437384d7c?q=80&w=1200&auto=format&fit=crop',
+    narrative: 'A refined fusion of tradition and tailoring.',
+    craftsmanship: 'Hand-finished kotis with intricate detailing.',
+    packaging: 'Custom silk dust-bag wrap.',
   },
-
   {
     id: 'kurta',
     fullName: 'Kurta',
     shortName: 'Kurta',
-    descriptor: 'Classic Indian silhouettes crafted with refined fabrics.',
-    image: '',
-    narrative: 'The soul of timeless elegance.',
-    craftsmanship: 'Precision-cut panels and clean finishing.',
-    packaging: 'Luxury folded presentation packaging.'
+    descriptor: 'Timeless kurtas crafted from the finest silks and linens.',
+    image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?q=80&w=1200&auto=format&fit=crop',
+    narrative: 'The soul of LUXARDO FASHION.',
+    craftsmanship: 'Precision cut and hand-finished seams.',
+    packaging: 'Acid-free tissue wrapping in archival box.',
   },
-
   {
     id: 'casual',
     fullName: 'Casual',
     shortName: 'Casual',
-    descriptor: 'Modern luxury essentials for everyday sophistication.',
-    image: '',
-    narrative: 'Contemporary tailoring for effortless confidence.',
-    craftsmanship: 'Premium fabric blends with clean construction.',
-    packaging: 'Minimal luxury delivery presentation.'
-  }
+    descriptor: 'Modern tailored shirts and trousers for daily luxury.',
+    image: 'https://images.unsplash.com/photo-1490114538077-0a7f8cb49891?q=80&w=1200&auto=format&fit=crop',
+    narrative: 'Contemporary workwear, refined.',
+    craftsmanship: 'Precision stitching and premium cotton blends.',
+    packaging: 'Signature LUXARDO box.',
+  },
 ];
 
-/*
-|--------------------------------------------------------------------------
-| PRODUCTS
-|--------------------------------------------------------------------------
-| Products now come directly from Firebase Firestore.
-| No demo/mock/sample products are generated locally anymore.
-|--------------------------------------------------------------------------
-*/
-
-export const PRODUCTS: Product[] = [];
+export const PRODUCTS: Product[] = [
+  {
+    id: '3ps-flagship-01',
+    name: 'Sovrano Three-Piece Suit',
+    slug: 'sovrano-three-piece-suit',
+    category: '3 Piece Suit',
+    collection: 'three-piece-suit',
+    price: 89999,
+    image: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=1200&auto=format&fit=crop',
+    images: [
+      'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=1200&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1593030761757-71fae46af504?q=80&w=1200&auto=format&fit=crop',
+    ],
+    description: 'A flagship three-piece ensemble in midnight wool with full canvas construction, peak lapels and a matching waistcoat. Cut for a structured modern silhouette.',
+    fabricOrigin: 'Italy',
+    composition: '95% Super 120s Wool, 5% Mulberry Silk',
+    washingCare: 'Dry clean only • Do not bleach • Iron at low temp (≤110°C) • Steam to refresh',
+    shipping: 'Complimentary worldwide shipping on orders above ₹25,000. 3–7 business days dispatch.',
+    returns: '14-day return window on unworn, tagged items in original packaging.',
+    garmentFormat: 'Delivered ready-to-stitch as a premium fabric set in our archival presentation box. Tailoring not included.',
+    readyToStitch: true,
+    readyToStitchInfo: 'Includes coat, waistcoat & trouser fabric panels, signature lining, and a tailoring guide.',
+    stock: 12,
+    lowStockThreshold: 3,
+    visibility: 'public',
+    featured: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'tux-flagship-01',
+    name: 'Notturno Satin-Lapel Tuxedo',
+    slug: 'notturno-satin-lapel-tuxedo',
+    category: 'Tuxedo',
+    collection: 'tuxedo',
+    price: 79999,
+    image: 'https://images.unsplash.com/photo-1598808503746-f34c53b9323e?q=80&w=1200&auto=format&fit=crop',
+    images: [
+      'https://images.unsplash.com/photo-1598808503746-f34c53b9323e?q=80&w=1200&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1605007493699-af65834f8a00?q=80&w=1200&auto=format&fit=crop',
+    ],
+    description: 'An evening tuxedo in jet black with satin peak lapels, covered buttons, and a single besom welt pocket. The definitive black-tie cut.',
+    fabricOrigin: 'Italy',
+    composition: '100% Super 130s Worsted Wool with Silk Satin facing',
+    washingCare: 'Dry clean only • Iron at low temp • Cover lapels before pressing',
+    shipping: 'Complimentary worldwide shipping. 3–7 business days dispatch.',
+    returns: '14-day return window on unworn, tagged items.',
+    garmentFormat: 'Ready-to-stitch fabric set in archival presentation box. Tailoring not included.',
+    readyToStitch: true,
+    stock: 9,
+    visibility: 'public',
+    featured: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'jod-flagship-01',
+    name: 'Maharaja Jodhpuri Bandhgala',
+    slug: 'maharaja-jodhpuri-bandhgala',
+    category: 'Jodhpuri',
+    collection: 'jodhpuri',
+    price: 64999,
+    image: 'https://images.unsplash.com/photo-1622519407650-3df9883f76a5?q=80&w=1200&auto=format&fit=crop',
+    images: [
+      'https://images.unsplash.com/photo-1622519407650-3df9883f76a5?q=80&w=1200&auto=format&fit=crop',
+    ],
+    description: 'Structured Jodhpuri bandhgala with mandarin collar, hand-carved horn buttons and an embroidered chest motif. Worn with tapered trousers.',
+    fabricOrigin: 'India',
+    composition: '70% Wool, 25% Silk, 5% Polyester (lining)',
+    washingCare: 'Dry clean only',
+    shipping: 'Complimentary worldwide shipping. 3–7 business days dispatch.',
+    returns: '14-day return window on unworn, tagged items.',
+    garmentFormat: 'Ready-to-stitch fabric set in archival box. Tailoring not included.',
+    readyToStitch: true,
+    stock: 15,
+    visibility: 'public',
+    featured: true,
+    createdAt: new Date().toISOString(),
+  }
+];
