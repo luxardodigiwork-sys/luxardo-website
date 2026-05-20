@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAfktiFGPeb4gxk83SzeEb6XhVGBDwrsY",
+  apiKey: "AIzaSyAfqktiFGPeb4gxk83SzeEb6XhVGBDwrsY",
   authDomain: "luxardo-fashion-website.firebaseapp.com",
   projectId: "luxardo-fashion-website",
   storageBucket: "luxardo-fashion-website.firebasestorage.app",

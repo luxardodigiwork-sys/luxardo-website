@@ -77,7 +77,7 @@ export const COLLECTIONS = [
     image: 'https://images.unsplash.com/photo-1490114538077-0a7f8cb49891?q=80&w=1200&auto=format&fit=crop',
     narrative: 'Contemporary workwear, refined.',
     craftsmanship: 'Precision stitching and premium cotton blends.',
-    packaging: 'Signature LUXARDO box.',
+    packaging: 'Signature LUXARDO FASHION box.',
   },
 ];
 

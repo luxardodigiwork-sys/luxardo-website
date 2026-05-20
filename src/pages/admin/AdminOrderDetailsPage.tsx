@@ -4,6 +4,9 @@ import { ArrowLeft, Package, CheckCircle2, Box, Send, ShieldCheck } from 'lucide
 import { storage } from '../../utils/localStorage';
 import { Order } from '../../types';
 import { formatCurrency } from '../../utils/currency';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { updateOrderStatusInFirestore } from '../../utils/ordersFirestore';
 
 export default function AdminOrderDetailsPage() {
   const { id } = useParams();
@@ -23,11 +26,22 @@ export default function AdminOrderDetailsPage() {
   const basePath = location.pathname.split('/')[1];
 
   useEffect(() => {
-    const fetchOrder = () => {
+    const fetchOrder = async () => {
       if (!id) return;
       try {
-        const orders = storage.getOrders();
-        const foundOrder = orders.find(o => o.id === id);
+        // Firestore source-of-truth, localStorage as fallback
+        let foundOrder: Order | null = null;
+        try {
+          const snap = await getDoc(doc(db, 'orders', id));
+          if (snap.exists()) {
+            foundOrder = { id: snap.id, ...snap.data() } as Order;
+          }
+        } catch (fsErr) {
+          console.warn('[AdminOrderDetails] Firestore fetch failed, using cache:', fsErr);
+        }
+        if (!foundOrder) {
+          foundOrder = storage.getOrders().find(o => o.id === id) || null;
+        }
         if (foundOrder) {
           setOrder(foundOrder);
           setTrackingInput(foundOrder.trackingId || '');
@@ -48,55 +62,50 @@ export default function AdminOrderDetailsPage() {
     fetchOrder();
   }, [id, navigate, basePath]);
 
-  const handleSaveDispatchDetails = () => {
+  const handleSaveDispatchDetails = async () => {
     if (!order) return;
     setIsUpdating(true);
     try {
-      const orders = storage.getOrders();
-      const updatedOrders = orders.map(o => 
-        o.id === order.id ? { 
-          ...o, 
-          trackingId: trackingInput,
-          courierName,
-          courierService,
-          dispatchDate: pickupDate,
-          trackingUrl
-        } : o
-      );
-      storage.saveOrders(updatedOrders);
-      setOrder({ 
-        ...order, 
+      const patch = {
         trackingId: trackingInput,
         courierName,
         courierService,
         dispatchDate: pickupDate,
-        trackingUrl
-      });
-    } catch (error) {
+        trackingUrl,
+      };
+      await updateOrderStatusInFirestore(order.id, patch);
+      setOrder({ ...order, ...patch });
+    } catch (error: any) {
       console.error('Error saving dispatch details:', error);
+      alert('Failed to save dispatch details: ' + (error?.message || 'Unknown'));
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const handleResendInvoice = () => {
-    setInvoiceSent(true);
-    setTimeout(() => setInvoiceSent(false), 3000);
+  const handleResendInvoice = async () => {
+    if (!order) return;
+    try {
+      // Flag the order so a Cloud Function (Phase C) can pick it up and resend via Resend.
+      await updateOrderStatusInFirestore(order.id, {
+        resendInvoiceRequestedAt: new Date().toISOString(),
+      } as any);
+      setInvoiceSent(true);
+      setTimeout(() => setInvoiceSent(false), 3000);
+    } catch (e: any) {
+      alert('Failed to flag invoice resend: ' + (e?.message || 'Unknown'));
+    }
   };
 
   const handleStatusChange = async (newStatus: Order['status']) => {
     if (!order) return;
     setIsUpdating(true);
     try {
-      const orders = storage.getOrders();
-      const updatedOrders = orders.map(o => 
-        o.id === order.id ? { ...o, status: newStatus } : o
-      );
-      storage.saveOrders(updatedOrders);
+      await updateOrderStatusInFirestore(order.id, { status: newStatus });
       setOrder({ ...order, status: newStatus });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating status:', error);
-      alert('Failed to update order status');
+      alert('Failed to update order status: ' + (error?.message || 'Unknown'));
     } finally {
       setIsUpdating(false);
     }
@@ -106,15 +115,11 @@ export default function AdminOrderDetailsPage() {
     if (!order) return;
     setIsUpdating(true);
     try {
-      const orders = storage.getOrders();
-      const updatedOrders = orders.map(o => 
-        o.id === order.id ? { ...o, verificationStatus: newStatus } : o
-      );
-      storage.saveOrders(updatedOrders);
+      await updateOrderStatusInFirestore(order.id, { verificationStatus: newStatus });
       setOrder({ ...order, verificationStatus: newStatus });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating verification status:', error);
-      alert('Failed to update verification status');
+      alert('Failed to update verification status: ' + (error?.message || 'Unknown'));
     } finally {
       setIsUpdating(false);
     }

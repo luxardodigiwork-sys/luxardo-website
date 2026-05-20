@@ -31,19 +31,20 @@ export default function AdminDispatchPage() {
   const [showAssignModal, setShowAssignModal] = useState(false);
 
   useEffect(() => {
-    const fetchData = () => {
-      const ordersData = storage.getOrders();
-      // Day 2: Subscribe to Firestore real-time orders (replaces static read)
-      const unsub = subscribeOrders((firestoreOrders) => setOrders(firestoreOrders));
-      // Cleanup on unmount handled by useEffect return value (added below)
-      (window as any).__unsubOrders = unsub;
-      const usersData = storage.getBackendUsers();
-      setOrders(ordersData);
-      setBackendUsers(usersData.filter(u => u.role === 'dispatch'));
-      setIsLoading(false);
-    };
+    // Backend users still live in localStorage (until Phase B migration)
+    const usersData = storage.getBackendUsers();
+    setBackendUsers(usersData.filter(u => u.role === 'dispatch'));
 
-    fetchData();
+    // Firestore real-time subscription — single source of truth
+    setIsLoading(true);
+    const unsub = subscribeOrders((firestoreOrders) => {
+      setOrders(firestoreOrders);
+      setIsLoading(false);
+    });
+
+    return () => {
+      try { unsub(); } catch {}
+    };
   }, []);
 
   const stats = useMemo(() => {
@@ -70,30 +71,44 @@ export default function AdminDispatchPage() {
     );
   }, [orders, searchTerm]);
 
-  const handleAssignStaff = (orderId: string, staffId: string) => {
+  const handleAssignStaff = async (orderId: string, staffId: string) => {
     const staff = backendUsers.find(u => u.id === staffId);
     if (!staff) return;
-
-    const updatedOrders = orders.map(order => 
-      order.id === orderId ? { ...order, assignedStaffId: staffId, assignedStaffName: staff.fullName } : order
-    );
-    storage.saveOrders(updatedOrders);
-    setOrders(updatedOrders);
-    setShowAssignModal(false);
-    setSelectedOrder(null);
+    try {
+      await updateOrderStatusInFirestore(orderId, {
+        assignedStaffId: staffId,
+        assignedStaffName: staff.fullName,
+      });
+      setShowAssignModal(false);
+      setSelectedOrder(null);
+      // Orders list will auto-refresh via subscribeOrders
+    } catch (e: any) {
+      console.error('Assign staff failed:', e);
+      alert('Failed to assign staff: ' + (e?.message || 'Unknown error'));
+    }
   };
 
-  const handleForceOverride = (orderId: string) => {
+  const handleForceOverride = async (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
+    if (!window.confirm(
+      `Force-override status for ${orderId}?\n\n` +
+      `This will mark payment as CONFIRMED and bump status to ${order.status === 'pending' ? 'processing' : 'shipped'}.\n\n` +
+      `This action is destructive and bypasses normal flow.`
+    )) return;
 
     const nextStatus: Order['status'] = order.status === 'pending' ? 'processing' : 'shipped';
-    const updatedOrders = orders.map(o => 
-      o.id === orderId ? { ...o, status: nextStatus, paymentStatus: 'confirmed' as const } : o
-    );
-    storage.saveOrders(updatedOrders);
-    setOrders(updatedOrders);
-    alert(`Order ${orderId} status overridden by Admin.`);
+    try {
+      await updateOrderStatusInFirestore(orderId, {
+        status: nextStatus,
+        paymentStatus: 'confirmed',
+      });
+      alert(`Order ${orderId} status overridden by Admin.`);
+      // Auto-refresh via subscription
+    } catch (e: any) {
+      console.error('Force override failed:', e);
+      alert('Override failed: ' + (e?.message || 'Unknown error'));
+    }
   };
 
   const getStatusColor = (status: string) => {

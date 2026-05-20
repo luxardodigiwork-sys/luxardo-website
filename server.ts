@@ -127,7 +127,7 @@ db.exec(`
 
 // Seed default admin and permissions if not exists
 const seedData = () => {
-  const adminEmail = "LUXARDO FASHIONdigiwork@gmail.com";
+  const adminEmail = "luxardodigiwork@gmail.com";
   const adminPassword = "7976672811";
 
   const stmt = db.prepare("SELECT * FROM users WHERE role = ?");

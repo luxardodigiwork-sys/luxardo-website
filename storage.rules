@@ -6,7 +6,7 @@ service firebase.storage {
       return isSignedIn() && (
         request.auth.uid == '0Frc6Dy2MqN0zc0UFkmqvpELFnr1' ||
         request.auth.token.admin == true ||
-        request.auth.token.email == 'Luxardodigiwork@gmail.com'
+        request.auth.token.email == 'luxardodigiwork@gmail.com'
       );
     }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }

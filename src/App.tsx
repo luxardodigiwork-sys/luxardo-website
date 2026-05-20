@@ -178,6 +178,8 @@ export default function App() {
                 />
                 <Route path="dashboard" element={<AdminDashboardPage />} />
                 <Route path="dispatch" element={<AdminDispatchPage />} />
+                <Route path="orders" element={<Navigate to="/admin/dispatch" replace />} />
+                <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
                 <Route path="products" element={<AdminProductsPage />} />
                 <Route path="collections" element={<AdminCollectionsPage />} />
                 <Route path="products/new" element={<AdminAddProductPage />} />

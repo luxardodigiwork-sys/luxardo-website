@@ -40,7 +40,7 @@ export const DEFAULT_SITE_CONTENT = {
     intro: {
       label: 'The Maison',
       heading: 'Design Discipline',
-      description: 'LUXARDO FASHION Fashion is a modern ethnic luxury menswear brand built around the philosophy of design discipline and selected imported fabrics. We believe that true luxury is found in the intersection of traditional craftsmanship and contemporary aesthetic precision.\n\nOur approach is defined by premium presentation and a refined customer experience, ensuring that every garment is not just worn, but experienced.',
+      description: 'LUXARDO FASHION  is a modern ethnic luxury menswear brand built around the philosophy of design discipline and selected imported fabrics. We believe that true luxury is found in the intersection of traditional craftsmanship and contemporary aesthetic precision.\n\nOur approach is defined by premium presentation and a refined customer experience, ensuring that every garment is not just worn, but experienced.',
       ctaText: 'Discover Our Story',
       ctaLink: '/our-story',
       imageUrl: 'https://images.unsplash.com/photo-1593030761757-71fae45fa0e7?q=80&w=1000&auto=format&fit=crop'
@@ -48,7 +48,7 @@ export const DEFAULT_SITE_CONTENT = {
     ecosystem: {
       label: 'The System',
       heading: 'A Complete Luxury Ecosystem',
-      subheading: 'LUXARDO FASHION Fashion is more than garments; it is a disciplined system of creation, refinement, and delivery.',
+      subheading: 'LUXARDO FASHION  is more than garments; it is a disciplined system of creation, refinement, and delivery.',
       steps: [
         {
           step: "01",
@@ -410,10 +410,10 @@ export const DEFAULT_SITE_CONTENT = {
     }
   },
   footer: {
-    about: 'LUXARDO FASHION Fashion represents the pinnacle of modern luxury menswear, blending architectural precision with ethnic heritage.',
-    copyright: '© 2015 LUXARDO FASHION Fashion. All rights reserved.',
+    about: 'LUXARDO FASHION  represents the pinnacle of modern luxury menswear, blending architectural precision with ethnic heritage.',
+    copyright: '© 2015 LUXARDO FASHION . All rights reserved.',
     copyrightYear: '2015',
-    copyrightText: 'LUXARDO FASHION Fashion. All rights reserved',
+    copyrightText: 'LUXARDO FASHION . All rights reserved',
     socialLinks: {
       instagram: 'https://instagram.com/LUXARDO FASHION',
       facebook: 'https://facebook.com/LUXARDO FASHION',

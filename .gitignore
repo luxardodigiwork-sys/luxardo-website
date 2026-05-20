@@ -21,4 +21,4 @@ serviceAccount.json
 LUXARDO FASHION.db
 *.db
 src/pages/admin/*.old
-luxardo-production-setup.sh
+luxardo fashion-production-setup.sh

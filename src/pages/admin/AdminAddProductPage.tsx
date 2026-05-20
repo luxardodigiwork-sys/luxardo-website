@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { storage } from '../../utils/localStorage';
-import { saveProductToFirestore } from '../../utils/productsFirestore';
+import { saveProductToFirestore, getProductFromFirestore } from '../../utils/productsFirestore';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 
 export default function AdminAddProductPage() {
@@ -14,7 +14,7 @@ export default function AdminAddProductPage() {
     name: '',
     slug: '',
     price: 0,
-    category: 'Kurta Editions',
+    category: 'Premium Kurta Pajama',
     collection: '',
     image: '',
     images: [] as string[],
@@ -66,11 +66,10 @@ export default function AdminAddProductPage() {
     setIsLoading(true);
 
     try {
-      const products = storage.getProducts();
-      
-      // Check if ID already exists
-      if (products.some(p => p.id === formData.id)) {
-        alert('A product with this ID already exists. Please use a unique ID.');
+      // Firestore-first duplicate check (source of truth)
+      const existing = await getProductFromFirestore(formData.id);
+      if (existing) {
+        alert('A product with this ID already exists in the catalog. Please use a unique ID.');
         setIsLoading(false);
         return;
       }
@@ -84,20 +83,33 @@ export default function AdminAddProductPage() {
         updatedAt: new Date().toISOString()
       };
 
+      // Firestore is source of truth. Throw on failure so user sees real error.
       try {
         await saveProductToFirestore(newProduct);
-      } catch (firestoreErr) {
-        print('Firestore save failed, falling back to localStorage');
+      } catch (firestoreErr: any) {
+        console.error('[AdminAddProductPage] Firestore save failed:', firestoreErr);
+        alert(
+          'Failed to save product to Firestore.\n\n' +
+          (firestoreErr?.code || '') + '\n' +
+          (firestoreErr?.message || 'Unknown error') +
+          '\n\nCheck console for details. Most common cause: not logged in as admin, or Firestore rules.'
+        );
+        setIsLoading(false);
+        return;
       }
-      storage.saveProducts([...products, newProduct]);
+
+      // Local cache (best-effort, ignore quota errors)
+      try {
+        const cached = storage.getProducts();
+        storage.saveProducts([newProduct, ...cached.filter(p => p.id !== newProduct.id)]);
+      } catch (cacheErr) {
+        console.warn('[AdminAddProductPage] Local cache update skipped:', cacheErr);
+      }
+
       navigate('/admin/products');
     } catch (error: any) {
       console.error('Error saving product:', error);
-      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
-        alert('Storage limit exceeded. The uploaded images are too large. Please use smaller images or image URLs.');
-      } else {
-        alert('Failed to save product. Please try again.');
-      }
+      alert('Unexpected error: ' + (error?.message || 'Unknown'));
     } finally {
       setIsLoading(false);
     }

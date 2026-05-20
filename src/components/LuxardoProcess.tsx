@@ -40,7 +40,7 @@ const processSteps = [
   }
 ];
 
-export const LUXARDO FASHIONProcess: React.FC = () => {
+export const LuxardoProcess: React.FC = () => {
   return (
     <section className="section-padding bg-brand-white">
       <SectionHeader 
