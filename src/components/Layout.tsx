@@ -136,25 +136,29 @@ export default function Layout() {
     }
   }, [isAuthReady, user]);
 
-  // Login Reminder Logic
+  // Login Reminder Logic — only show to logged-out users
   useEffect(() => {
+    if (isLoggedIn) {
+      setShowLoginReminder(false);
+      return;
+    }
 
     const delay = reminderCount === 0 ? 5000 : 30000;
-    
+
     const timer = setTimeout(() => {
       setShowLoginReminder(true);
       setReminderCount(prev => prev + 1);
-      
+
       // Auto hide after 5 seconds
       setTimeout(() => {
         setShowLoginReminder(false);
       }, 5000);
-      
+
     }, delay);
 
     return () => clearTimeout(timer);
 
-  }, [isLoggedIn, showLoginReminder, reminderCount]);
+  }, [isLoggedIn, reminderCount]);
   // Close menu on route change and handle scroll lock during transition
   useEffect(() => {
     setIsMenuOpen(false);

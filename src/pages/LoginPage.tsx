@@ -1,534 +1,437 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { auth } from '../firebase';
+import React, { useEffect, useState } from "react";
+import { useNavigate, useLocation, Link } from "react-router-dom";
+import { Lock, Mail, ArrowRight, Eye, EyeOff, User, AlertCircle } from "lucide-react";
+import { motion } from "framer-motion";
+import { auth, db } from "../firebase";
 import {
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   GoogleAuthProvider,
-  ConfirmationResult,
-} from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
-import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown } from 'lucide-react';
-import Logo from '../components/Logo';
-import { storage } from '../utils/localStorage';
-import { ALL_COUNTRIES } from '../countries';
+  signInWithPopup,
+  sendPasswordResetEmail,
+  updateProfile,
+} from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { useAuth } from "../context/AuthContext";
 
-declare global { interface Window { recaptchaVerifier?: RecaptchaVerifier; } }
-
-type Step = 'phone' | 'otp' | 'profile';
+type Mode = "login" | "signup" | "reset";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-
   const location = useLocation();
-  const { user, isAuthReady, login } = useAuth();
-  const outletContext: any = useOutletContext();
+  const { user, isAuthReady } = useAuth();
+  const from = (location.state as any)?.from?.pathname || "/account";
 
-  const [step, setStep] = useState<Step>('phone');
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [otp, setOtp] = useState('');
-  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
+  const [mode, setMode] = useState<Mode>("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [name, setName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [resendTimer, setResendTimer] = useState(59);
-  const [profile, setProfile] = useState({ firstName: '', lastName: '', email: '', gender: '', age: '' });
-  const recaptchaRef = useRef<HTMLDivElement>(null);
-  const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
-  const [bgImage, setBgImage] = useState('https://images.unsplash.com/photo-1617137968427-85924c800a22?q=80&w=1974&auto=format&fit=crop');
 
-  const [selectedCountry, setSelectedCountry] = useState(() => {
-    const savedCode = localStorage.getItem('LUXARDO FASHION_country');
-    return ALL_COUNTRIES.find(c => c.code === savedCode) || ALL_COUNTRIES.find(c => c.code === 'IN') || ALL_COUNTRIES[0];
-  });
-
-  const from = (location.state as any)?.from?.pathname || '/account';
-
-  // Sync country from outlet context
-  useEffect(() => {
-    if (outletContext?.selectedCountry) {
-      const match = ALL_COUNTRIES.find(c => c.code === outletContext.selectedCountry.code);
-      if (match) setSelectedCountry(match);
-    }
-  }, [outletContext?.selectedCountry]);
-
-  // Load hero bg image from site content
-  useEffect(() => {
-    const content = storage.getSiteContent();
-    if (content?.homepage?.hero?.slides?.[0]?.imageUrl) {
-      setBgImage(content.homepage.hero.slides[0].imageUrl);
-    }
-  }, []);
-
-  // Scroll to top on mount
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
-  // Redirect if already logged in
   useEffect(() => {
     if (isAuthReady && user) {
-      if (['super_admin', 'admin'].includes(user.role)) {
-        navigate('/admin/dashboard', { replace: true });
-      } else if (user.role === 'dispatch' || user.role === 'owner' || user.role === 'analysis') {
-        navigate('/backend', { replace: true });
+      // Role-aware redirect: admins go to admin panel, customers to account/from
+      if (["admin", "super_admin"].includes(user.role)) {
+        navigate("/admin/dashboard", { replace: true });
       } else {
         navigate(from, { replace: true });
       }
     }
   }, [user, isAuthReady, navigate, from]);
 
-  // Initialize reCAPTCHA
-  useEffect(() => {
-    if (step === 'phone') {
-      try {
-        if (window.recaptchaVerifier) {
-          window.recaptchaVerifier.clear();
-          window.recaptchaVerifier = undefined;
-        }
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'normal',
-          callback: () => {},
-          'expired-callback': () => {
-            setError('reCAPTCHA expired. Please try again.');
-          }
-        });
-        window.recaptchaVerifier.render();
-      } catch (e) {
-        console.error('Recaptcha error:', e);
-      }
-    }
-  }, [step]);
-
-  // Resend timer countdown
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (step === 'otp' && resendTimer > 0) {
-      interval = setInterval(() => setResendTimer(prev => prev - 1), 1000);
-    }
-    return () => clearInterval(interval);
-  }, [step, resendTimer]);
-
-  const handleSendOTP = async () => {
-    if (mobileNumber.length < 5) {
-      setError('Please enter a valid mobile number');
-      return;
-    }
-    setError('');
-    setLoading(true);
-    try {
-      const fullPhone = `${(selectedCountry as any).dial}${mobileNumber.replace(/^0+/, '')}`;
-      const verifier = window.recaptchaVerifier!;
-      const result = await signInWithPhoneNumber(auth, fullPhone, verifier);
-      setConfirmation(result);
-      setStep('otp');
-      setResendTimer(59);
-    } catch (err: any) {
-      console.error('OTP send error:', err);
-      setError('Failed to send OTP. Please check your number and try again.');
-      // Reset recaptcha on error
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
-      }
-    } finally {
-      setLoading(false);
+  const errorMessage = (code: string): string => {
+    switch (code) {
+      case "auth/invalid-credential":
+      case "auth/wrong-password":
+        return "Incorrect email or password.";
+      case "auth/user-not-found":
+        return "No account found with this email.";
+      case "auth/email-already-in-use":
+        return "An account already exists with this email.";
+      case "auth/weak-password":
+        return "Password must be at least 6 characters.";
+      case "auth/invalid-email":
+        return "Invalid email format.";
+      case "auth/popup-closed-by-user":
+        return "Google sign-in cancelled.";
+      case "auth/network-request-failed":
+        return "Network error. Check your connection.";
+      case "auth/too-many-requests":
+        return "Too many attempts. Try again later.";
+      default:
+        return "Something went wrong. Please try again.";
     }
   };
 
-  const handleResendOTP = async () => {
-    if (resendTimer > 0) return;
-    setError('');
-    setLoading(true);
-    try {
-      const fullPhone = `${(selectedCountry as any).dial}${mobileNumber.replace(/^0+/, '')}`;
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
-      }
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'normal' });
-      await window.recaptchaVerifier.render();
-      const result = await signInWithPhoneNumber(auth, fullPhone, window.recaptchaVerifier);
-      setConfirmation(result);
-      setResendTimer(59);
-    } catch (err: any) {
-      setError('Failed to resend OTP. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async () => {
-    if (otp.length < 6) {
-      setError('Please enter a valid 6-digit OTP');
-      return;
-    }
-    setError('');
-    setLoading(true);
-    try {
-      const result = await confirmation!.confirm(otp);
-      const uid = result.user.uid;
-      const userDoc = await getDoc(doc(db, 'customers', uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        login({
-          id: uid,
-          name: data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : data.name || 'Customer',
-          email: data.email || '',
-          role: data.role || 'customer',
-          isPrimeMember: data.isPrimeMember || false,
-          phone: data.phone,
-        });
-        navigate(from, { replace: true });
-      } else {
-        setStep('profile');
-      }
-    } catch (err: any) {
-      setError('Invalid OTP. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleProfileSubmit = async () => {
-    if (!profile.firstName || !profile.lastName || !profile.email || !profile.gender || !profile.age) {
-      setError('Please fill all fields');
-      return;
-    }
-    setError('');
-    setLoading(true);
-    try {
-      const uid = auth.currentUser!.uid;
-      const fullPhone = `${(selectedCountry as any).dial}${mobileNumber}`;
-      const customerData = {
-        firstName: profile.firstName,
-        lastName: profile.lastName,
-        email: profile.email,
-        gender: profile.gender,
-        age: profile.age,
-        phone: fullPhone,
-        role: 'customer',
-        isPrimeMember: false,
-        createdAt: new Date().toISOString(),
-      };
-      await setDoc(doc(db, 'customers', uid), customerData);
-      login({
+  async function createCustomerDoc(uid: string, data: { name?: string; email?: string }) {
+    const ref = doc(db, "customers", uid);
+    const snap = await getDoc(ref);
+    const ADMIN_EMAILS = ["luxardodigiwork@gmail.com"];
+    const isAdmin = ADMIN_EMAILS.includes((data.email || "").toLowerCase());
+    if (!snap.exists()) {
+      await setDoc(ref, {
         id: uid,
-        name: `${profile.firstName} ${profile.lastName}`,
-        email: profile.email,
-        role: 'customer',
+        name: data.name || "Customer",
+        email: data.email || "",
+        role: isAdmin ? "admin" : "customer",
         isPrimeMember: false,
-        phone: fullPhone,
+        createdAt: serverTimestamp(),
+        ...(isAdmin && {
+          permissions: {
+            products: true, orders: true, content: true, media: true,
+            customers: true, dispatch: true, settings: true,
+          },
+        }),
       });
-      navigate(from, { replace: true });
+    } else if (isAdmin) {
+      // Existing doc — promote to admin if not already (handles users that signed up before this fix)
+      const existing = snap.data();
+      if (existing.role !== "admin" && existing.role !== "super_admin") {
+        await setDoc(ref, {
+          role: "admin",
+          permissions: {
+            products: true, orders: true, content: true, media: true,
+            customers: true, dispatch: true, settings: true,
+          },
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
+    }
+  }
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+    if (!email || !password) {
+      setError("Please fill all fields.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
     } catch (err: any) {
-      setError('Failed to save profile. Please try again.');
+      setError(errorMessage(err?.code || ""));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+    if (!name || !email || !password || !confirmPassword) {
+      setError("Please fill all fields.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+      if (cred.user) {
+        await updateProfile(cred.user, { displayName: name });
+        await createCustomerDoc(cred.user.uid, { name, email });
+      }
+    } catch (err: any) {
+      setError(errorMessage(err?.code || ""));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError("");
+    setMessage("");
+    setLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      const cred = await signInWithPopup(auth, provider);
+      if (cred.user) {
+        await createCustomerDoc(cred.user.uid, {
+          name: cred.user.displayName || "Customer",
+          email: cred.user.email || "",
+        });
+      }
+    } catch (err: any) {
+      setError(errorMessage(err?.code || ""));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+    if (!email) {
+      setError("Please enter your email.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+      setMessage("Password reset link sent. Check your inbox.");
+      setTimeout(() => setMode("login"), 3000);
+    } catch (err: any) {
+      setError(errorMessage(err?.code || ""));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full flex bg-[#FBFBFA] font-sans">
-
-      {/* Left Panel — Editorial */}
-      <div className="hidden md:flex md:w-1/2 relative bg-black flex-col justify-between p-12 overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <img
-            src={bgImage}
-            alt="LUXARDO FASHION Editorial"
-            className="w-full h-full object-cover opacity-50"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+    <div className="min-h-screen bg-brand-bg flex items-center justify-center p-6 py-16">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        className="w-full max-w-md"
+      >
+        <div className="text-center mb-10">
+          <Link to="/" className="inline-block mb-6">
+            <h1 className="text-3xl font-display tracking-[0.3em] text-brand-black uppercase">
+              LUXARDO
+            </h1>
+            <p className="text-[10px] tracking-[0.4em] text-brand-secondary mt-1">FASHION • ITALY</p>
+          </Link>
         </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
-          className="relative z-10 text-white tracking-[0.3em] font-semibold text-xs uppercase"
-        >
-          LUXARDO FASHION
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="relative z-10"
-        >
-          <h1 className="text-white text-5xl lg:text-6xl font-display leading-tight max-w-lg">
-            Crafting Legacy,<br />Defining Elegance.
-          </h1>
-        </motion.div>
-      </div>
-
-      {/* Right Panel — Auth */}
-      <div className="w-full md:w-1/2 flex flex-col justify-center items-center p-6 md:p-12 lg:p-20 bg-[#FBFBFA] relative">
-        <div className="w-full max-w-md flex flex-col bg-white p-8 md:p-12 shadow-sm">
-
-          {/* Logo + Title */}
-          <div className="flex flex-col items-center mb-10">
-            <Logo className="w-40 h-auto mb-5 text-black" />
-            <p className="text-[#8E8E86] font-medium text-sm tracking-wide">
-              {step === 'phone' && 'Access Your Account'}
-              {step === 'otp' && 'Verify Your Number'}
-              {step === 'profile' && 'Complete Your Profile'}
-            </p>
-          </div>
-
-          {/* Error Message */}
-          <AnimatePresence>
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="text-red-500 text-xs font-semibold text-center mb-6"
+        <div className="bg-white p-10 border border-brand-divider shadow-sm">
+          {mode !== "reset" && (
+            <div className="flex border-b border-brand-divider mb-8">
+              <button
+                onClick={() => { setMode("login"); setError(""); setMessage(""); }}
+                className={"flex-1 py-3 text-[11px] uppercase tracking-[0.3em] font-bold transition-colors " + (mode === "login" ? "text-brand-black border-b-2 border-brand-black -mb-px" : "text-brand-secondary")}
               >
-                {error}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="relative w-full">
-            <AnimatePresence mode="wait">
-
-              {/* STEP 1 — Phone */}
-              {step === 'phone' && (
-                <motion.div
-                  key="phone"
-                  initial={{ opacity: 0, x: 12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -12 }}
-                  className="w-full flex flex-col gap-6"
-                >
-                  {/* Phone Input */}
-                  <div className="flex items-center border-b border-[#CFC7B8] focus-within:border-black transition-colors py-2 relative">
-                    <button
-                      type="button"
-                      onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
-                      className="flex items-center gap-2 pr-4 border-r border-[#CFC7B8] mr-4"
-                    >
-                      <img
-                        src={`https://flagcdn.com/w40/${selectedCountry.code.toLowerCase()}.png`}
-                        alt={selectedCountry.name}
-                        className="w-6 h-auto border border-gray-100"
-                      />
-                      <span className="text-sm font-semibold text-black">{selectedCountry.code}</span>
-                      <ChevronDown className="w-4 h-4 text-black" />
-                    </button>
-
-                    {/* Country Dropdown */}
-                    <AnimatePresence>
-                      {isCountryDropdownOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          className="absolute top-[110%] left-0 w-72 bg-white border border-[#CFC7B8] shadow-xl z-50 max-h-64 overflow-y-auto"
-                        >
-                          {ALL_COUNTRIES.map((c) => (
-                            <button
-                              key={c.code}
-                              type="button"
-                              onClick={() => {
-                                setSelectedCountry(c);
-                                localStorage.setItem('LUXARDO FASHION_country', c.code);
-                                setIsCountryDropdownOpen(false);
-                              }}
-                              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#FBFBFA] transition-colors text-left"
-                            >
-                              <img
-                                src={`https://flagcdn.com/w40/${c.code.toLowerCase()}.png`}
-                                alt={c.name}
-                                className="w-5 h-auto border border-gray-100"
-                              />
-                              <span className="text-sm font-medium text-black flex-1">{c.name}</span>
-                              <span className="text-xs text-[#8E8E86] font-mono">{(c as any).dial}</span>
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    <span className="text-sm font-semibold text-black mr-2">{(selectedCountry as any).dial}</span>
-                    <input
-                      type="tel"
-                      value={mobileNumber}
-                      onChange={(e) => setMobileNumber(e.target.value)}
-                      placeholder="Mobile Number"
-                      className="w-full bg-transparent outline-none text-sm placeholder:text-[#8E8E86] text-black"
-                    />
-                  </div>
-
-                  {/* reCAPTCHA */}
-                  <div id="recaptcha-container" ref={recaptchaRef} className="flex justify-center"></div>
-
-                  <button
-                    type="button"
-                    onClick={handleSendOTP}
-                    disabled={loading || !mobileNumber}
-                    className="w-full h-14 bg-black text-white uppercase tracking-[0.25em] text-[11px] hover:bg-gray-900 transition-colors disabled:opacity-40"
-                  >
-                    {loading ? 'Sending...' : 'Send OTP'}
-                  </button>
-                </motion.div>
-              )}
-
-              {/* STEP 2 — OTP */}
-              {step === 'otp' && (
-                <motion.div
-                  key="otp"
-                  initial={{ opacity: 0, x: 12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -12 }}
-                  className="w-full flex flex-col gap-6"
-                >
-                  <p className="text-center text-sm text-[#8E8E86]">
-                    OTP sent to <span className="font-semibold text-black">{(selectedCountry as any).dial} {mobileNumber}</span>
-                  </p>
-
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    placeholder="• • • • • •"
-                    autoFocus
-                    className="w-full text-center text-3xl tracking-[1em] py-4 border-b border-[#CFC7B8] focus:border-black outline-none bg-transparent placeholder:text-[#CFC7B8] text-black"
-                  />
-
-                  <div className="flex flex-col items-center gap-2 text-sm text-[#8E8E86]">
-                    {resendTimer > 0 ? (
-                      <span>Resend OTP in 00:{String(resendTimer).padStart(2, '0')}</span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleResendOTP}
-                        disabled={loading}
-                        className="underline hover:text-black transition-colors"
-                      >
-                        Resend OTP
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => { setStep('phone'); setOtp(''); }}
-                      className="text-xs hover:text-black transition-colors"
-                    >
-                      Change Number
-                    </button>
-                  </div>
-
-                  {/* Hidden recaptcha for resend */}
-                  <div id="recaptcha-container" className="hidden"></div>
-
-                  <button
-                    type="button"
-                    onClick={handleVerifyOTP}
-                    disabled={loading || otp.length < 6}
-                    className="w-full h-14 bg-black text-white uppercase tracking-[0.25em] text-[11px] hover:bg-gray-900 transition-colors disabled:opacity-40"
-                  >
-                    {loading ? 'Verifying...' : 'Verify & Continue'}
-                  </button>
-                </motion.div>
-              )}
-
-              {/* STEP 3 — Profile */}
-              {step === 'profile' && (
-                <motion.div
-                  key="profile"
-                  initial={{ opacity: 0, x: 12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -12 }}
-                  className="w-full flex flex-col gap-6"
-                >
-                  <div className="w-full p-4 bg-[#FBFBFA] border border-[#CFC7B8] flex items-center justify-between text-sm">
-                    <span className="text-[#8E8E86]">Verified Number</span>
-                    <span className="font-semibold text-black">{(selectedCountry as any).dial} {mobileNumber}</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <input
-                      type="text"
-                      placeholder="First Name"
-                      value={profile.firstName}
-                      onChange={e => setProfile(p => ({ ...p, firstName: e.target.value }))}
-                      required
-                      className="w-full border-b border-[#CFC7B8] focus:border-black outline-none bg-transparent py-2 text-sm placeholder:text-[#8E8E86] text-black"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Last Name"
-                      value={profile.lastName}
-                      onChange={e => setProfile(p => ({ ...p, lastName: e.target.value }))}
-                      required
-                      className="w-full border-b border-[#CFC7B8] focus:border-black outline-none bg-transparent py-2 text-sm placeholder:text-[#8E8E86] text-black"
-                    />
-                  </div>
-
+                Sign In
+              </button>
+              <button
+                onClick={() => { setMode("signup"); setError(""); setMessage(""); }}
+                className={"flex-1 py-3 text-[11px] uppercase tracking-[0.3em] font-bold transition-colors " + (mode === "signup" ? "text-brand-black border-b-2 border-brand-black -mb-px" : "text-brand-secondary")}
+              >
+                Create Account
+              </button>
+            </div>
+          )}
+          {mode === "reset" && (
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-display text-brand-black mb-2">Reset Password</h2>
+              <p className="text-xs text-brand-secondary">Enter your email to receive a reset link</p>
+            </div>
+          )}
+          {error && (
+            <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 mb-5 text-xs flex items-start gap-2">
+              <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+          {message && (
+            <div className="bg-green-50 border border-green-100 text-green-700 px-4 py-3 mb-5 text-xs">
+              {message}
+            </div>
+          )}
+          {mode !== "reset" && (
+            <>
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                className="w-full py-3.5 mb-5 border border-brand-divider hover:border-brand-black flex items-center justify-center gap-3 text-sm transition-colors disabled:opacity-50"
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" />
+                  <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" />
+                  <path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z" />
+                  <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" />
+                </svg>
+                <span className="font-medium text-brand-black">Continue with Google</span>
+              </button>
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-brand-divider"></div>
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-white px-3 text-[10px] uppercase tracking-widest text-brand-secondary">or continue with email</span>
+                </div>
+              </div>
+            </>
+          )}
+          {mode === "login" && (
+            <form onSubmit={handleEmailLogin} className="space-y-5">
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-brand-secondary mb-2">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary" size={16} />
                   <input
                     type="email"
-                    placeholder="Email Address"
-                    value={profile.email}
-                    onChange={e => setProfile(p => ({ ...p, email: e.target.value }))}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    autoComplete="email"
+                    className="w-full border border-brand-divider p-3.5 pl-12 text-sm focus:outline-none focus:border-brand-black transition-colors"
                     required
-                    className="w-full border-b border-[#CFC7B8] focus:border-black outline-none bg-transparent py-2 text-sm placeholder:text-[#8E8E86] text-black"
                   />
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <input
-                      type="number"
-                      placeholder="Age"
-                      value={profile.age}
-                      onChange={e => setProfile(p => ({ ...p, age: e.target.value }))}
-                      min="18"
-                      max="100"
-                      required
-                      className="w-full border-b border-[#CFC7B8] focus:border-black outline-none bg-transparent py-2 text-sm placeholder:text-[#8E8E86] text-black"
-                    />
-                    <div className="relative">
-                      <select
-                        value={profile.gender}
-                        onChange={e => setProfile(p => ({ ...p, gender: e.target.value }))}
-                        required
-                        className="w-full border-b border-[#CFC7B8] focus:border-black outline-none bg-transparent py-2 text-sm text-black appearance-none"
-                      >
-                        <option value="" disabled>Gender</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                      </select>
-                      <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 text-black pointer-events-none" />
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleProfileSubmit}
-                    disabled={loading}
-                    className="w-full h-14 bg-black text-white uppercase tracking-[0.25em] text-[11px] hover:bg-gray-900 transition-colors mt-2 disabled:opacity-50"
-                  >
-                    {loading ? 'Saving...' : 'Complete Registration'}
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-[10px] uppercase tracking-widest text-brand-secondary">Password</label>
+                  <button type="button" onClick={() => { setMode("reset"); setError(""); }} className="text-[10px] uppercase tracking-widest text-brand-secondary hover:text-brand-black">
+                    Forgot?
                   </button>
-                </motion.div>
-              )}
-
-            </AnimatePresence>
-          </div>
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary" size={16} />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    className="w-full border border-brand-divider p-3.5 pl-12 pr-12 text-sm focus:outline-none focus:border-brand-black transition-colors"
+                    required
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-secondary hover:text-brand-black">
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-4 bg-brand-black text-white text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-brand-black/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-3"
+              >
+                {loading ? "Signing in..." : "Sign In"} {!loading && <ArrowRight size={14} />}
+              </button>
+            </form>
+          )}
+          {mode === "signup" && (
+            <form onSubmit={handleEmailSignUp} className="space-y-5">
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-brand-secondary mb-2">Full Name</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary" size={16} />
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    autoComplete="name"
+                    className="w-full border border-brand-divider p-3.5 pl-12 text-sm focus:outline-none focus:border-brand-black transition-colors"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-brand-secondary mb-2">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary" size={16} />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    autoComplete="email"
+                    className="w-full border border-brand-divider p-3.5 pl-12 text-sm focus:outline-none focus:border-brand-black transition-colors"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-brand-secondary mb-2">Password (min 6 chars)</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary" size={16} />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    className="w-full border border-brand-divider p-3.5 pl-12 pr-12 text-sm focus:outline-none focus:border-brand-black transition-colors"
+                    required
+                    minLength={6}
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-secondary hover:text-brand-black">
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-brand-secondary mb-2">Confirm Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary" size={16} />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    className="w-full border border-brand-divider p-3.5 pl-12 text-sm focus:outline-none focus:border-brand-black transition-colors"
+                    required
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-brand-secondary leading-relaxed">
+                By creating an account, you agree to our <Link to="/policies/terms" className="underline hover:text-brand-black">Terms</Link> and <Link to="/policies/privacy" className="underline hover:text-brand-black">Privacy Policy</Link>.
+              </p>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-4 bg-brand-black text-white text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-brand-black/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-3"
+              >
+                {loading ? "Creating..." : "Create Account"} {!loading && <ArrowRight size={14} />}
+              </button>
+            </form>
+          )}
+          {mode === "reset" && (
+            <form onSubmit={handlePasswordReset} className="space-y-5">
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-brand-secondary mb-2">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-secondary" size={16} />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    className="w-full border border-brand-divider p-3.5 pl-12 text-sm focus:outline-none focus:border-brand-black transition-colors"
+                    required
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-4 bg-brand-black text-white text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-brand-black/90 transition-colors disabled:opacity-50"
+              >
+                {loading ? "Sending..." : "Send Reset Link"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMode("login"); setError(""); setMessage(""); }}
+                className="w-full text-[10px] uppercase tracking-widest text-brand-secondary hover:text-brand-black"
+              >
+                ← Back to Sign In
+              </button>
+            </form>
+          )}
         </div>
-
-        <p className="text-center text-[9px] uppercase tracking-[0.25em] text-[#8E8E86] mt-8">
-          LUXARDO FASHION — Protected Authentication
-        </p>
-      </div>
-
+        <div className="text-center mt-6 text-[10px] uppercase tracking-widest text-brand-secondary">
+          Need help? <Link to="/contact" className="hover:text-brand-black underline">Contact Us</Link>
+        </div>
+      </motion.div>
     </div>
   );
 }
-
-

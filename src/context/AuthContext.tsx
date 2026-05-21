@@ -72,6 +72,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             };
             await setDoc(customerRef, adminData);
             customerDoc = await getDoc(customerRef);
+          } else if (customerDoc.exists() && isMasterAdmin) {
+            // Force-promote master admin every login (handles previously-created customer docs with wrong role)
+            const existing = customerDoc.data();
+            if (existing.role !== 'admin' && existing.role !== 'super_admin') {
+              console.log('[AuthContext] Master admin doc had role:' + existing.role + ' — promoting to admin');
+              await setDoc(customerRef, {
+                role: 'admin',
+                permissions: {
+                  products: true, orders: true, content: true, media: true,
+                  customers: true, dispatch: true, settings: true,
+                },
+                updatedAt: new Date().toISOString(),
+              }, { merge: true });
+              customerDoc = await getDoc(customerRef);
+            }
           }
 
           if (customerDoc.exists()) {
