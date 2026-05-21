@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, ArrowRight, Package, Grid, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { storage } from '../utils/localStorage';
 import { COLLECTIONS } from '../constants';
-import { Product } from '../types';
+import { useProducts } from '../context/ProductsContext';
 
 interface SearchOverlayProps {
   isOpen: boolean;

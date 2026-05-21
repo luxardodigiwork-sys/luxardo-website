@@ -3,16 +3,17 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { COLLECTIONS } from '../constants';
 import { Search, X } from 'lucide-react';
-import { storage } from '../utils/localStorage';
 import { ProductCard } from '../components/ProductCard';
 import { useAuth } from '../context/AuthContext';
+import { useProducts } from '../context/ProductsContext';
 
 export default function CollectionsPage() {
   const { user } = useAuth();
+  const { products: allProducts } = useProducts();
   const [searchQuery, setSearchQuery] = useState('');
   const [conditionFilter, setConditionFilter] = useState<'All' | 'Newly' | 'Regular' | 'Limited Edition'>('All');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  
+
   const collections = COLLECTIONS.map(col => ({
     id: col.id,
     title: col.fullName,
@@ -20,8 +21,6 @@ export default function CollectionsPage() {
     img: col.image,
     descriptor: col.descriptor
   }));
-
-  const allProducts = storage.getProducts();
 
   const filteredProducts = useMemo(() => {
     let result = [...allProducts];

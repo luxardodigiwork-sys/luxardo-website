@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useOutletContext, Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Country } from '../types';
-import { storage } from '../utils/localStorage';
+import { useProducts } from '../context/ProductsContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronDown, 
@@ -29,8 +29,8 @@ export default function ProductPage() {
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const { addToCart } = useCart();
   const { isLoggedIn } = useAuth();
-  
-  const products = storage.getProducts();
+  const { products } = useProducts();
+
   const product = products.find(p => p.id === id) || products[0];
 
   const [openSection, setOpenSection] = useState<string | null>('description');

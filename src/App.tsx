@@ -48,6 +48,7 @@ function CountryModalBridge() {
   return <FirstVisitModal onSelect={setCountry} />;
 }
 import { CartProvider } from "./context/CartContext";
+import { ProductsProvider } from "./context/ProductsContext";
 import { syncSiteContentFromFirestore, subscribeSiteContent } from "./utils/siteContentSync";
 import { fetchProductsFromFirestore } from "./utils/productsFirestore";
 
@@ -164,6 +165,7 @@ export default function App() {
     <AuthProvider>
       <CountryProvider>
         <CountryModalBridge />
+      <ProductsProvider>
       <CartProvider>
         <WishlistProvider>
           <Routes>
@@ -404,6 +406,7 @@ export default function App() {
           </Routes>
         </WishlistProvider>
       </CartProvider>
+      </ProductsProvider>
       </CountryProvider>
     </AuthProvider>
   );

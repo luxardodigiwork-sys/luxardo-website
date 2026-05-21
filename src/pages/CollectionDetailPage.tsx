@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useParams, useOutletContext } from 'react-router-dom';
 import { SectionHeader } from '../components/SectionHeader';
 import { COLLECTIONS } from '../constants';
-import { storage } from '../utils/localStorage';
 import { ProductCard } from '../components/ProductCard';
 import { Country } from '../types';
 import { motion } from 'motion/react';
 import { SlidersHorizontal } from 'lucide-react';
+import { useProducts } from '../context/ProductsContext';
 
 export default function CollectionDetailPage() {
   const { category } = useParams<{ category: string }>();
@@ -14,7 +14,7 @@ export default function CollectionDetailPage() {
   const [sortBy, setSortBy] = useState<'featured' | 'newest' | 'recommended'>('featured');
 
   const collection = COLLECTIONS.find(c => c.id === category);
-  const products = storage.getProducts();
+  const { products } = useProducts();
   
   let filteredProducts = products.filter(p => p.category === collection?.fullName);
 

@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { storage } from '../../utils/localStorage';
-import { saveProductToFirestore, deleteProductFromFirestore } from '../../utils/productsFirestore';
+import { saveProductToFirestore, deleteProductFromFirestore, getProductFromFirestore } from '../../utils/productsFirestore';
 import { Product } from '../../types';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 
@@ -24,13 +23,12 @@ export default function AdminEditProductPage() {
   ];
 
   useEffect(() => {
-    const fetchProduct = () => {
+    const fetchProduct = async () => {
       if (!id) return;
       try {
-        const products = storage.getProducts();
-        const product = products.find(p => p.id === id);
+        // Firestore source-of-truth
+        const product = await getProductFromFirestore(id);
         if (product) {
-          // Ensure all new fields exist
           setFormData({
             ...product,
             slug: product.slug || '',
@@ -49,6 +47,7 @@ export default function AdminEditProductPage() {
         }
       } catch (error) {
         console.error('Error fetching product:', error);
+        navigate('/admin/products');
       } finally {
         setIsLoading(false);
       }
@@ -83,27 +82,21 @@ export default function AdminEditProductPage() {
     if (!id || !formData) return;
     setIsSaving(true);
 
+    const updatedProduct: Product = {
+      ...formData,
+      id,
+      price: Number(formData.price),
+      stock: Number(formData.stock),
+      visibility: visibilityOverride || formData.visibility,
+      updatedAt: new Date().toISOString(),
+    };
+
     try {
-      const products = storage.getProducts();
-      const updatedProducts = products.map(p => 
-        p.id === id ? { 
-          ...formData, 
-          price: Number(formData.price), 
-          stock: Number(formData.stock),
-          visibility: visibilityOverride || formData.visibility,
-          updatedAt: new Date().toISOString()
-        } : p
-      );
-      try { await saveProductToFirestore(updatedProduct); } catch(e) { console.error(e); }
-      storage.saveProducts(updatedProducts);
+      await saveProductToFirestore(updatedProduct);
       navigate('/admin/products');
     } catch (error: any) {
       console.error('Error updating product:', error);
-      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
-        alert('Storage limit exceeded. The uploaded images are too large. Please use smaller images or image URLs.');
-      } else {
-        alert('Failed to update product.');
-      }
+      alert('Failed to update product: ' + (error?.code || '') + ' ' + (error?.message || 'Unknown'));
     } finally {
       setIsSaving(false);
     }
