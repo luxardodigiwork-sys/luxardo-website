@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
+import { ArrowLeft, Save, Image as ImageIcon, Plus, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { storage } from '../../utils/localStorage';
 import { saveProductToFirestore, getProductFromFirestore } from '../../utils/productsFirestore';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
+import { auth } from '../../firebase';
+import { useAuth } from '../../context/AuthContext';
 
 export default function AdminAddProductPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
   const [formData, setFormData] = useState({
     id: '',
     name: '',
@@ -64,12 +68,36 @@ export default function AdminAddProductPage() {
   const handleSubmit = async (e: React.FormEvent, visibilityOverride?: 'public' | 'hidden') => {
     e.preventDefault();
     setIsLoading(true);
+    setSaveStatus(null);
+
+    // 1. Pre-flight auth check (visible feedback)
+    if (!auth.currentUser) {
+      setSaveStatus({ type: 'err', msg: 'You are not signed in to Firebase Auth. Sign out and sign back in via /admin/login.' });
+      setIsLoading(false);
+      return;
+    }
+    if (!user || !['admin', 'super_admin'].includes(user.role)) {
+      setSaveStatus({ type: 'err', msg: `Your customer doc role is "${user?.role || 'unknown'}", not "admin". Cannot write to Firestore products.` });
+      setIsLoading(false);
+      return;
+    }
+    if (!formData.id?.trim()) {
+      setSaveStatus({ type: 'err', msg: 'Product ID is required.' });
+      setIsLoading(false);
+      return;
+    }
+    if (!formData.name?.trim()) {
+      setSaveStatus({ type: 'err', msg: 'Product Name is required.' });
+      setIsLoading(false);
+      return;
+    }
 
     try {
-      // Firestore-first duplicate check (source of truth)
+      // 2. Firestore-first duplicate check
+      console.log('[AdminAddProductPage] checking for existing product with id:', formData.id);
       const existing = await getProductFromFirestore(formData.id);
       if (existing) {
-        alert('A product with this ID already exists in the catalog. Please use a unique ID.');
+        setSaveStatus({ type: 'err', msg: `A product with ID "${formData.id}" already exists in Firestore. Use a unique ID.` });
         setIsLoading(false);
         return;
       }
@@ -83,22 +111,24 @@ export default function AdminAddProductPage() {
         updatedAt: new Date().toISOString()
       };
 
-      // Firestore is source of truth. Throw on failure so user sees real error.
+      // 3. Save to Firestore (source of truth)
+      console.log('[AdminAddProductPage] Saving to Firestore:', newProduct.id, 'as user', auth.currentUser.uid);
       try {
         await saveProductToFirestore(newProduct);
+        console.log('[AdminAddProductPage] Firestore save OK');
       } catch (firestoreErr: any) {
-        console.error('[AdminAddProductPage] Firestore save failed:', firestoreErr);
-        alert(
-          'Failed to save product to Firestore.\n\n' +
-          (firestoreErr?.code || '') + '\n' +
-          (firestoreErr?.message || 'Unknown error') +
-          '\n\nCheck console for details. Most common cause: not logged in as admin, or Firestore rules.'
-        );
+        console.error('[AdminAddProductPage] Firestore save FAILED:', firestoreErr);
+        const code = firestoreErr?.code || 'unknown';
+        const msg = firestoreErr?.message || 'Unknown';
+        setSaveStatus({
+          type: 'err',
+          msg: `Firestore save failed [${code}]: ${msg}. Auth UID: ${auth.currentUser.uid}. Role: ${user.role}. Check Firestore rules + redeploy if rules changed.`,
+        });
         setIsLoading(false);
         return;
       }
 
-      // Local cache (best-effort, ignore quota errors)
+      // 4. Local cache (best-effort)
       try {
         const cached = storage.getProducts();
         storage.saveProducts([newProduct, ...cached.filter(p => p.id !== newProduct.id)]);
@@ -106,10 +136,11 @@ export default function AdminAddProductPage() {
         console.warn('[AdminAddProductPage] Local cache update skipped:', cacheErr);
       }
 
-      navigate('/admin/products');
+      setSaveStatus({ type: 'ok', msg: `Product "${newProduct.id}" saved to Firestore. Redirecting…` });
+      setTimeout(() => navigate('/admin/products'), 900);
     } catch (error: any) {
-      console.error('Error saving product:', error);
-      alert('Unexpected error: ' + (error?.message || 'Unknown'));
+      console.error('[AdminAddProductPage] Unexpected error:', error);
+      setSaveStatus({ type: 'err', msg: 'Unexpected error: ' + (error?.message || 'Unknown') });
     } finally {
       setIsLoading(false);
     }
@@ -125,6 +156,33 @@ export default function AdminAddProductPage() {
           <h1 className="text-4xl font-display uppercase tracking-tight">Add New Product</h1>
           <p className="text-brand-secondary font-sans">Expand the LUXARDO FASHION collection</p>
         </div>
+      </div>
+
+      {/* Auth + Save status banner (always visible) */}
+      <div className="flex flex-col gap-2">
+        <div className={`text-xs px-4 py-2 border ${auth.currentUser && user && ['admin','super_admin'].includes(user.role)
+          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          : 'bg-red-50 border-red-200 text-red-700'}`}>
+          {auth.currentUser ? (
+            <>
+              <strong>Signed in:</strong> {auth.currentUser.email} · <strong>UID:</strong> {auth.currentUser.uid.substring(0, 8)}… · <strong>Role:</strong> {user?.role || 'unknown'}
+              {user?.role !== 'admin' && user?.role !== 'super_admin' && <span> ⚠ NOT ADMIN — Firestore writes will fail</span>}
+            </>
+          ) : (
+            <>⚠ Not signed in to Firebase Auth. Go to /admin/login first.</>
+          )}
+        </div>
+
+        {saveStatus && (
+          <div className={`text-sm px-4 py-3 border flex items-start gap-2 ${
+            saveStatus.type === 'ok'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
+            {saveStatus.type === 'ok' ? <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" /> : <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />}
+            <span className="break-all">{saveStatus.msg}</span>
+          </div>
+        )}
       </div>
 
       <form onSubmit={(e) => handleSubmit(e)} className="grid grid-cols-1 lg:grid-cols-3 gap-8">

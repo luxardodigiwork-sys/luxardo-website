@@ -34,9 +34,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthReady && user) {
-      // Role-aware redirect: admins go to admin panel, customers to account/from
+      // Admin emails must use /admin/login, never the customer page
       if (["admin", "super_admin"].includes(user.role)) {
-        navigate("/admin/dashboard", { replace: true });
+        navigate("/admin/login", { replace: true });
       } else {
         navigate(from, { replace: true });
       }
@@ -103,12 +103,20 @@ export default function LoginPage() {
     }
   }
 
+  const ADMIN_EMAILS = ["luxardodigiwork@gmail.com"];
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setMessage("");
     if (!email || !password) {
       setError("Please fill all fields.");
+      return;
+    }
+    // Block admin emails on customer page
+    if (ADMIN_EMAILS.includes(email.trim().toLowerCase())) {
+      setError("This email is reserved for admin. Please use the admin sign-in page.");
+      setTimeout(() => navigate("/admin/login"), 1500);
       return;
     }
     setLoading(true);
@@ -152,6 +160,7 @@ export default function LoginPage() {
   };
 
   const handleGoogleSignIn = async () => {
+    // Block admin email after popup completes (handled in finally)
     setError("");
     setMessage("");
     setLoading(true);
@@ -159,6 +168,12 @@ export default function LoginPage() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
       const cred = await signInWithPopup(auth, provider);
+      // If user signed in with admin email, push them to admin login and sign out here
+      if (cred.user && ADMIN_EMAILS.includes((cred.user.email || "").toLowerCase())) {
+        setError("Admin account detected. Redirecting to admin sign-in…");
+        setTimeout(() => navigate("/admin/login"), 1200);
+        return;
+      }
       if (cred.user) {
         await createCustomerDoc(cred.user.uid, {
           name: cred.user.displayName || "Customer",

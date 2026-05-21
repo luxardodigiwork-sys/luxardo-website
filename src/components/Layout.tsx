@@ -364,7 +364,7 @@ export default function Layout() {
           {/* Right: Icons & Hamburger */}
           <div className="flex-1 flex justify-end items-center gap-3 md:gap-6">
             <button onClick={() => setIsSearchOpen(true)} className="hover:text-brand-secondary transition-colors"><Search className="w-[18px] h-[18px] md:w-6 md:h-6" /></button>
-            <Link to={isLoggedIn ? "/account" : "/login"} className="hover:text-brand-secondary transition-colors"><User className="w-[18px] h-[18px] md:w-6 md:h-6" /></Link>
+            <Link to={isLoggedIn ? (["admin","super_admin"].includes(user?.role || "") ? "/admin/dashboard" : "/account") : "/login"} className="hover:text-brand-secondary transition-colors"><User className="w-[18px] h-[18px] md:w-6 md:h-6" /></Link>
             <Link to="/cart" className="hover:text-brand-secondary transition-colors relative">
               <ShoppingBag className="w-[18px] h-[18px] md:w-6 md:h-6" />
               {cartCount > 0 && (
