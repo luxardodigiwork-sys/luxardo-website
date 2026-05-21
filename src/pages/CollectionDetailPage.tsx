@@ -32,7 +32,7 @@ export default function CollectionDetailPage() {
       {/* Category Banner */}
       <section className="relative h-[50vh] overflow-hidden bg-brand-black">
         <img 
-          src={collection?.image || "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=2000&auto=format&fit=crop"} 
+          src={collection?.image || "/placeholder.svg"} 
           alt={collection?.fullName} 
           className="absolute inset-0 w-full h-full object-cover"
           referrerPolicy="no-referrer"
@@ -100,4 +100,3 @@ export default function CollectionDetailPage() {
       </div>
     </div>
   );
-}

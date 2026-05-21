@@ -396,7 +396,7 @@ export default function AdminAddProductPage() {
                   <ImageUploadInput
                     value={formData.image}
                     onChange={(val) => setFormData({ ...formData, image: val })}
-                    placeholder="https://images.unsplash.com/..."
+                    placeholder="/placeholder.svg"
                   />
                   <p className="text-xs text-brand-secondary font-sans mt-2">
                     This image will be used as the main thumbnail across the site. Use a 3:4 aspect ratio for best results.
@@ -512,55 +512,4 @@ export default function AdminAddProductPage() {
                   type="number"
                   value={formData.lowStockThreshold}
                   onChange={(e) => setFormData({ ...formData, lowStockThreshold: Number(e.target.value) })}
-                  className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Collection & Visibility */}
-          <div className="bg-white p-6 border border-brand-divider shadow-sm space-y-6">
-            <h3 className="text-[11px] uppercase tracking-widest font-bold border-b border-brand-divider pb-4">Collection & Visibility</h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Collection</label>
-                <input id="prod-input-field" aria-label="Product Configuration Field"
-                  type="text"
-                  value={formData.collection}
-                  onChange={(e) => setFormData({ ...formData, collection: e.target.value })}
-                  placeholder="e.g. Summer 2026"
-                  className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black"
-                />
-              </div>
-              
-              <div className="space-y-2 pt-2">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Visibility Status</label>
-                <select
-                  value={formData.visibility}
-                  onChange={(e) => setFormData({ ...formData, visibility: e.target.value as 'public' | 'hidden' })}
-                  className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black"
-                >
-                  <option value="public">Public</option>
-                  <option value="hidden">Hidden</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-between pt-4 border-t border-brand-divider">
-                <label className="text-sm font-sans text-brand-black">Featured Product</label>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input id="prod-input-field" aria-label="Product Configuration Field" 
-                    type="checkbox" 
-                    className="sr-only peer"
-                    checked={formData.featured}
-                    onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-black"></div>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-      </form>
-    </div>
-  );
-}
+                  className="w-full b

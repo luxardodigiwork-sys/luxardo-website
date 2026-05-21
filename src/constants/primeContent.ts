@@ -3,7 +3,7 @@ export const DEFAULT_PRIME_CONTENT = {
     heading: 'Prime Member',
     subheading: 'Private access to bespoke tailoring, consultation, and client services.',
     price: 1499,
-    imageUrl: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=2000&auto=format&fit=crop',
+    imageUrl: '/placeholder.svg',
     ctaLabel: 'JOIN PRIME MEMBER'
   },
   benefits: [

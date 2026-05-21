@@ -11,7 +11,7 @@ import { DEFAULT_SITE_CONTENT } from '../constants/homeContent';
 const HERO_SLIDES = [
   {
     id: 1,
-    imageUrl: 'https://images.unsplash.com/photo-1594938298598-718890ce8c53?q=80&w=2148&auto=format&fit=crop',
+    imageUrl: '/placeholder.svg',
     heading: 'Modern Ethnic Menswear',
     subtext: 'Premium fabrics. Structured silhouettes.',
     cta: 'Shop Now',
@@ -19,7 +19,7 @@ const HERO_SLIDES = [
   },
   {
     id: 2,
-    imageUrl: 'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=2148&auto=format&fit=crop',
+    imageUrl: '/placeholder.svg',
     heading: 'Constructed With Intent',
     subtext: 'A philosophy of slow luxury and disciplined craftsmanship.',
     cta: 'Discover Our Story',
@@ -27,7 +27,7 @@ const HERO_SLIDES = [
   },
   {
     id: 3,
-    imageUrl: 'https://images.unsplash.com/photo-1605007493699-af65834f8a00?q=80&w=2148&auto=format&fit=crop',
+    imageUrl: '/placeholder.svg',
     heading: 'Designed for Every Occasion',
     subtext: 'From wedding festivities to formal excellence.',
     cta: 'View Collections',
@@ -458,7 +458,7 @@ export default function HomePage() {
           className="absolute inset-0"
         >
           <img 
-            src={siteContent.homepage.partnership.img || "https://images.unsplash.com/photo-1555529771-835f59fc5efe?q=80&w=2000&auto=format&fit=crop"} 
+            src={siteContent.homepage.partnership.img || "/placeholder.svg"} 
             alt="Partner with us" 
             className="w-full h-full object-cover opacity-40"
             referrerPolicy="no-referrer"

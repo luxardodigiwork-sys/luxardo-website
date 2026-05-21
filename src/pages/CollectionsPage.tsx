@@ -52,10 +52,9 @@ export default function CollectionsPage() {
       result = result.filter(p => p.category === selectedCategory);
     }
 
-    // Prime member restrictions
-    if (!user?.isPrimeMember) {
-      result = result.filter(p => p.readyToStitch);
-    }
+    // (Prime gating removed — show all products to all visitors.
+    // If a product is Prime-only in future, mark it on the product doc
+    // and filter explicitly per-product, not by member status.)
 
     return result;
   }, [allProducts, searchQuery, conditionFilter, user, selectedCategory]);

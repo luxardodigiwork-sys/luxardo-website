@@ -7,37 +7,37 @@ const FALLBACK_STORY_STEPS = [
     title: "Our Story.",
     subtitle: "Design Sketching",
     description: "From the world's finest mills to your wardrobe. A journey of uncompromising quality, expert craftsmanship, and timeless design.",
-    image: "https://images.unsplash.com/photo-1542060748-10c28b62716f?q=80&w=1600&auto=format&fit=crop&sat=-100&con=20"
+    image: "/placeholder.svg"
   },
   {
     title: "Global Sourcing",
     subtitle: "01 / Premium Fabric",
     description: "We import premium fabrics from across the entire world, meticulously selecting only the finest materials.",
-    image: "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?q=80&w=1600&auto=format&fit=crop&sat=-100&con=20"
+    image: "/placeholder.svg"
   },
   {
     title: "Fabric Finishing",
     subtitle: "02 / Treatment",
     description: "Each fabric undergoes specialized finishing processes, enhancing its natural texture, drape, and longevity.",
-    image: "https://images.unsplash.com/photo-1612423284934-2850a4ea6b0f?q=80&w=1600&auto=format&fit=crop&sat=-100&con=20"
+    image: "/placeholder.svg"
   },
   {
     title: "Personalized Sketching",
     subtitle: "03 / Design",
     description: "Our master designers sketch personalized, bespoke designs, translating your vision into detailed sartorial blueprints.",
-    image: "https://images.unsplash.com/photo-1549388604-817d15aa0110?q=80&w=1600&auto=format&fit=crop&sat=-100&con=20"
+    image: "/placeholder.svg"
   },
   {
     title: "Expert Craftsmanship",
     subtitle: "04 / Tailoring",
     description: "Master tailors bring designs to life with traditional techniques refined over generations.",
-    image: "https://images.unsplash.com/photo-1607083206968-13611e3d76db?q=80&w=1600&auto=format&fit=crop&sat=-100&con=20"
+    image: "/placeholder.svg"
   },
   {
     title: "Ready For You",
     subtitle: "05 / Box Packing",
     description: "The journey concludes with the ready-to-stitch fabric elegantly folded and secured in our premium box packing.",
-    image: "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=1600&auto=format&fit=crop&sat=-100&con=20"
+    image: "/placeholder.svg"
   }
 ];
 
