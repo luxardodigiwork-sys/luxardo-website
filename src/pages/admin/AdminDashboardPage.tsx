@@ -5,9 +5,11 @@ import { Link } from 'react-router-dom';
 import { formatCurrency } from '../../utils/currency';
 import { useAuth } from '../../context/AuthContext';
 import { storage } from '../../utils/localStorage';
+import { useProducts } from '../../context/ProductsContext';
 
 export default function AdminDashboardPage() {
   const { isAuthReady } = useAuth();
+  const { products } = useProducts();
 
   const dashboardData = useMemo(() => {
     if (!isAuthReady) return null;
@@ -15,7 +17,6 @@ export default function AdminDashboardPage() {
     try {
       const data = storage.getDashboardStats();
       const orders = storage.getOrders();
-      const products = storage.getProducts();
       const wholesaleInquiries = storage.getWholesaleInquiries();
       
       const today = new Date();
@@ -100,7 +101,7 @@ export default function AdminDashboardPage() {
       console.error('Dashboard fetch error:', err);
       return null;
     }
-  }, [isAuthReady]);
+  }, [isAuthReady, products]);
 
   if (!isAuthReady || !dashboardData) {
     return (

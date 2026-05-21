@@ -21,13 +21,12 @@ const PAGES = [
 
 export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
   const [query, setQuery] = useState('');
-  const [products, setProducts] = useState<Product[]>([]);
+  const { products } = useProducts();
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (isOpen) {
-      setProducts(storage.getProducts());
       setQuery('');
       // Small delay to ensure the element is rendered before focusing
       setTimeout(() => {
