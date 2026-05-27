@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Lock, Mail, KeyRound, Eye, EyeOff, ShieldAlert, ArrowRight, Clock } from 'lucide-react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { Lock, Mail, KeyRound, Eye, EyeOff, ShieldAlert, ArrowRight, Clock, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
   signInWithEmailAndPassword,
@@ -15,7 +15,32 @@ import { doc, getDoc } from 'firebase/firestore';
 const MAX_FAILED_ATTEMPTS = 3;
 const LOCKOUT_DURATION_MINUTES = 15;
 
-export default function AdminLoginPage() {
+export interface RoleLoginConfig {
+  /** Display title above logo. e.g. "OWNER", "DISPATCH", "ACCOUNTS" */
+  roleLabel: string;
+  /** Allowed customer doc roles to enter this page. */
+  allowedRoles: string[];
+  /** Default redirect after success. e.g. "/owner/dashboard" */
+  redirectPath: string;
+  /** Unique localStorage key for lock state (avoid clobbering admin lock). */
+  lockKey: string;
+  /** Unique localStorage key for attempts counter. */
+  attemptsKey: string;
+  /** Subtitle copy. e.g. "Operations staff only" */
+  tagline?: string;
+  /** Where to send wrong-role users (default /backend). */
+  wrongRoleRedirect?: string;
+}
+
+export default function RoleLoginPage({
+  roleLabel,
+  allowedRoles,
+  redirectPath,
+  lockKey,
+  attemptsKey,
+  tagline = 'Authorised personnel only',
+  wrongRoleRedirect = '/backend',
+}: RoleLoginConfig) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthReady } = useAuth();
@@ -30,65 +55,62 @@ export default function AdminLoginPage() {
   const [isLocked, setIsLocked] = useState(false);
   const [lockTimer, setLockTimer] = useState<number>(0);
 
-  const from = (location.state as any)?.from?.pathname || '/admin/dashboard';
+  const from = (location.state as any)?.from?.pathname || redirectPath;
 
   useEffect(() => {
-    if (isAuthReady && user) {
-      if (['admin', 'super_admin'].includes(user.role)) {
-        navigate(from, { replace: true });
-      }
+    if (isAuthReady && user && allowedRoles.includes(user.role)) {
+      navigate(from, { replace: true });
     }
     checkLocalLock();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isAuthReady, navigate, from]);
 
-  // LOCAL STORAGE LOCK LOGIC
   const checkLocalLock = () => {
-    const lockData = localStorage.getItem('admin_lock');
+    const lockData = localStorage.getItem(lockKey);
     if (lockData) {
-      const lockedUntil = JSON.parse(lockData).lockedUntil;
-      if (Date.now() < lockedUntil) {
-        setIsLocked(true);
-        setLockTimer(Math.ceil((lockedUntil - Date.now()) / 60000));
-        return true;
-      } else {
-        localStorage.removeItem('admin_lock');
-        localStorage.removeItem('admin_attempts');
-        setIsLocked(false);
-      }
+      try {
+        const lockedUntil = JSON.parse(lockData).lockedUntil;
+        if (Date.now() < lockedUntil) {
+          setIsLocked(true);
+          setLockTimer(Math.ceil((lockedUntil - Date.now()) / 60000));
+          return true;
+        }
+      } catch {}
+      localStorage.removeItem(lockKey);
+      localStorage.removeItem(attemptsKey);
+      setIsLocked(false);
     }
     return false;
   };
 
   const recordLocalFailure = () => {
-    const attempts = parseInt(localStorage.getItem('admin_attempts') || '0') + 1;
+    const attempts = parseInt(localStorage.getItem(attemptsKey) || '0', 10) + 1;
     if (attempts >= MAX_FAILED_ATTEMPTS) {
-      const lockedUntil = Date.now() + LOCKOUT_DURATION_MINUTES * 60000;
-      localStorage.setItem('admin_lock', JSON.stringify({ lockedUntil }));
+      const lockedUntil = Date.now() + LOCKOUT_DURATION_MINUTES * 60_000;
+      localStorage.setItem(lockKey, JSON.stringify({ lockedUntil }));
       setIsLocked(true);
       setLockTimer(LOCKOUT_DURATION_MINUTES);
     } else {
-      localStorage.setItem('admin_attempts', attempts.toString());
+      localStorage.setItem(attemptsKey, attempts.toString());
     }
   };
 
-  const verifyAdminRole = async (uid: string) => {
-    // App stores roles in customers/{uid} (AuthContext source of truth)
+  const verifyRole = async (uid: string) => {
+    // App's source of truth for roles is `customers/{uid}` (AuthContext).
     const userDoc = await getDoc(doc(db, 'customers', uid));
     if (!userDoc.exists()) {
       await signOut(auth);
-      throw new Error("Admin record not found. Sign-in again or contact support.");
+      throw new Error('Account record not found. Contact support.');
     }
-
     const role = userDoc.data()?.role?.toLowerCase();
-    if (['admin', 'super_admin'].includes(role)) {
-      return true;
-    } else if (['dispatch', 'accounts', 'owner'].includes(role)) {
-      await signOut(auth);
-      throw new Error('Please use the Backend Gateway (/backend) for your role.');
-    } else {
-      await signOut(auth);
-      throw new Error('Access denied: Unauthorised account.');
+    if (allowedRoles.includes(role)) return true;
+
+    // Recognised but wrong-role users get a friendly redirect
+    await signOut(auth);
+    if (['admin', 'super_admin', 'owner', 'dispatch', 'accounts', 'analysis'].includes(role)) {
+      throw new Error(`This page is for "${roleLabel}". Your role is "${role.toUpperCase()}". Use the right portal.`);
     }
+    throw new Error('Access denied: this account is not authorised for staff portal.');
   };
 
   const errMsg = (code: string) => {
@@ -100,6 +122,14 @@ export default function AdminLoginPage() {
         return 'No account found.';
       case 'auth/invalid-email':
         return 'Invalid email format.';
+      case 'auth/too-many-requests':
+        return 'Too many attempts. Try again later.';
+      case 'auth/network-request-failed':
+        return 'Network error. Check your connection.';
+      case 'auth/popup-closed-by-user':
+        return 'Sign-in cancelled.';
+      case 'auth/popup-blocked':
+        return 'Popup blocked. Allow popups and try again.';
       default:
         return 'Authentication failed.';
     }
@@ -110,33 +140,20 @@ export default function AdminLoginPage() {
     setError('');
     setOkMsg('');
     setLoading(true);
-    
     try {
       if (checkLocalLock()) {
         setLoading(false);
         return;
       }
-
       const submitEmail = email.trim().toLowerCase();
       const cred = await signInWithEmailAndPassword(auth, submitEmail, password);
-      
-      // Verify role in firestore
-      await verifyAdminRole(cred.user.uid);
-      
-      // Success -> Clear lock
-      localStorage.removeItem('admin_attempts');
-      localStorage.removeItem('admin_lock');
+      await verifyRole(cred.user.uid);
+      localStorage.removeItem(attemptsKey);
+      localStorage.removeItem(lockKey);
       navigate(from, { replace: true });
-
     } catch (err: any) {
-      // 🚀 FIX: Ab HAR error par strike count hoga (Password galat ho ya Database Role missing ho)
       recordLocalFailure();
-      
-      if (err?.message && (err.message.includes('Admin record not found') || err.message.includes('Access denied') || err.message.includes('Backend Gateway'))) {
-        setError(err.message);
-      } else {
-        setError(err?.code ? errMsg(err.code) : (err?.message || 'Authentication failed.'));
-      }
+      setError(err?.code ? errMsg(err.code) : (err?.message || 'Authentication failed.'));
     } finally {
       setLoading(false);
     }
@@ -151,22 +168,16 @@ export default function AdminLoginPage() {
         setLoading(false);
         return;
       }
-
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       const cred = await signInWithPopup(auth, provider);
-      await verifyAdminRole(cred.user.uid);
-      
-      localStorage.removeItem('admin_attempts');
-      localStorage.removeItem('admin_lock');
+      await verifyRole(cred.user.uid);
+      localStorage.removeItem(attemptsKey);
+      localStorage.removeItem(lockKey);
       navigate(from, { replace: true });
     } catch (err: any) {
       recordLocalFailure();
-      if (err?.message && (err.message.includes('Admin record not found') || err.message.includes('Access denied') || err.message.includes('Backend Gateway'))) {
-        setError(err.message);
-      } else {
-        setError(err?.code ? errMsg(err.code) : (err?.message || 'Google sign-in failed.'));
-      }
+      setError(err?.code ? errMsg(err.code) : (err?.message || 'Google sign-in failed.'));
     } finally {
       setLoading(false);
     }
@@ -191,39 +202,41 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
+        <Link to={wrongRoleRedirect} className="inline-flex items-center gap-2 text-xs text-gray-500 hover:text-black mb-6">
+          <ArrowLeft size={14} /> Back to portal selection
+        </Link>
+
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-black rounded-full mb-4 shadow-md">
             <Lock size={20} className="text-white" />
           </div>
           <h1 className="font-display text-2xl text-black tracking-[0.3em] uppercase">LUXARDO</h1>
-          <p className="text-[10px] tracking-[0.4em] text-gray-500 mt-1">ADMIN ACCESS</p>
+          <p className="text-[10px] tracking-[0.4em] text-gray-500 mt-1">{roleLabel} ACCESS</p>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-xl relative overflow-hidden">
-          
-          {/* Security Overlay when Locked */}
+          {/* Security overlay when locked */}
           {isLocked && mode === 'login' && (
-             <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-6 text-center border-t-4 border-red-600">
-               <Clock size={40} className="text-red-500 mb-4 animate-pulse" />
-               <h3 className="font-display text-lg text-black uppercase mb-2 tracking-widest">Security Lock</h3>
-               <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-                 Multiple failed login attempts detected. This account is temporarily locked for <span className="font-bold text-red-600">{lockTimer} minutes</span>.
-               </p>
-               <button
-                  onClick={() => { setMode('reset'); setIsLocked(false); }}
-                  className="w-full bg-black text-white py-3 text-xs tracking-[0.3em] uppercase hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 rounded-lg"
-                >
-                  Reset Password
-                </button>
-             </div>
+            <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-6 text-center border-t-4 border-red-600">
+              <Clock size={40} className="text-red-500 mb-4 animate-pulse" />
+              <h3 className="font-display text-lg text-black uppercase mb-2 tracking-widest">Security Lock</h3>
+              <p className="text-xs text-gray-500 mb-6 leading-relaxed">
+                Multiple failed login attempts detected. This portal is temporarily locked for
+                <span className="font-bold text-red-600"> {lockTimer} minutes</span>.
+              </p>
+              <button
+                onClick={() => { setMode('reset'); setIsLocked(false); }}
+                className="w-full bg-black text-white py-3 text-xs tracking-[0.3em] uppercase hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 rounded-lg"
+              >
+                Reset Password
+              </button>
+            </div>
           )}
 
           <h2 className="font-display text-lg text-black text-center mb-1">
             {mode === 'login' ? 'Sign In' : 'Reset Password'}
           </h2>
-          <p className="text-[10px] tracking-widest uppercase text-gray-400 text-center mb-6">
-            Admin personnel only
-          </p>
+          <p className="text-[10px] tracking-widest uppercase text-gray-400 text-center mb-6">{tagline}</p>
 
           {error && (
             <div className="bg-red-50 text-red-700 p-3 mb-4 text-xs border border-red-100 rounded-lg flex items-start gap-2">
@@ -235,7 +248,12 @@ export default function AdminLoginPage() {
 
           {mode === 'login' && (
             <>
-              <button type="button" onClick={handleGoogleLogin} disabled={loading || isLocked} className="w-full flex items-center justify-center gap-3 border border-gray-200 rounded-lg py-3 text-sm text-black hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50">
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={loading || isLocked}
+                className="w-full flex items-center justify-center gap-3 border border-gray-200 rounded-lg py-3 text-sm text-black hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50"
+              >
                 <svg width="16" height="16" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
                   <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
                   <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
@@ -257,16 +275,36 @@ export default function AdminLoginPage() {
 
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Admin email" className="w-full border border-gray-300 rounded-lg pl-10 pr-3 py-3 text-sm focus:outline-none focus:border-black" required autoComplete="nope" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={`${roleLabel.toLowerCase()} email`}
+                    className="w-full border border-gray-300 rounded-lg pl-10 pr-3 py-3 text-sm focus:outline-none focus:border-black"
+                    required
+                    autoComplete="nope"
+                  />
                 </div>
                 <div className="relative">
                   <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                  <input type={showPwd ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full border border-gray-300 rounded-lg pl-10 pr-10 py-3 text-sm focus:outline-none focus:border-black" required autoComplete="new-password" />
+                  <input
+                    type={showPwd ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password"
+                    className="w-full border border-gray-300 rounded-lg pl-10 pr-10 py-3 text-sm focus:outline-none focus:border-black"
+                    required
+                    autoComplete="new-password"
+                  />
                   <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black">
                     {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <button type="submit" disabled={loading || isLocked} className="w-full bg-black text-white rounded-lg py-3 text-xs tracking-[0.3em] uppercase hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 mt-2 shadow-md disabled:opacity-50">
+                <button
+                  type="submit"
+                  disabled={loading || isLocked}
+                  className="w-full bg-black text-white rounded-lg py-3 text-xs tracking-[0.3em] uppercase hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 mt-2 shadow-md disabled:opacity-50"
+                >
                   {loading ? 'Verifying...' : 'Sign In'} <ArrowRight size={14} />
                 </button>
                 <div className="text-center pt-1">
@@ -281,13 +319,25 @@ export default function AdminLoginPage() {
               <input type="text" style={{ display: 'none' }} />
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Admin email" className="w-full border border-gray-300 rounded-lg pl-10 pr-3 py-3 text-sm focus:outline-none focus:border-black" required autoComplete="nope" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={`${roleLabel.toLowerCase()} email`}
+                  className="w-full border border-gray-300 rounded-lg pl-10 pr-3 py-3 text-sm focus:outline-none focus:border-black"
+                  required
+                  autoComplete="nope"
+                />
               </div>
-              <button type="submit" disabled={loading} className="w-full bg-black text-white rounded-lg py-3 text-xs tracking-[0.3em] uppercase hover:bg-gray-900 shadow-md disabled:opacity-50">Send Recovery Link</button>
+              <button type="submit" disabled={loading} className="w-full bg-black text-white rounded-lg py-3 text-xs tracking-[0.3em] uppercase hover:bg-gray-900 shadow-md disabled:opacity-50">
+                Send Recovery Link
+              </button>
               <button type="button" onClick={() => { setMode('login'); setIsLocked(false); }} className="w-full text-xs text-gray-500 hover:text-black tracking-wider mt-2">Back to sign in</button>
             </form>
           )}
         </div>
+
+        <p className="text-center text-[10px] tracking-[0.3em] text-gray-400 uppercase mt-6">Restricted Access</p>
       </div>
     </div>
   );

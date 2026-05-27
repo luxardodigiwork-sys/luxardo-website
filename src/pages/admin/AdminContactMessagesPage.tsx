@@ -1,22 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { storage } from '../../utils/localStorage';
-import { Search, Mail, Calendar, User } from 'lucide-react';
+import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebase'; // Make sure this path is correct based on your setup
+import { Search, Mail, Calendar, Trash2, Download } from 'lucide-react';
 
 export default function AdminContactMessagesPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchMessages = () => {
-      // Simulate network request
-      setTimeout(() => {
-        const data = storage.getContactMessages();
-        setMessages(data);
-        setIsLoading(false);
-      }, 500);
-    };
+  // Fetch messages from Firebase Firestore
+  const fetchMessages = async () => {
+    setIsLoading(true);
+    try {
+      const querySnapshot = await getDocs(collection(db, 'contactMessages'));
+      const fetchedMessages = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      // Sort by newest first
+      fetchedMessages.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setMessages(fetchedMessages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      alert("Failed to load messages from cloud.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchMessages();
   }, []);
 
@@ -27,19 +39,77 @@ export default function AdminContactMessagesPage() {
     (msg.subject?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
-  const handleStatusChange = (id: number, newStatus: string) => {
-    const updatedMessages = messages.map(msg => 
-      msg.id === id ? { ...msg, status: newStatus } : msg
-    );
-    storage.saveContactMessages(updatedMessages);
-    setMessages(updatedMessages);
+  // Update Status in Firebase
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    try {
+      await updateDoc(doc(db, 'contactMessages', id), { status: newStatus });
+      setMessages(messages.map(msg => msg.id === id ? { ...msg, status: newStatus } : msg));
+    } catch (error) {
+      console.error("Error updating status:", error);
+      alert("Failed to update status.");
+    }
+  };
+
+  // Delete from Firebase
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Are you sure you want to permanently delete this message?")) {
+      try {
+        await deleteDoc(doc(db, 'contactMessages', id));
+        setMessages(messages.filter(msg => msg.id !== id));
+      } catch (error) {
+        console.error("Error deleting message:", error);
+        alert("Failed to delete message. Check your permissions.");
+      }
+    }
+  };
+
+  // Export to CSV
+  const handleExport = () => {
+    if (messages.length === 0) {
+      alert("No messages to export.");
+      return;
+    }
+    const headers = ['Date', 'First Name', 'Last Name', 'Email', 'Phone', 'Subject', 'Message', 'Status'];
+    const csvRows = [headers.join(',')];
+
+    messages.forEach(msg => {
+      const row = [
+        new Date(msg.createdAt).toLocaleDateString(),
+        `"${msg.firstName || ''}"`,
+        `"${msg.lastName || ''}"`,
+        `"${msg.email || ''}"`,
+        `"${msg.phone || ''}"`,
+        `"${msg.subject || ''}"`,
+        `"${(msg.message || '').replace(/"/g, '""')}"`, // Escape quotes in message
+        msg.status || 'pending'
+      ];
+      csvRows.push(row.join(','));
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," + csvRows.join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Laxardo_Inquiries_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-4xl font-display uppercase tracking-tight">Contact Messages</h1>
-        <p className="text-brand-secondary font-sans mt-1">Manage customer inquiries and support requests</p>
+      <div className="flex justify-between items-end">
+        <div>
+          <h1 className="text-4xl font-display uppercase tracking-tight">Contact Messages</h1>
+          <p className="text-brand-secondary font-sans mt-1">Manage customer inquiries and support requests</p>
+        </div>
+        <button 
+          onClick={handleExport}
+          className="flex items-center gap-2 bg-brand-black text-white px-4 py-2 rounded-md hover:bg-gray-800 transition-colors"
+        >
+          <Download size={16} />
+          <span className="text-sm font-semibold uppercase tracking-wider">Export CSV</span>
+        </button>
       </div>
 
       <div className="bg-white border border-brand-divider shadow-sm">
@@ -65,19 +135,20 @@ export default function AdminContactMessagesPage() {
                 <th className="p-6 text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Message</th>
                 <th className="p-6 text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Date</th>
                 <th className="p-6 text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Status</th>
+                <th className="p-6 text-[10px] uppercase tracking-widest font-bold text-brand-secondary text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-divider">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="p-20 text-center">
+                  <td colSpan={6} className="p-20 text-center">
                     <div className="inline-block w-8 h-8 border-4 border-brand-divider border-t-brand-black rounded-full animate-spin"></div>
                   </td>
                 </tr>
               ) : filteredMessages.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-20 text-center font-sans text-brand-secondary">
-                    No contact messages found.
+                  <td colSpan={6} className="p-20 text-center font-sans text-brand-secondary">
+                    No contact messages found in Cloud.
                   </td>
                 </tr>
               ) : (
@@ -104,7 +175,7 @@ export default function AdminContactMessagesPage() {
                     <td className="p-6">
                       <div className="flex items-center gap-2 text-brand-secondary text-sm">
                         <Calendar size={14} />
-                        {new Date(msg.createdAt).toLocaleDateString()}
+                        {msg.createdAt ? new Date(msg.createdAt).toLocaleDateString() : 'N/A'}
                       </div>
                     </td>
                     <td className="p-6">
@@ -122,6 +193,15 @@ export default function AdminContactMessagesPage() {
                         <option value="contacted">Contacted</option>
                         <option value="resolved">Resolved</option>
                       </select>
+                    </td>
+                    <td className="p-6 text-right">
+                       <button 
+                         onClick={() => handleDelete(msg.id)}
+                         className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
+                         title="Delete Message"
+                       >
+                         <Trash2 size={18} />
+                       </button>
                     </td>
                   </tr>
                 ))

@@ -333,10 +333,13 @@ export default function AdminEditProductPage() {
                   <ImageUploadInput
                     value={formData.image}
                     onChange={(val) => setFormData({ ...formData, image: val })}
-                    placeholder="/placeholder.svg"
+                    placeholder="https://images.unsplash.com/..."
+                    purpose="Product primary image"
+                    recommendedSize="1200 × 1600"
+                    aspectRatio="3:4"
                   />
                   <p className="text-xs text-brand-secondary font-sans mt-2">
-                    This image will be used as the main thumbnail across the site. Use a 3:4 aspect ratio for best results.
+                    This image will be used as the main thumbnail across the site.
                   </p>
                 </div>
               </div>
@@ -349,6 +352,9 @@ export default function AdminEditProductPage() {
                       value={newImageUrl}
                       onChange={(val) => setNewImageUrl(val)}
                       placeholder="Add additional image URL..."
+                      purpose="Product gallery image"
+                      recommendedSize="1200 × 1600"
+                      aspectRatio="3:4"
                     />
                   </div>
                   <button 
@@ -501,4 +507,3 @@ export default function AdminEditProductPage() {
     </div>
   );
 }
-                                                                                                                                                                                                                                                                                                                                                                                                               

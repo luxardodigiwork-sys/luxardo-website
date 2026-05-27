@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Package, FileText, Shield, LogOut, Layers, Crown, Image as ImageIcon, Send, Truck, Settings, Users, BarChart3, Wallet, Menu, X, Mail } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, FileText, Shield, LogOut, Layers, Crown, Image as ImageIcon, Send, Truck, Settings, Users, BarChart3, Wallet, Menu, X, Mail, Newspaper } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import AdminAssistantChatbot from './AdminAssistantChatbot';
 import { AnimatePresence, motion } from 'motion/react';
@@ -41,6 +41,7 @@ export default function AdminLayout() {
         { path: '/admin/bespoke-requests', label: 'Bespoke Requests', icon: Send },
         { path: '/admin/partners', label: 'Partners', icon: Wallet },
         { path: '/admin/contact-messages', label: 'Contact Messages', icon: Mail },
+        { path: '/admin/newsletter', label: 'Newsletter', icon: Newspaper }, // NEW BUTTON ADDED HERE
       ]
     },
     {

@@ -43,24 +43,59 @@ const TextArea = ({ className, ...props }: React.TextareaHTMLAttributes<HTMLText
   />
 );
 
-const ImagePreview = ({ url, label }: { url: string; label: string }) => (
-  <div className="space-y-3">
-    <label className="block text-[10px] uppercase tracking-widest font-bold text-brand-secondary">{label}</label>
-    <div className="aspect-video border border-brand-divider overflow-hidden bg-brand-bg relative group">
-      {url ? (
-        <>
-          <img src={url} alt="Preview" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" referrerPolicy="no-referrer" />
-          <div className="absolute inset-0 bg-brand-black/0 group-hover:bg-brand-black/10 transition-colors" />
-        </>
-      ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-brand-secondary/30 gap-2">
-          <ImageIcon size={40} strokeWidth={1} />
-          <span className="text-[10px] uppercase tracking-widest font-bold">No Image Provided</span>
-        </div>
-      )}
+const ImagePreview = ({
+  url,
+  label,
+  recommendedSize = '1920 × 1080',
+  aspectRatio = '16:9',
+}: {
+  url: string;
+  label: string;
+  recommendedSize?: string;
+  aspectRatio?: string;
+}) => {
+  const [dims, setDims] = React.useState<{ w: number; h: number } | null>(null);
+  return (
+    <div className="space-y-3">
+      <label className="block text-[10px] uppercase tracking-widest font-bold text-brand-secondary">{label}</label>
+      <div className="aspect-video border border-brand-divider overflow-hidden bg-brand-bg relative group">
+        {url ? (
+          <>
+            <img
+              src={url}
+              alt="Preview"
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              referrerPolicy="no-referrer"
+              onLoad={(e) => {
+                const img = e.target as HTMLImageElement;
+                setDims({ w: img.naturalWidth, h: img.naturalHeight });
+              }}
+            />
+            <div className="absolute inset-0 bg-brand-black/0 group-hover:bg-brand-black/10 transition-colors" />
+            {dims && (
+              <div className="absolute bottom-2 right-2 bg-brand-black/80 backdrop-blur-sm text-white text-[9px] font-mono px-2 py-1 rounded">
+                {dims.w} × {dims.h} px
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-brand-secondary/60 gap-2 px-4 text-center">
+            <ImageIcon size={36} strokeWidth={1} />
+            <span className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">No Image Provided</span>
+            <div className="mt-2 pt-2 border-t border-brand-divider/60 w-full max-w-[200px] space-y-1">
+              <p className="text-[10px] text-brand-secondary/80">
+                <span className="font-bold text-brand-black/70">Recommended:</span> <span className="font-mono">{recommendedSize}</span>
+              </p>
+              <p className="text-[10px] text-brand-secondary/80">
+                <span className="font-bold text-brand-black/70">Ratio:</span> <span className="font-mono">{aspectRatio}</span>
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default function AdminContentPage() {
   const [activeTab, setActiveTab] = useState<TabType>('homepage');
@@ -264,13 +299,70 @@ export default function AdminContentPage() {
                 >
                   Remove
                 </button>
-                <FormField label={`Slide ${index + 1} Image URL`}>
+
+                <FormField label={`Slide ${index + 1} — Heading`}>
+                  <Input
+                    type="text"
+                    value={slide.heading || ''}
+                    placeholder="e.g. Presence Before Words"
+                    onChange={(e) => {
+                      const newSlides = [...(content.homepage.hero.slides || [])];
+                      newSlides[index] = { ...newSlides[index], heading: e.target.value };
+                      updateNestedContent('homepage', 'hero', 'slides', newSlides);
+                    }}
+                  />
+                </FormField>
+
+                <FormField label={`Slide ${index + 1} — Subtext`}>
+                  <Input
+                    type="text"
+                    value={slide.subtext || ''}
+                    placeholder="A philosophy of elegance, designed to leave a lasting impression."
+                    onChange={(e) => {
+                      const newSlides = [...(content.homepage.hero.slides || [])];
+                      newSlides[index] = { ...newSlides[index], subtext: e.target.value };
+                      updateNestedContent('homepage', 'hero', 'slides', newSlides);
+                    }}
+                  />
+                </FormField>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField label="CTA Text">
+                    <Input
+                      type="text"
+                      value={slide.cta || ''}
+                      placeholder="Discover the Collection"
+                      onChange={(e) => {
+                        const newSlides = [...(content.homepage.hero.slides || [])];
+                        newSlides[index] = { ...newSlides[index], cta: e.target.value };
+                        updateNestedContent('homepage', 'hero', 'slides', newSlides);
+                      }}
+                    />
+                  </FormField>
+                  <FormField label="CTA Link">
+                    <Input
+                      type="text"
+                      value={slide.link || ''}
+                      placeholder="/collections"
+                      onChange={(e) => {
+                        const newSlides = [...(content.homepage.hero.slides || [])];
+                        newSlides[index] = { ...newSlides[index], link: e.target.value };
+                        updateNestedContent('homepage', 'hero', 'slides', newSlides);
+                      }}
+                    />
+                  </FormField>
+                </div>
+
+                <FormField label={`Slide ${index + 1} Image`}>
                   <ImageUploadInput
                     value={slide.imageUrl || ''}
                     onChange={(val) => updateSlideImage(index, val)}
+                    purpose="Hero banner (full-screen)"
+                    recommendedSize="1920 × 1080"
+                    aspectRatio="16:9"
                   />
                 </FormField>
-                <ImagePreview url={slide.imageUrl || ''} label={`Slide ${index + 1} Preview`} />
+                <ImagePreview url={slide.imageUrl || ''} label={`Slide ${index + 1} Preview`} recommendedSize="1920 × 1080" aspectRatio="16:9" />
               </div>
             ))}
             

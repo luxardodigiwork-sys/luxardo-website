@@ -12,6 +12,12 @@ interface ImageUploadInputProps {
   storagePath?: string;   // optional custom path, default: "uploads"
   maxSizeMB?: number;     // default: 50MB
   quality?: '4k' | '2k' | '1080p' | 'original'; // default: 'original' (no compression)
+  /** Recommended pixel size shown when no image is uploaded yet. e.g. "1920 × 1080" */
+  recommendedSize?: string;
+  /** Recommended aspect ratio. e.g. "16:9", "3:4" */
+  aspectRatio?: string;
+  /** Image purpose for ALT/UX hint. e.g. "Hero banner", "Product main" */
+  purpose?: string;
 }
 
 export const ImageUploadInput = ({
@@ -21,11 +27,15 @@ export const ImageUploadInput = ({
   storagePath = 'products',
   maxSizeMB = 50,
   quality = 'original',
+  recommendedSize,
+  aspectRatio,
+  purpose,
 }: ImageUploadInputProps) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
+  const [loadedDims, setLoadedDims] = useState<{ w: number; h: number } | null>(null);
 
   // Only resize if quality param is explicitly set (not 'original')
   // For 4K: no resize at all — upload as-is
@@ -201,6 +211,26 @@ export const ImageUploadInput = ({
         <p className="text-[10px] text-red-500 font-medium">{error}</p>
       )}
 
+      {/* EMPTY STATE — always show hint when no image uploaded */}
+      {!value && (
+        <div className="flex items-start gap-3 p-3 border border-dashed border-brand-divider bg-brand-bg/50">
+          <svg className="w-5 h-5 text-brand-secondary mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-widest font-bold text-brand-black mb-1">
+              {purpose || 'No image uploaded yet'}
+            </p>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-brand-secondary">
+              <span className="font-mono"><span className="text-brand-black/60">Recommended:</span> <span className="text-brand-black font-bold">{recommendedSize || '1920 × 1080'} px</span></span>
+              <span className="font-mono"><span className="text-brand-black/60">Ratio:</span> <span className="text-brand-black font-bold">{aspectRatio || '16:9'}</span></span>
+              <span className="font-mono"><span className="text-brand-black/60">Max:</span> <span className="text-brand-black font-bold">{maxSizeMB}MB</span></span>
+            </div>
+            <p className="text-[9px] text-brand-secondary mt-1.5 italic">JPG, PNG, or WebP · upload to Firebase Storage</p>
+          </div>
+        </div>
+      )}
+
       {/* Image preview thumbnail (if URL exists) */}
       {value && !value.startsWith('data:') && (
         <div className="flex items-center gap-3 p-2 border border-brand-divider bg-brand-bg">
@@ -209,15 +239,26 @@ export const ImageUploadInput = ({
             alt="Preview"
             className="w-12 h-12 object-cover border border-brand-divider flex-shrink-0"
             referrerPolicy="no-referrer"
+            onLoad={(e) => {
+              const img = e.target as HTMLImageElement;
+              setLoadedDims({ w: img.naturalWidth, h: img.naturalHeight });
+            }}
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = 'none';
+              setLoadedDims(null);
             }}
           />
           <div className="flex-1 min-w-0">
             <p className="text-[10px] text-brand-secondary truncate">{value}</p>
-            <p className="text-[9px] text-green-600 font-bold mt-0.5">
-              ✓ Stored in Firebase Storage
-            </p>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <p className="text-[9px] text-green-600 font-bold">✓ Stored in Firebase Storage</p>
+              {loadedDims && (
+                <span className="text-[9px] font-mono text-brand-black/70">
+                  · <span className="font-bold">{loadedDims.w} × {loadedDims.h}</span> px
+                  {recommendedSize && ` (recommended: ${recommendedSize})`}
+                </span>
+              )}
+            </div>
           </div>
           <button
             type="button"

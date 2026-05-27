@@ -136,29 +136,28 @@ export default function Layout() {
     }
   }, [isAuthReady, user]);
 
-  // Login Reminder Logic — only show to logged-out users
+  // Login Reminder Logic — show ONCE per session for logged-out users,
+  // then never again (respecting sessionStorage dismissal flag).
   useEffect(() => {
     if (isLoggedIn) {
       setShowLoginReminder(false);
       return;
     }
-
-    const delay = reminderCount === 0 ? 5000 : 30000;
+    if (typeof window === 'undefined') return;
+    if (sessionStorage.getItem('LUXARDO_LOGIN_REMINDER_DISMISSED') === '1') return;
 
     const timer = setTimeout(() => {
       setShowLoginReminder(true);
-      setReminderCount(prev => prev + 1);
-
-      // Auto hide after 5 seconds
-      setTimeout(() => {
+      // Auto hide after 6 seconds
+      const hideTimer = setTimeout(() => {
         setShowLoginReminder(false);
-      }, 5000);
-
-    }, delay);
+        sessionStorage.setItem('LUXARDO_LOGIN_REMINDER_DISMISSED', '1');
+      }, 6000);
+      return () => clearTimeout(hideTimer);
+    }, 8000);
 
     return () => clearTimeout(timer);
-
-  }, [isLoggedIn, reminderCount]);
+  }, [isLoggedIn]);
   // Close menu on route change and handle scroll lock during transition
   useEffect(() => {
     setIsMenuOpen(false);
@@ -473,10 +472,11 @@ export default function Layout() {
                 <p className="text-sm font-sans opacity-80">Please log in to access your exclusive benefits.</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
                 setShowLoginReminder(false);
+                try { sessionStorage.setItem('LUXARDO_LOGIN_REMINDER_DISMISSED', '1'); } catch {}
               }}
               className="p-2 hover:bg-white/10 transition-colors"
             >

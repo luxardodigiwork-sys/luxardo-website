@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, Package, CheckCircle2, Box, Send, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Package, CheckCircle2, Box, Send, ShieldCheck, Lock, Unlock } from 'lucide-react';
 import { storage } from '../../utils/localStorage';
 import { Order } from '../../types';
 import { formatCurrency } from '../../utils/currency';
@@ -22,14 +22,12 @@ export default function AdminOrderDetailsPage() {
   const [trackingUrl, setTrackingUrl] = useState('');
   const [invoiceSent, setInvoiceSent] = useState(false);
 
-  // Determine the base path for navigation
   const basePath = location.pathname.split('/')[1];
 
   useEffect(() => {
     const fetchOrder = async () => {
       if (!id) return;
       try {
-        // Firestore source-of-truth, localStorage as fallback
         let foundOrder: Order | null = null;
         try {
           const snap = await getDoc(doc(db, 'orders', id));
@@ -66,17 +64,10 @@ export default function AdminOrderDetailsPage() {
     if (!order) return;
     setIsUpdating(true);
     try {
-      const patch = {
-        trackingId: trackingInput,
-        courierName,
-        courierService,
-        dispatchDate: pickupDate,
-        trackingUrl,
-      };
+      const patch = { trackingId: trackingInput, courierName, courierService, dispatchDate: pickupDate, trackingUrl };
       await updateOrderStatusInFirestore(order.id, patch);
       setOrder({ ...order, ...patch });
     } catch (error: any) {
-      console.error('Error saving dispatch details:', error);
       alert('Failed to save dispatch details: ' + (error?.message || 'Unknown'));
     } finally {
       setIsUpdating(false);
@@ -86,10 +77,7 @@ export default function AdminOrderDetailsPage() {
   const handleResendInvoice = async () => {
     if (!order) return;
     try {
-      // Flag the order so a Cloud Function (Phase C) can pick it up and resend via Resend.
-      await updateOrderStatusInFirestore(order.id, {
-        resendInvoiceRequestedAt: new Date().toISOString(),
-      } as any);
+      await updateOrderStatusInFirestore(order.id, { resendInvoiceRequestedAt: new Date().toISOString() } as any);
       setInvoiceSent(true);
       setTimeout(() => setInvoiceSent(false), 3000);
     } catch (e: any) {
@@ -104,7 +92,6 @@ export default function AdminOrderDetailsPage() {
       await updateOrderStatusInFirestore(order.id, { status: newStatus });
       setOrder({ ...order, status: newStatus });
     } catch (error: any) {
-      console.error('Error updating status:', error);
       alert('Failed to update order status: ' + (error?.message || 'Unknown'));
     } finally {
       setIsUpdating(false);
@@ -118,43 +105,41 @@ export default function AdminOrderDetailsPage() {
       await updateOrderStatusInFirestore(order.id, { verificationStatus: newStatus });
       setOrder({ ...order, verificationStatus: newStatus });
     } catch (error: any) {
-      console.error('Error updating verification status:', error);
       alert('Failed to update verification status: ' + (error?.message || 'Unknown'));
     } finally {
       setIsUpdating(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-brand-divider border-t-brand-black rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  // --- NEW: ACCOUNTS APPROVAL LOGIC ---
+  const handleAccountsApproval = async (approved: boolean) => {
+    if (!order) return;
+    if (!confirm(approved ? 'Approve payment and unlock this order for Dispatch team?' : 'Revoke approval and lock this order from Dispatch?')) return;
+    
+    setIsUpdating(true);
+    try {
+      await updateOrderStatusInFirestore(order.id, { isAccountsApproved: approved } as any);
+      setOrder({ ...order, isAccountsApproved: approved } as any);
+    } catch (error: any) {
+      alert('Failed to update accounts approval: ' + (error?.message || 'Unknown'));
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
+  if (isLoading) return <div className="min-h-[400px] flex items-center justify-center"><div className="w-12 h-12 border-4 border-brand-divider border-t-brand-black rounded-full animate-spin"></div></div>;
   if (!order) return null;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-20">
       <div className="flex items-center gap-4">
-        <button 
-          onClick={() => navigate(-1)}
-          className="p-2 hover:bg-brand-bg rounded-full transition-colors"
-        >
+        <button onClick={() => navigate(-1)} className="p-2 hover:bg-brand-bg rounded-full transition-colors">
           <ArrowLeft size={24} />
         </button>
         <div>
           <h1 className="text-3xl font-display uppercase tracking-tight">Order Details</h1>
           <p className="text-brand-secondary font-sans text-sm mt-1">
-            <span className="font-mono">{order.id}</span> • {new Date(order.createdAt).toLocaleDateString('en-IN', {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric'
-            })} at {new Date(order.createdAt).toLocaleTimeString('en-IN', {
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
+            <span className="font-mono">{order.id}</span> • {new Date(order.createdAt).toLocaleDateString()}
           </p>
         </div>
       </div>
@@ -171,20 +156,12 @@ export default function AdminOrderDetailsPage() {
                 <div key={index} className="flex justify-between items-center py-2">
                   <div className="flex items-center gap-6">
                     <div className="w-20 h-24 bg-brand-bg flex items-center justify-center border border-brand-divider shrink-0 overflow-hidden">
-                      {item.image ? (
-                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <Package size={24} className="text-brand-secondary" />
-                      )}
+                      {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <Package size={24} className="text-brand-secondary" />}
                     </div>
                     <div className="space-y-1">
                       <p className="font-display text-lg text-brand-black">{item.name}</p>
-                      <p className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">
-                        {item.category || 'Uncategorized'}
-                      </p>
-                      <p className="text-xs text-brand-secondary mt-2">
-                        Qty: <span className="text-brand-black font-medium">{item.quantity}</span> × {formatCurrency(item.price)}
-                      </p>
+                      <p className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">{item.category || 'Uncategorized'}</p>
+                      <p className="text-xs text-brand-secondary mt-2">Qty: <span className="text-brand-black font-medium">{item.quantity}</span> × {formatCurrency(item.price)}</p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -194,14 +171,6 @@ export default function AdminOrderDetailsPage() {
               ))}
             </div>
             <div className="pt-4 border-t border-brand-divider space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-brand-secondary">Subtotal</span>
-                <span className="text-brand-black">{formatCurrency(order.totalAmount)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-brand-secondary">Shipping</span>
-                <span className="text-brand-black">Complimentary</span>
-              </div>
               <div className="flex justify-between text-base font-bold pt-4 mt-2 border-t border-brand-divider">
                 <span className="text-brand-black">Total</span>
                 <span className="text-brand-black">{formatCurrency(order.totalAmount)}</span>
@@ -209,79 +178,31 @@ export default function AdminOrderDetailsPage() {
             </div>
           </div>
 
-          {/* Order Verification Section */}
-          <div className="bg-white border border-brand-divider p-6 shadow-sm space-y-6">
-            <div className="flex items-center justify-between border-b border-brand-divider pb-4">
-              <h2 className="text-sm uppercase tracking-widest font-bold text-brand-secondary">
-                Order Verification Flow
-              </h2>
-              <div className="flex items-center gap-2 px-3 py-1 bg-brand-bg border border-brand-divider rounded-full">
-                <ShieldCheck size={12} className="text-brand-black" />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-brand-black">Admin Control</span>
-              </div>
-            </div>
+          {/* Payment, Status & ACCOUNTS APPROVAL */}
+          <div className="bg-white border border-brand-divider p-6 shadow-sm space-y-6 relative overflow-hidden">
+            {/* The Lock/Unlock UI for Accounts */}
+            <div className={`absolute top-0 left-0 w-1.5 h-full ${order.isAccountsApproved ? 'bg-emerald-500' : 'bg-red-500'}`} />
             
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="flex items-center justify-between border-b border-brand-divider pb-4">
+              <h2 className="text-sm uppercase tracking-widest font-bold text-brand-secondary">Payment & Accounts Approval</h2>
               <button
-                onClick={() => handleVerificationStatusChange('verified')}
+                onClick={() => handleAccountsApproval(!order.isAccountsApproved)}
                 disabled={isUpdating}
-                className={`flex flex-col items-center gap-3 p-6 border transition-all duration-300 ${
-                  order.verificationStatus === 'verified'
-                    ? 'bg-brand-black border-brand-black text-white shadow-lg'
-                    : 'bg-white border-brand-divider text-brand-secondary hover:border-brand-black hover:text-brand-black'
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
+                  order.isAccountsApproved 
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' 
+                    : 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100'
                 }`}
               >
-                <CheckCircle2 size={24} />
-                <span className="text-[10px] font-bold uppercase tracking-widest">Verified</span>
-              </button>
-
-              <button
-                onClick={() => handleVerificationStatusChange('packing_ready')}
-                disabled={isUpdating}
-                className={`flex flex-col items-center gap-3 p-6 border transition-all duration-300 ${
-                  order.verificationStatus === 'packing_ready'
-                    ? 'bg-brand-black border-brand-black text-white shadow-lg'
-                    : 'bg-white border-brand-divider text-brand-secondary hover:border-brand-black hover:text-brand-black'
-                }`}
-              >
-                <Box size={24} />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-center">Packing Ready</span>
-              </button>
-
-              <button
-                onClick={() => handleVerificationStatusChange('dispatch_ready')}
-                disabled={isUpdating}
-                className={`flex flex-col items-center gap-3 p-6 border transition-all duration-300 ${
-                  order.verificationStatus === 'dispatch_ready'
-                    ? 'bg-brand-black border-brand-black text-white shadow-lg'
-                    : 'bg-white border-brand-divider text-brand-secondary hover:border-brand-black hover:text-brand-black'
-                }`}
-              >
-                <Send size={24} />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-center">Dispatch Ready</span>
+                {order.isAccountsApproved ? <><Unlock size={14} /> Dispatch Unlocked</> : <><Lock size={14} /> Locked for Dispatch</>}
               </button>
             </div>
 
-            <p className="text-[10px] text-brand-secondary italic font-sans text-center">
-              Updating the verification status helps track the internal processing stage of the order.
-            </p>
-          </div>
-
-          {/* Payment & Status */}
-          <div className="bg-white border border-brand-divider p-6 shadow-sm space-y-6">
-            <h2 className="text-sm uppercase tracking-widest font-bold text-brand-secondary border-b border-brand-divider pb-4">
-              Payment & Status
-            </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div>
                   <p className="text-brand-secondary text-xs mb-2">Payment Status</p>
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] uppercase tracking-widest font-bold border ${
-                    (order.paymentStatus || 'paid') === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                    order.paymentStatus === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
-                    order.paymentStatus === 'refunded' ? 'bg-gray-50 text-gray-700 border-gray-200' :
-                    'bg-amber-50 text-amber-700 border-amber-200'
-                  }`}>
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] uppercase tracking-widest font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
                     {order.paymentStatus || 'Paid'}
                   </span>
                 </div>
@@ -300,168 +221,45 @@ export default function AdminOrderDetailsPage() {
                     value={order.status}
                     onChange={(e) => handleStatusChange(e.target.value as Order['status'])}
                     disabled={isUpdating || order.status === 'cancelled'}
-                    className={`text-xs font-medium px-4 py-2 w-full sm:w-auto min-w-[140px] rounded-full border focus:outline-none focus:ring-1 focus:ring-brand-black cursor-pointer transition-colors ${
-                      order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                      order.status === 'processing' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                      order.status === 'packed' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                      order.status === 'shipped' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                      order.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
-                      'bg-gray-50 text-gray-700 border-gray-200'
-                    } ${order.status === 'cancelled' ? 'opacity-75 cursor-not-allowed' : ''}`}
+                    className="text-xs font-medium px-4 py-2 w-full border rounded-full focus:outline-none"
                   >
                     <option value="pending">Pending</option>
                     <option value="processing">Processing</option>
                     <option value="packed">Packed</option>
                     <option value="shipped">Shipped</option>
                     <option value="delivered">Delivered</option>
-                    <option value="returned">Returned</option>
-                    <option value="failed_delivery">Failed Delivery</option>
                     <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
-                
-                {(order.status === 'packed' || order.status === 'shipped' || order.status === 'delivered' || order.trackingId) && (
-                  <div className="space-y-4 pt-4 border-t border-brand-divider mt-4">
-                    <h3 className="text-xs font-bold text-brand-black uppercase tracking-widest">Dispatch Details</h3>
-                    
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-brand-secondary text-[10px] uppercase tracking-widest mb-1">Courier Partner</p>
-                        <select
-                          value={courierName}
-                          onChange={(e) => setCourierName(e.target.value)}
-                          className="w-full bg-brand-bg border border-brand-divider px-3 py-2 text-sm font-sans focus:outline-none focus:border-brand-black"
-                        >
-                          <option value="DTDC">DTDC</option>
-                          <option value="BlueDart">BlueDart</option>
-                          <option value="Delhivery">Delhivery</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <p className="text-brand-secondary text-[10px] uppercase tracking-widest mb-1">Service Type</p>
-                        <select
-                          value={courierService}
-                          onChange={(e) => setCourierService(e.target.value)}
-                          className="w-full bg-brand-bg border border-brand-divider px-3 py-2 text-sm font-sans focus:outline-none focus:border-brand-black"
-                        >
-                          <option value="Express">Express</option>
-                          <option value="Surface">Surface</option>
-                          <option value="Premium">Premium</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <p className="text-brand-secondary text-[10px] uppercase tracking-widest mb-1">Pickup Date</p>
-                        <input
-                          type="date"
-                          value={pickupDate}
-                          onChange={(e) => setPickupDate(e.target.value)}
-                          className="w-full bg-brand-bg border border-brand-divider px-3 py-2 text-sm font-sans focus:outline-none focus:border-brand-black"
-                        />
-                      </div>
-
-                      <div>
-                        <p className="text-brand-secondary text-[10px] uppercase tracking-widest mb-1">AWB / Tracking ID</p>
-                        <input
-                          type="text"
-                          value={trackingInput}
-                          onChange={(e) => setTrackingInput(e.target.value)}
-                          placeholder="Enter AWB number"
-                          className="w-full bg-brand-bg border border-brand-divider px-3 py-2 text-sm font-sans focus:outline-none focus:border-brand-black"
-                        />
-                      </div>
-
-                      <div>
-                        <p className="text-brand-secondary text-[10px] uppercase tracking-widest mb-1">Tracking URL</p>
-                        <input
-                          type="url"
-                          value={trackingUrl}
-                          onChange={(e) => setTrackingUrl(e.target.value)}
-                          placeholder="https://..."
-                          className="w-full bg-brand-bg border border-brand-divider px-3 py-2 text-sm font-sans focus:outline-none focus:border-brand-black"
-                        />
-                      </div>
-
-                      <button 
-                        onClick={handleSaveDispatchDetails}
-                        disabled={isUpdating}
-                        className="w-full bg-brand-black text-white px-4 py-2 text-xs uppercase tracking-widest hover:bg-brand-black/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-                      >
-                        Save Dispatch Details
-                      </button>
-
-                      {order.trackingUrl && order.courierName === 'DTDC' && (
-                        <a 
-                          href={order.trackingUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block w-full text-center border border-brand-black text-brand-black px-4 py-2 text-xs uppercase tracking-widest hover:bg-brand-black hover:text-white transition-colors mt-2"
-                        >
-                          Track on DTDC
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
+            {!order.isAccountsApproved && (
+               <div className="bg-red-50 border border-red-100 p-4 rounded-lg flex items-start gap-3 mt-4 text-red-700 text-xs">
+                 <Lock size={16} className="mt-0.5 shrink-0" />
+                 <p>This order is currently <strong>LOCKED</strong>. Dispatch team cannot pack or ship this order until you click the button above to approve the payment.</p>
+               </div>
+            )}
           </div>
         </div>
 
+        {/* Right Column: Customer & Shipping */}
         <div className="space-y-8">
-          {/* Customer Info */}
           <div className="bg-white border border-brand-divider p-6 shadow-sm space-y-4">
-            <h2 className="text-sm uppercase tracking-widest font-bold text-brand-secondary border-b border-brand-divider pb-4">
-              Customer Info
-            </h2>
+            <h2 className="text-sm uppercase tracking-widest font-bold text-brand-secondary border-b border-brand-divider pb-4">Customer Info</h2>
             <div className="space-y-4 text-sm">
-              <div>
-                <p className="text-brand-secondary text-xs mb-1">Name</p>
-                <p className="font-medium text-brand-black">{order.userName}</p>
-              </div>
-              <div>
-                <p className="text-brand-secondary text-xs mb-1">Email</p>
-                <a href={`mailto:${order.userEmail}`} className="font-medium text-brand-black hover:underline">
-                  {order.userEmail}
-                </a>
-              </div>
-              <div>
-                <p className="text-brand-secondary text-xs mb-1">Phone</p>
-                <p className="font-medium text-brand-black">{order.shippingAddress?.phone || 'N/A'}</p>
-              </div>
-              <div className="pt-4 mt-4 border-t border-brand-divider">
-                <button 
-                  onClick={handleResendInvoice}
-                  disabled={invoiceSent}
-                  className={`w-full py-2.5 border font-medium text-xs uppercase tracking-widest transition-colors ${
-                    invoiceSent 
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
-                      : 'border-brand-black text-brand-black hover:bg-brand-black hover:text-white'
-                  }`}
-                >
-                  {invoiceSent ? 'Invoice Sent ✓' : 'Resend Invoice'}
-                </button>
-              </div>
+              <p><span className="text-brand-secondary text-xs block mb-1">Name</span><span className="font-medium text-brand-black">{order.userName}</span></p>
+              <p><span className="text-brand-secondary text-xs block mb-1">Phone</span><span className="font-medium text-brand-black">{order.shippingAddress?.phone || 'N/A'}</span></p>
             </div>
           </div>
-
-          {/* Shipping Info */}
           <div className="bg-white border border-brand-divider p-6 shadow-sm space-y-4">
-            <h2 className="text-sm uppercase tracking-widest font-bold text-brand-secondary border-b border-brand-divider pb-4">
-              Shipping Info
-            </h2>
+            <h2 className="text-sm uppercase tracking-widest font-bold text-brand-secondary border-b border-brand-divider pb-4">Shipping Info</h2>
             {order.shippingAddress ? (
               <div className="space-y-1 text-sm text-brand-black">
                 <p className="font-medium mb-2">{order.shippingAddress.fullName}</p>
                 <p>{order.shippingAddress.addressLine1}</p>
-                {order.shippingAddress.addressLine2 && <p>{order.shippingAddress.addressLine2}</p>}
                 <p>{order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.postalCode}</p>
-                <p>{order.shippingAddress.country}</p>
               </div>
-            ) : (
-              <p className="text-sm text-brand-secondary">No shipping address provided.</p>
-            )}
+            ) : <p className="text-sm text-brand-secondary">No address.</p>}
           </div>
         </div>
       </div>

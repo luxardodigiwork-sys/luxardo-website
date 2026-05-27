@@ -4,6 +4,9 @@ import { Mail, Phone, MapPin, Instagram, Facebook, Linkedin, ArrowRight, CheckCi
 import { storage } from '../utils/localStorage';
 import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
+// Firebase imports added for Cloud Database
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 export default function ContactPage() {
   const { user } = useAuth();
@@ -12,30 +15,39 @@ export default function ContactPage() {
   const siteContent = storage.getSiteContent();
   const [content, setContent] = useState(siteContent.contact);
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const updatedSiteContent = storage.getSiteContent();
     setContent(updatedSiteContent.contact);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
     const formData = new FormData(e.currentTarget);
     const data = {
-      id: Date.now(),
       firstName: formData.get('firstName'),
       lastName: formData.get('lastName'),
       email: formData.get('email'),
-      phone: formData.get('phone'),
+      phone: formData.get('phone') || '',
       subject: formData.get('subject'),
       message: formData.get('message'),
       status: 'pending',
       createdAt: new Date().toISOString()
     };
     
-    storage.addContactMessage(data);
-    setSubmitted(true);
+    try {
+      // Sends data directly to Firebase Cloud instead of local storage
+      await addDoc(collection(db, 'contactMessages'), data);
+      setSubmitted(true);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      alert("Failed to send message. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -207,8 +219,8 @@ export default function ContactPage() {
                 <textarea name="message" required rows={5} className="w-full bg-transparent border-b border-brand-divider py-4 font-sans focus:outline-none focus:border-brand-black transition-colors resize-none" placeholder="How can we assist you today?"></textarea>
               </div>
 
-              <button type="submit" className="btn-primary w-full py-5 flex items-center justify-center gap-4">
-                SEND MESSAGE <ArrowRight size={18} />
+              <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-5 flex items-center justify-center gap-4 disabled:opacity-70">
+                {isSubmitting ? 'SENDING...' : 'SEND MESSAGE'} <ArrowRight size={18} />
               </button>
             </form>
           ) : (

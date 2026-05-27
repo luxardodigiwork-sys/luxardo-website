@@ -1,33 +1,33 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, animate, useInView, useMotionValueEvent } from 'motion/react';
-import { useOutletContext, Link, useNavigate } from 'react-router-dom';
-import { Globe, Sparkles, PenTool, BadgeCheck, Package } from 'lucide-react';
-import { Country, Language, Product } from '../types';
-import { storage } from '../utils/localStorage';
-import { useAuth } from '../context/AuthContext';
-import HomeOurStorySection from '../components/HomeOurStorySection';
-import { DEFAULT_SITE_CONTENT } from '../constants/homeContent';
+import React, { useRef, useState, useEffect } from "react";
+import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, animate, useInView, useMotionValueEvent } from "motion/react";
+import { useOutletContext, Link, useNavigate, useLocation } from "react-router-dom";
+import { Country, Language } from "../types";
+import { storage } from "../utils/localStorage";
+import { useAuth } from "../context/AuthContext";
+
+// Global helper to check for missing/placeholder images
+const isMissingImage = (src?: string) => !src || src === '/placeholder.svg' || src.endsWith('placeholder.svg') || src.startsWith('data:');
 
 const HERO_SLIDES = [
   {
     id: 1,
-    imageUrl: '/placeholder.svg',
+    imageUrl: '',
     heading: 'Modern Ethnic Menswear',
-    subtext: 'Premium fabrics. Structured silhouettes.',
-    cta: 'Shop Now',
+    subtext: 'Premium fabrics. Structured silhouettes. Crafted in Bhilwara.',
+    cta: 'Shop Collections',
     link: '/collections'
   },
   {
     id: 2,
-    imageUrl: '/placeholder.svg',
+    imageUrl: '',
     heading: 'Constructed With Intent',
     subtext: 'A philosophy of slow luxury and disciplined craftsmanship.',
     cta: 'Discover Our Story',
-    link: '/our-story'
+    link: '/about'
   },
   {
     id: 3,
-    imageUrl: '/placeholder.svg',
+    imageUrl: '',
     heading: 'Designed for Every Occasion',
     subtext: 'From wedding festivities to formal excellence.',
     cta: 'View Collections',
@@ -35,6 +35,212 @@ const HERO_SLIDES = [
   }
 ];
 
+const FALLBACK_STORY_STEPS = [
+  {
+    title: "Our Story.",
+    subtitle: "Design Sketching",
+    description: "From the world's finest mills to your wardrobe. A journey of uncompromising quality, expert craftsmanship, and timeless design.",
+    image: "/placeholder.svg"
+  },
+  {
+    title: "Global Sourcing",
+    subtitle: "01 / Premium Fabric",
+    description: "We import premium fabrics from across the entire world, meticulously selecting only the finest materials.",
+    image: "/placeholder.svg"
+  },
+  {
+    title: "Fabric Finishing",
+    subtitle: "02 / Treatment",
+    description: "Each fabric undergoes specialized finishing processes, enhancing its natural texture, drape, and longevity.",
+    image: "/placeholder.svg"
+  },
+  {
+    title: "Personalized Sketching",
+    subtitle: "03 / Design",
+    description: "Our master designers sketch personalized, bespoke designs, translating your vision into detailed sartorial blueprints.",
+    image: "/placeholder.svg"
+  },
+  {
+    title: "Expert Craftsmanship",
+    subtitle: "04 / Tailoring",
+    description: "Master tailors bring designs to life with traditional techniques refined over generations.",
+    image: "/placeholder.svg"
+  },
+  {
+    title: "Ready For You",
+    subtitle: "05 / Box Packing",
+    description: "The journey concludes with the ready-to-stitch fabric elegantly folded and secured in our premium box packing.",
+    image: "/placeholder.svg"
+  }
+];
+
+// Fixed 3D Scrolling Section (Sticky Scroll)
+function HomeOurStorySection() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [activeStoryStep, setActiveStoryStep] = useState(0);
+
+  const siteContent = storage.getSiteContent();
+  const siteStorySteps = siteContent?.homepage?.storySteps;
+  
+  const STORY_STEPS = (siteStorySteps && siteStorySteps.length > 0) ? siteStorySteps : FALLBACK_STORY_STEPS;
+
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start start", "end end"]
+  });
+
+  useMotionValueEvent(scrollYProgress, "change", (latest) => {
+    const step = Math.min(
+      Math.floor(latest * STORY_STEPS.length), 
+      STORY_STEPS.length - 1
+    );
+    if (step !== activeStoryStep) {
+      setActiveStoryStep(step);
+    }
+  });
+
+  const currentStep = STORY_STEPS[activeStoryStep];
+  const isFirst = activeStoryStep === 0;
+  const missingImage = isMissingImage(currentStep.image);
+
+  return (
+    // Height set to 300vh to ensure it stays pinned while scrolling
+    <section ref={containerRef} className="bg-brand-white relative border-y border-brand-black/10" style={{ height: '300vh' }}>
+      
+      {/* Sticky container that holds the content on screen */}
+      <div className="sticky top-0 left-0 w-full h-[100dvh] overflow-hidden flex flex-col">
+        
+        {/* Desktop Layout */}
+        <div className="hidden md:flex max-w-[1400px] mx-auto w-full h-full items-center px-6 md:px-12">
+          <div className="w-1/2 h-full flex items-center justify-center p-12">
+            <div className="w-full max-w-md aspect-[3/4] relative bg-brand-bg shadow-2xl overflow-hidden">
+              <AnimatePresence mode="wait">
+                {missingImage ? (
+                  <motion.div
+                    key={`grad-${activeStoryStep}`}
+                    initial={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
+                    animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+                    exit={{ opacity: 0, filter: "blur(10px)", scale: 1.05 }}
+                    transition={{ duration: 0.6, ease: "easeInOut" }}
+                    className="absolute inset-0 bg-gradient-to-br from-[#1c1c1c] via-brand-black to-[#0a0a0a] flex flex-col items-center justify-center p-8"
+                  >
+                    <span className="text-[12rem] font-display text-white/[0.05] leading-none select-none">
+                      {String(activeStoryStep + 1).padStart(2, '0')}
+                    </span>
+                    <span className="text-[10px] uppercase tracking-[0.4em] text-white/30 text-center mt-4">LUXARDO · FASHION</span>
+                  </motion.div>
+                ) : (
+                  <motion.img
+                    key={activeStoryStep}
+                    src={currentStep.image}
+                    initial={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
+                    animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+                    exit={{ opacity: 0, filter: "blur(10px)", scale: 1.05 }}
+                    transition={{ duration: 0.6, ease: "easeInOut" }}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                )}
+              </AnimatePresence>
+              <div className="absolute inset-0 border border-brand-black/5 pointer-events-none" />
+            </div>
+          </div>
+
+          <div className="w-1/2 relative h-[60vh] flex items-center pl-16">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeStoryStep}
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -40 }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+                className="absolute w-full pr-12"
+              >
+                <div className="absolute -left-8 -top-20 text-[180px] lg:text-[220px] font-display text-brand-black/[0.03] font-bold pointer-events-none select-none leading-none z-0">
+                  {isFirst ? "EST" : String(activeStoryStep).padStart(2, '0')}
+                </div>
+                <div className="relative z-10">
+                  <div className="flex items-center gap-4 mb-8">
+                    <span className="w-12 h-[1px] bg-brand-secondary/50"></span>
+                    <span className="text-[10px] uppercase tracking-[0.4em] font-bold text-brand-secondary">{currentStep.subtitle}</span>
+                  </div>
+                  <h3 className="text-4xl lg:text-6xl font-display tracking-tight text-brand-black mb-8 leading-[1.1]">
+                    {isFirst ? <span className="font-bold text-brand-black">Our Story.</span> : currentStep.title}
+                  </h3>
+                  <p className="text-lg text-brand-secondary/80 font-light leading-relaxed max-w-md">
+                    {currentStep.description}
+                  </p>
+                  <div className="flex flex-wrap gap-6 pt-10 mt-6 border-t border-brand-black/10">
+                    <Link to="/about" className="text-[10px] uppercase tracking-[0.3em] font-bold text-brand-black border-b border-brand-black pb-1 hover:opacity-70 transition-opacity">Read Full Story</Link>
+                    <Link to="/craftsmanship" className="text-[10px] uppercase tracking-[0.3em] font-bold text-brand-secondary hover:text-brand-black transition-colors">View Craftsmanship</Link>
+                    <Link to="/contact" className="text-[10px] uppercase tracking-[0.3em] font-bold text-brand-secondary hover:text-brand-black transition-colors">Contact Us</Link>
+                  </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Mobile Layout */}
+        <div className="md:hidden w-full h-full flex flex-col relative bg-brand-white pt-20">
+          <div className="h-[40svh] w-full relative px-6 flex items-center justify-center">
+            <AnimatePresence mode="wait">
+              {missingImage ? (
+                <motion.div
+                  key={`grad-mobile-${activeStoryStep}`}
+                  initial={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
+                  animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+                  exit={{ opacity: 0, filter: "blur(10px)", scale: 1.05 }}
+                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                  className="absolute inset-0 mx-4 bg-gradient-to-br from-[#1c1c1c] via-brand-black to-[#0a0a0a] flex flex-col items-center justify-center shadow-xl"
+                >
+                  <span className="text-[6rem] font-display text-white/[0.05] leading-none select-none">
+                    {String(activeStoryStep + 1).padStart(2, '0')}
+                  </span>
+                </motion.div>
+              ) : (
+                <motion.img
+                  key={`img-mobile-${activeStoryStep}`}
+                  src={currentStep.image}
+                  initial={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
+                  animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+                  exit={{ opacity: 0, filter: "blur(10px)", scale: 1.05 }}
+                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                  className="absolute inset-0 w-full h-full object-cover p-4"
+                  referrerPolicy="no-referrer"
+                />
+              )}
+            </AnimatePresence>
+          </div>
+          <div className="flex-1 w-full relative px-6 pt-8 pb-4">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`text-mobile-${activeStoryStep}`}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="absolute w-[calc(100%-3rem)]"
+              >
+                <span className="text-[10px] uppercase tracking-[0.4em] font-bold text-brand-secondary mb-3 block">{currentStep.subtitle}</span>
+                <h3 className="text-3xl font-display tracking-tight text-brand-black mb-3">
+                  {isFirst ? <span className="font-bold text-brand-black">Our Story.</span> : currentStep.title}
+                </h3>
+                <p className="text-sm text-brand-secondary/80 font-light leading-relaxed mb-6">
+                  {currentStep.description}
+                </p>
+                <div className="flex flex-col gap-4 pt-6 border-t border-brand-black/10">
+                  <Link to="/about" className="text-[10px] uppercase tracking-[0.3em] font-bold text-brand-black border-b border-brand-black pb-1 w-fit">Read Full Story</Link>
+                  <Link to="/craftsmanship" className="text-[10px] uppercase tracking-[0.3em] font-bold text-brand-secondary w-fit">View Craftsmanship</Link>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function AnimatedCounter({ value, suffix = "", start = 0, duration = 2.5 }: { value: number, suffix?: string, start?: number, duration?: number }) {
   const ref = useRef(null);
@@ -64,22 +270,20 @@ export default function HomePage() {
   const { selectedCountry } = useOutletContext<{ selectedCountry: Country | null; selectedLanguage: Language }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentCollectionSlide, setCurrentCollectionSlide] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
   const [isCollectionHovered, setIsCollectionHovered] = useState(false);
-  const [activeStoryStep, setActiveStoryStep] = useState(0);
   const [wholesaleLoading, setWholesaleLoading] = useState(false);
   const [wholesaleSuccess, setWholesaleSuccess] = useState(false);
 
+  // Quota Error Fix for HomePage wholesale form
   const handleWholesaleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!user) {
-      navigate('/login', { state: { from: { pathname: '/' } } });
-      return;
-    }
     setWholesaleLoading(true);
+
     const formData = new FormData(e.currentTarget);
     
     let imageBase64 = '';
@@ -131,22 +335,15 @@ export default function HomePage() {
         offset: ["start start", "end end"]
       }
     : undefined
-);
+  );
+  
   const siteContent = storage.getSiteContent();
   const heroSlides = siteContent.homepage.hero.slides || HERO_SLIDES;
-  const storySteps = siteContent.homepage.storySteps || DEFAULT_SITE_CONTENT.homepage.storySteps;
-
-  useMotionValueEvent(storyScrollY, "change", (latest) => {
-    const step = Math.min(Math.floor(latest * storySteps.length), storySteps.length - 1);
-    if (step !== activeStoryStep) {
-      setActiveStoryStep(step);
-    }
-  });
 
   const statsY = useTransform(storyScrollY, [0, 1], ["50px", "-50px"]);
 
   useEffect(() => {
-    if (isHovered || siteContent.homepage.hero.mediaType === 'video') return; // Don't auto-slide if video is enabled
+    if (isHovered || siteContent.homepage.hero.mediaType === 'video') return; 
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
     }, 5000);
@@ -163,47 +360,27 @@ export default function HomePage() {
 
   return (
     <div className="bg-brand-bg text-brand-black">
-      {/* 1. Hero (Video or Image Slider) */}
-      <section 
-        className="relative h-[70vh] md:h-[90vh] overflow-hidden bg-brand-black"
+      <section
+        className="relative min-h-[100dvh] md:min-h-0 md:h-[92vh] overflow-hidden bg-brand-black"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {siteContent.homepage.hero.mediaType === 'video' && siteContent.homepage.hero.videoUrl ? (
-          <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden">
-            <video
-              className="absolute top-1/2 left-1/2 w-[100vw] h-[56.25vw] min-h-[100vh] min-w-[177.77vh] -translate-x-1/2 -translate-y-1/2 object-cover"
-              src={siteContent.homepage.hero.videoUrl}
-              autoPlay
-              muted
-              loop
-              playsInline
-            />
-          </div>
-        ) : (
-          <AnimatePresence mode="wait">
-            <motion.div 
-              key={heroSlides[currentSlide].id}
-              initial={{ opacity: 0, scale: 1.05 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 1.5, ease: "easeInOut" }}
-              className="absolute inset-0"
-            >
-              <img 
-                src={heroSlides[currentSlide].imageUrl} 
-                alt={heroSlides[currentSlide].heading} 
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            </motion.div>
-          </AnimatePresence>
-        )}
-        
-        <div className="absolute inset-0 bg-gradient-to-b from-brand-black/40 via-brand-black/20 to-brand-black/80 z-20 pointer-events-none" />
-        
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-brand-white text-center px-4 md:px-6 z-30 pointer-events-none">
-          <div className="w-full max-w-4xl pointer-events-auto">
+        {/* Emporio Armani Campaign Video (No sound, auto loop) */}
+        <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden">
+            {/* The iframe covers the background. Pointer-events-none makes sure it can't be clicked/paused */}
+            <iframe 
+                src="https://www.youtube.com/embed/1zOfwTVrcbE?autoplay=1&mute=1&loop=1&playlist=1zOfwTVrcbE&controls=0&showinfo=0&rel=0&modestbranding=1" 
+                title="Laxardo Fashion Background Video"
+                className="absolute top-1/2 left-1/2 w-[100vw] h-[56.25vw] min-h-[100vh] min-w-[177.77vh] -translate-x-1/2 -translate-y-1/2 object-cover opacity-60"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowFullScreen
+                style={{ pointerEvents: 'none' }}
+            ></iframe>
+        </div>
+
+        {/* Hero content — LEFT-MIDDLE aligned (matches reference) */}
+        <div className="absolute inset-0 flex flex-col items-start justify-center text-brand-white text-left px-6 md:px-16 lg:px-24 z-30 pt-20 md:pt-0">
+          <div className="w-full max-w-2xl">
             <AnimatePresence mode="wait">
               <motion.div
                 key={`content-${siteContent.homepage.hero.mediaType === 'video' ? 'video' : currentSlide}`}
@@ -211,11 +388,29 @@ export default function HomePage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-                className="flex flex-col items-center"
+                className="flex flex-col items-start gap-6 md:gap-8"
               >
-                <h1 className="text-4xl md:text-8xl font-display tracking-tight leading-[1.1] mb-4 md:mb-6 font-light">
-                  {heroSlides[currentSlide].heading}
+                <div className="flex items-center gap-3 opacity-90">
+                  <span className="w-10 md:w-14 h-[1px] bg-white/60"></span>
+                  <span className="text-[9px] md:text-[11px] uppercase tracking-[0.4em] font-bold text-white/70">LUXARDO · FASHION</span>
+                </div>
+                <h1 className="text-4xl md:text-6xl lg:text-8xl font-display tracking-tight leading-[1.05] font-light drop-shadow-lg">
+                  {heroSlides[currentSlide].heading || siteContent.homepage.hero.title}
                 </h1>
+                {(heroSlides[currentSlide].subtext || siteContent.homepage.hero.subtitle) && (
+                  <p className="text-sm md:text-lg text-white/90 font-light max-w-md leading-relaxed drop-shadow-md">
+                    {heroSlides[currentSlide].subtext || siteContent.homepage.hero.subtitle}
+                  </p>
+                )}
+                <Link
+                  to={heroSlides[currentSlide].link || siteContent.homepage.hero.primaryCtaLink || '/collections'}
+                  className="mt-2 inline-flex items-center gap-3 bg-white text-brand-black px-8 md:px-10 py-4 text-[10px] md:text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-white/90 transition-colors"
+                >
+                  {heroSlides[currentSlide].cta || siteContent.homepage.hero.primaryCtaText || 'Discover the Collection'}
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </Link>
               </motion.div>
             </AnimatePresence>
           </div>
@@ -230,7 +425,7 @@ export default function HomePage() {
                 className="group p-2"
                 aria-label={`Go to slide ${index + 1}`}
               >
-                <div className={`h-[1px] transition-all duration-500 ${
+                <div className={`h-[1.5px] transition-all duration-500 ${
                   currentSlide === index ? 'w-8 md:w-12 bg-brand-white' : 'w-4 md:w-6 bg-brand-white/30 group-hover:bg-brand-white/60'
                 }`} />
               </button>
@@ -239,7 +434,6 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* 1.1 Work Categories Banner */}
       <div className="w-full bg-brand-black border-t border-brand-white/10 py-4 md:py-6">
         <div className="max-w-[1600px] mx-auto px-4">
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-3 md:gap-12 text-center">
@@ -252,98 +446,155 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* 2. Collections Showcase (Ultra Premium Editorial Overlap) */}
-      <section className="bg-[#F8F8F8] py-16 md:py-40 overflow-hidden border-t border-brand-black/10">
+      <section className="bg-[#F8F8F8] py-16 md:py-28 overflow-hidden border-t border-brand-black/10">
         <div className="max-w-[1600px] mx-auto px-4 md:px-12">
-          <div className="mb-16 md:mb-32 text-center flex flex-col items-center">
+          <div className="text-center flex flex-col items-center">
             <span className="w-[1px] h-12 md:h-16 bg-brand-black/20 mb-6 md:mb-8"></span>
             <p className="text-[10px] uppercase tracking-[0.5em] font-bold text-brand-secondary mb-4 md:mb-6">{siteContent.homepage.collections.label}</p>
             <h2 className="text-4xl md:text-7xl font-display tracking-tight text-brand-black">{siteContent.homepage.collections.heading}</h2>
+            <p className="text-xs md:text-sm text-brand-secondary/70 mt-6 max-w-md mx-auto font-light">Seven categories. Scroll to explore each in detail.</p>
           </div>
+        </div>
+      </section>
 
-          {/* Desktop Grid */}
-          <div className="hidden md:grid md:grid-cols-12 gap-6">
-            {siteContent.homepage.collections.items?.map((collection: any, index: number) => {
-              let colSpan = "col-span-4";
-              let heightClass = "h-[60vh]";
-              
-              if (index < 3) {
-                colSpan = "col-span-4";
-                heightClass = "h-[60vh]";
-              } else {
-                colSpan = "col-span-3";
-                heightClass = "h-[50vh]";
-              }
-
-              return (
-                <Link 
-                  key={`desktop-${collection.id}`} 
-                  to={collection.link}
-                  className={`group relative bg-brand-white p-3 border border-brand-black/10 shadow-sm ${heightClass} ${colSpan}`}
-                >
-                  <div className="relative w-full h-full overflow-hidden bg-brand-black">
-                    <motion.img
-                      initial={{ scale: 1.1 }}
-                      whileInView={{ scale: 1 }}
-                      transition={{ duration: 1.5, ease: "easeOut" }}
-                      viewport={{ once: true }}
-                      src={collection.image}
-                      alt={collection.title}
-                      className="w-full h-full object-cover transition-transform duration-[10s] group-hover:scale-105 opacity-90 group-hover:opacity-100"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-brand-black/90 via-brand-black/20 to-transparent pointer-events-none" />
-                    
-                    <div className="absolute bottom-0 left-0 w-full p-6 flex flex-col justify-end">
-                      <div className="flex items-end justify-between">
-                        <div>
-                          <span className="text-[10px] uppercase tracking-[0.4em] font-bold text-brand-white/70 mb-3 block">
-                            0{index + 1} / Collection
-                          </span>
-                          <h3 className="text-2xl lg:text-4xl font-display text-brand-white">
-                            {collection.title}
-                          </h3>
-                        </div>
-                        <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-full border border-brand-white/30 flex items-center justify-center group-hover:bg-brand-white group-hover:text-brand-black transition-all duration-500 shrink-0">
-                          <svg className="w-4 h-4 lg:w-5 lg:h-5 transform -rotate-45 group-hover:rotate-0 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                          </svg>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-
-          {/* Mobile Auto-slider */}
-          <div className="md:hidden flex overflow-hidden relative w-full -mx-4 px-4">
-            <motion.div 
-              className="flex gap-4 w-max"
-              animate={{ x: ["0%", "-50%"] }}
-              transition={{ repeat: Infinity, ease: "linear", duration: 20 }}
+      <div className="relative bg-brand-black">
+        {(siteContent.homepage.collections.items || []).map((collection: any, index: number) => {
+          const missingImage = isMissingImage(collection.image);
+          const isLeft = index % 2 === 0;
+          const total = siteContent.homepage.collections.items?.length || 1;
+          return (
+            <section
+              key={`hero-${collection.id}`}
+              className="relative min-h-[75vh] md:min-h-0 md:h-screen w-full overflow-hidden bg-brand-black"
             >
-              {[...(siteContent.homepage.collections.items || []), ...(siteContent.homepage.collections.items || [])].map((collection: any, index: number) => (
-                <Link 
-                  key={`mobile-${index}`} 
+              {missingImage ? (
+                <div className="absolute inset-0 bg-gradient-to-br from-[#1c1c1c] via-brand-black to-[#0a0a0a]">
+                  <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{
+                    backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
+                    backgroundSize: '80px 80px'
+                  }} />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <span className="text-[55vw] md:text-[40vw] font-display text-white/[0.05] leading-none tracking-tighter select-none">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <motion.img
+                    initial={{ scale: 1.15 }}
+                    whileInView={{ scale: 1 }}
+                    transition={{ duration: 2, ease: 'easeOut' }}
+                    viewport={{ once: true, amount: 0.1 }}
+                    src={collection.image}
+                    alt={collection.title}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-b from-brand-black/40 via-brand-black/60 to-brand-black/90 md:bg-gradient-to-br md:from-brand-black/70 md:via-brand-black/30 md:to-brand-black/70" />
+                </>
+              )}
+
+              <div className={`absolute inset-0 flex flex-col items-center md:items-${isLeft ? 'start' : 'end'} justify-end md:justify-center pb-24 md:pb-0 px-6 md:px-16 lg:px-32 z-10 text-center md:text-${isLeft ? 'left' : 'right'}`}>
+                <motion.div
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.2 }}
+                  transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+                  className="max-w-2xl w-full"
+                >
+                  <div className={`flex items-center gap-4 mb-4 md:mb-8 justify-center md:justify-${isLeft ? 'start' : 'end'}`}>
+                    <span className="w-8 md:w-16 h-[1px] bg-white/60"></span>
+                    <span className="text-[10px] md:text-xs uppercase tracking-[0.4em] font-bold text-white/70">
+                      Collection {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
+                    </span>
+                  </div>
+                  <h3 className="text-4xl md:text-7xl lg:text-8xl font-display font-light tracking-tight text-white mb-4 md:mb-10 leading-[1.05]">
+                    {collection.title}
+                  </h3>
+                  {collection.descriptor && (
+                    <p className="text-sm md:text-xl text-white/80 font-light max-w-xl mx-auto md:mx-0 leading-relaxed mb-8 md:mb-12">
+                      {collection.descriptor}
+                    </p>
+                  )}
+                  <Link
+                    to={collection.link}
+                    className="inline-flex items-center justify-center gap-3 bg-white text-brand-black px-8 md:px-10 py-3.5 md:py-4 w-full md:w-auto text-[10px] md:text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-white/90 transition-colors group"
+                  >
+                    Explore {collection.title}
+                    <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                    </svg>
+                  </Link>
+                </motion.div>
+              </div>
+
+              <div className="hidden md:flex absolute right-8 top-1/2 -translate-y-1/2 flex-col gap-3 z-20">
+                {(siteContent.homepage.collections.items || []).map((_: any, dotIdx: number) => (
+                  <div
+                    key={dotIdx}
+                    className={`transition-all duration-500 ${
+                      dotIdx === index
+                        ? 'w-1 h-8 bg-white'
+                        : 'w-1 h-2 bg-white/30'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {index === 0 && (
+                <div className="absolute bottom-8 md:bottom-12 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 animate-bounce">
+                  <span className="text-[9px] md:text-[10px] uppercase tracking-[0.4em] text-white/60">Scroll</span>
+                  <svg className="w-4 h-4 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+
+      <section className="hidden">
+        <div className="md:hidden flex overflow-hidden relative w-full -mx-4 px-4 py-8 bg-[#f8f8f8]">
+          <motion.div 
+            className="flex gap-4 w-max"
+            animate={{ x: ["0%", "-50%"] }}
+            transition={{ repeat: Infinity, ease: "linear", duration: 25 }}
+          >
+            {[...(siteContent.homepage.collections.items || []), ...(siteContent.homepage.collections.items || [])].map((collection: any, index: number) => {
+              const missingImage = isMissingImage(collection.image);
+              const displayIndex = (index % (siteContent.homepage.collections.items?.length || 1)) + 1;
+              return (
+                <Link
+                  key={`mobile-${index}`}
                   to={collection.link}
-                  className="group relative bg-brand-white p-2 border border-brand-black/10 shadow-sm w-[260px] h-[35vh] flex-shrink-0"
+                  className="group relative bg-brand-white p-2 border border-brand-black/10 shadow-sm w-[280px] aspect-[4/5] flex-shrink-0"
                 >
                   <div className="relative w-full h-full overflow-hidden bg-brand-black">
-                    <img
-                      src={collection.image}
-                      alt={collection.title}
-                      className="w-full h-full object-cover opacity-90"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-brand-black/90 via-brand-black/20 to-transparent pointer-events-none" />
-                    
+                    {missingImage ? (
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#1c1c1c] via-brand-black to-[#0a0a0a] flex items-start justify-end p-4">
+                        <span className="text-[8rem] font-display text-white/[0.06] leading-none tracking-tighter select-none -mt-2">
+                          {String(displayIndex).padStart(2, '0')}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <img
+                          src={collection.image}
+                          alt={collection.title}
+                          className="w-full h-full object-cover opacity-90"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-brand-black/90 via-brand-black/20 to-transparent pointer-events-none" />
+                      </>
+                    )}
+
                     <div className="absolute bottom-0 left-0 w-full p-4 flex flex-col justify-end">
                       <div className="flex items-end justify-between">
                         <div>
                           <span className="text-[8px] uppercase tracking-[0.4em] font-bold text-brand-white/70 mb-1.5 block">
-                            0{(index % (siteContent.homepage.collections.items?.length || 1)) + 1} / Collection
+                            0{displayIndex} / Collection
                           </span>
                           <h3 className="text-xl font-display text-brand-white">
                             {collection.title}
@@ -353,19 +604,17 @@ export default function HomePage() {
                     </div>
                   </div>
                 </Link>
-              ))}
-            </motion.div>
-          </div>
+              );
+            })}
+          </motion.div>
         </div>
       </section>
 
-      {/* Our Story — 3D Smooth Scroll Experience */}
+      {/* FIXED: The 3D Scroll Section */}
       <HomeOurStorySection />
 
-      {/* Stats Section */}
       <section className="bg-brand-white pb-16 md:pb-24 pt-8 md:pt-12 overflow-hidden">
         <div className="max-w-[1400px] mx-auto px-6 md:px-12">
-          {/* Scrolling Stats Section */}
           <motion.div 
             style={{ y: statsY }}
             className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 md:gap-8 pt-8 md:pt-12 border-t border-brand-black/10"
@@ -404,8 +653,6 @@ export default function HomePage() {
         </div>
       </section>
 
-
-      {/* 5. LUXARDO FASHION experience (direct vs prime) */}
       <section className="py-16 md:py-32 bg-brand-bg border-y border-brand-divider">
         <div className="max-w-[1800px] mx-auto px-4 md:px-8">
           <div className="text-center mb-12 md:mb-20 space-y-4">
@@ -448,23 +695,28 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 6. Partner with us (Improved & Moved) */}
-      <section className="relative py-20 md:py-32 overflow-hidden bg-brand-black">
-        <motion.div 
-          initial={{ scale: 1.1 }}
-          whileInView={{ scale: 1 }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
-          viewport={{ once: true }}
-          className="absolute inset-0"
-        >
-          <img 
-            src={siteContent.homepage.partnership.img || "/placeholder.svg"} 
-            alt="Partner with us" 
-            className="w-full h-full object-cover opacity-40"
-            referrerPolicy="no-referrer"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-brand-black via-brand-black/90 to-brand-black/40" />
-        </motion.div>
+      <section className="relative py-20 md:py-32 overflow-hidden bg-gradient-to-br from-[#1c1c1c] via-brand-black to-[#0a0a0a]">
+        {!isMissingImage(siteContent.homepage.partnership?.img) && (
+          <motion.div
+            initial={{ scale: 1.1 }}
+            whileInView={{ scale: 1 }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+            viewport={{ once: true }}
+            className="absolute inset-0"
+          >
+            <img
+              src={siteContent.homepage.partnership.img}
+              alt="Partner with us"
+              className="w-full h-full object-cover opacity-40"
+              referrerPolicy="no-referrer"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-brand-black via-brand-black/90 to-brand-black/40" />
+          </motion.div>
+        )}
+        <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
+          backgroundSize: '60px 60px'
+        }} />
         
         <div className="relative z-10 max-w-[1400px] mx-auto px-6 md:px-12 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div className="max-w-2xl">
@@ -481,7 +733,6 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Form Section */}
           <div className="bg-brand-white/5 backdrop-blur-md border border-brand-white/10 p-8 md:p-12">
             <h3 className="text-2xl font-display text-brand-white mb-8">Apply for Partnership</h3>
             <form onSubmit={handleWholesaleSubmit} className="space-y-6">
@@ -528,19 +779,15 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 7. Vision & Mission (Structured & Compact Design) */}
       <section className="py-12 md:py-24 bg-brand-white">
         <div className="max-w-[1200px] mx-auto px-4 md:px-12">
-          {/* Architectural Grid Container */}
           <div className="grid grid-cols-1 lg:grid-cols-2 border border-brand-black/20 relative">
             
-            {/* Decorative corner markers to emphasize "structure" */}
             <div className="absolute -top-1 -left-1 w-2 h-2 border-t border-l border-brand-black"></div>
             <div className="absolute -top-1 -right-1 w-2 h-2 border-t border-r border-brand-black"></div>
             <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b border-l border-brand-black"></div>
             <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b border-r border-brand-black"></div>
 
-            {/* Vision */}
             <motion.div 
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
@@ -548,7 +795,6 @@ export default function HomePage() {
               transition={{ duration: 0.8 }}
               className="p-6 md:p-12 lg:p-16 border-b lg:border-b-0 lg:border-r border-brand-black/20 bg-[#FAFAFA] flex flex-col justify-center relative overflow-hidden"
             >
-              {/* Subtle background grid pattern for "architectural precision" */}
               <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
               
               <div className="relative z-10">
@@ -567,7 +813,6 @@ export default function HomePage() {
               </div>
             </motion.div>
 
-            {/* Mission */}
             <motion.div 
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
@@ -612,4 +857,3 @@ export default function HomePage() {
     </div>
   );
 }
-

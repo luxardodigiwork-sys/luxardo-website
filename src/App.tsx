@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { BackendPermissions } from "./types";
 import Lenis from "lenis";
 
@@ -54,8 +54,11 @@ import { fetchProductsFromFirestore } from "./utils/productsFirestore";
 
 import RegisterPage from "./pages/RegisterPage";
 
-// Admin imports
+// Admin + role login pages (each role has dedicated login route)
 import AdminLoginPage from "./pages/admin/AdminLoginPage";
+import OwnerLoginPage from "./pages/owner/OwnerLoginPage";
+import DispatchLoginPage from "./pages/dispatch/DispatchLoginPage";
+import AccountsLoginPage from "./pages/accounts/AccountsLoginPage";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
 import AdminDispatchPage from "./pages/admin/AdminDispatchPage";
 import AdminOrderDetailsPage from "./pages/admin/AdminOrderDetailsPage";
@@ -73,6 +76,7 @@ import AdminBackendManagementPage from "./pages/admin/BackendManagementPage";
 import AdminPartnersPage from "./pages/admin/AdminPartnersPage";
 import AdminContactMessagesPage from "./pages/admin/AdminContactMessagesPage";
 import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
+import AdminNewsletterPage from "./pages/admin/AdminNewsletterPage";
 import DispatchDashboardPage from "./pages/dispatch/DispatchDashboardPage";
 import BackendGatewayPage from "./pages/BackendGatewayPage";
 import DispatchLayout from "./components/dispatch/DispatchLayout";
@@ -95,6 +99,7 @@ const ProtectedBackendRoute = ({
   children: React.ReactNode;
 }) => {
   const { user, isAuthReady } = useAuth();
+  const location = useLocation();
 
   if (!isAuthReady) {
     return (
@@ -108,15 +113,15 @@ const ProtectedBackendRoute = ({
   const hasRole = user && user.role === role;
   const hasPermission = !permission || user?.permissions?.[permission];
 
+  // 🚀 FIXED: Agar login nahi hai toh /backend par bhejo
   if (!user || (!isSuperAdmin && (!hasRole || !hasPermission))) {
-    return <Navigate to="/backend" replace />;
+    return <Navigate to="/backend" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;
 };
 
 export default function App() {
-  // Sub-phase 2.5: Real-time site content sync from Firestore
   useEffect(() => {
     syncSiteContentFromFirestore();
     fetchProductsFromFirestore();
@@ -127,7 +132,6 @@ export default function App() {
     
     return () => unsubSiteContent();
   }, []);
-
 
   useEffect(() => {
     if ("scrollRestoration" in history) {
@@ -159,8 +163,6 @@ export default function App() {
     };
   }, []);
 
-
-
   return (
     <AuthProvider>
       <CountryProvider>
@@ -169,7 +171,12 @@ export default function App() {
       <CartProvider>
         <WishlistProvider>
           <Routes>
+            {/* Dedicated login pages — one per role */}
             <Route path="/admin/login" element={<AdminLoginPage />} />
+            <Route path="/owner/login" element={<OwnerLoginPage />} />
+            <Route path="/dispatch/login" element={<DispatchLoginPage />} />
+            <Route path="/accounts/login" element={<AccountsLoginPage />} />
+            <Route path="/analysis/login" element={<Navigate to="/accounts/login" replace />} />
 
             <Route path="/admin">
               <Route element={<ProtectedAdminRoute />}>
@@ -210,6 +217,10 @@ export default function App() {
                   element={<AdminContactMessagesPage />}
                 />
                 <Route
+                  path="newsletter"
+                  element={<AdminNewsletterPage />}
+                />
+                <Route
                   path="backend-management"
                   element={<AdminBackendManagementPage />}
                 />
@@ -218,10 +229,6 @@ export default function App() {
               </Route>
             </Route>
 
-            <Route
-              path="/dispatch/login"
-              element={<Navigate to="/backend" replace />}
-            />
             <Route
               path="/dispatch"
               element={
@@ -243,14 +250,8 @@ export default function App() {
             <Route path="/backend" element={<BackendGatewayPage />} />
             <Route path="/admin-access" caseSensitive={false} element={<Navigate to="/admin/login" replace />} />
             <Route path="/ADMIN-ACCESS" element={<Navigate to="/admin/login" replace />} />
-            <Route
-              path="/analysis/login"
-              element={<Navigate to="/backend" replace />}
-            />
-            <Route
-              path="/owner/login"
-              element={<Navigate to="/backend" replace />}
-            />
+
+
             <Route
               path="/owner"
               element={
@@ -269,6 +270,7 @@ export default function App() {
               <Route path="dashboard" element={<OwnerDashboardPage />} />
               <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
             </Route>
+            
             <Route
               path="/analysis"
               element={
