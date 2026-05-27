@@ -1,5 +1,6 @@
-  import React from 'react';
-import { TrendingUp, Users, ShoppingBag, Globe, Bell, User, ArrowUpRight, DollarSign } from 'lucide-react';
+import React from 'react';
+// 🚀 FIX: Yahan aakhri mein AlertCircle add kar diya gaya hai
+import { TrendingUp, Users, ShoppingBag, Globe, Bell, User, ArrowUpRight, DollarSign, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function OwnerDashboardPage() {
@@ -32,7 +33,7 @@ export default function OwnerDashboardPage() {
         </div>
       </div>
 
-      {/* Primary KPI Cards (Black styling for Owner premium feel) */}
+      {/* Primary KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-black text-white p-6 rounded-2xl shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full -mr-8 -mt-8 pointer-events-none"></div>
