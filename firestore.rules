@@ -79,9 +79,16 @@ service cloud.firestore {
     }
 
     /* ── Catalogue Designs ─────────────────────────────────────────── */
-    match /designs/{id} {
+    match /catalogueDesigns/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','designer','pm','dispatch','tailor','store']);
-      allow create, update: if isAdmin() || isStaffWithRole('designer');
+      allow create: if isAdmin() || isStaffWithRole('designer');
+      allow update: if (isAdmin() || isStaffWithRole('designer') || isStaffWithRole('owner')) && (
+        !resource.data.isFrozen ||
+        // Allow designer to set catalogueShortName/designNumber AFTER owner approval
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'catalogueShortName', 'designNumber', 'updatedAt'
+        ])
+      );
       allow delete: if false; // no-delete immutability
     }
 
@@ -103,7 +110,11 @@ service cloud.firestore {
     match /productionRequests/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
       allow create: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
-      allow update: if isAdmin() || isStaffInRoles(['owner','pm']);
+      allow update: if (isAdmin() || isStaffInRoles(['owner','pm'])) && (
+        !resource.data.originalQtyFrozen ||
+        // After approval, originalOrderedQty is immutable
+        request.resource.data.originalOrderedQty == resource.data.originalOrderedQty
+      );
       allow delete: if false;
     }
 
@@ -121,8 +132,8 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    /* ── Labour Sessions ────────────────────────────────────────────── */
-    match /labourSessions/{id} {
+    /* ── Work Sessions (pieceWorkSessions) ──────────────────────────── */
+    match /pieceWorkSessions/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
       allow create: if isSignedIn() && isStaffInRoles(['admin','owner','pm']);
       allow update: if isAdmin() || isStaffInRoles(['owner','pm']);
@@ -164,8 +175,8 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    /* ── Movement Records (append-only audit) ────────────────────────── */
-    match /movementRecords/{id} {
+    /* ── Piece Movement History (append-only audit) ─────────────────── */
+    match /pieceMovementHistory/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch','guard','tailor']);
       allow create: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch','guard','tailor']);
       allow update, delete: if false;

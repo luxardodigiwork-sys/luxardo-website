@@ -6,15 +6,32 @@
  * This module is the FOUNDATION / DATA MODEL for the production system.
  * It is purely additive: it does not modify any existing type in `../types`.
  *
- * Design notes (mirrors the finalized workflow):
- *  - Catalogue Design (KL-2001): a design pattern on fabric in the collection.
- *  - Sample Design (SAMPLE-10021): a small fabric piece showing a portion of a
- *    design, used by salesmen. Independent entity; optionally linked to a
- *    Catalogue Design via `catalogDesignId`.
- *  - Sample Piece (SAMPLE-10021-P1): one complete garment made for catalogue
- *    approval. Normally only one per design.
- *  - Physical Piece ({designId}-NN): the atomic unit of production.
- *  - Karigar: NOT a login user — a registry entity worked on by the PM.
+ * Collection names (Firestore):
+ *   catalogueDesigns, sampleDesigns, samplePieces, pieces,
+ *   productionRequests, karigars, pieceWorkSessions,
+ *   pieceMovementHistory, idCounters
+ *
+ * ID families:
+ *   Catalogue Design  KL-XXXX
+ *   Sample Design     SAMPLE-DESIGN-XXXX
+ *   Sample Piece      SAMPLE-PIECE-XXXX
+ *   Physical Piece    PIECE-XXXX
+ *   Production Request PR-XXXX
+ *   Karigar           K-XXXX
+ *   Store-Out         SO-XXXX
+ *   Store-Out Issue   SOI-XXXX
+ *   Guard QC Record   QC-XXXX
+ *   Work Session      LS-XXXX
+ *
+ * Immutability principles:
+ *   - Original ordered quantity frozen after Owner approval
+ *   - Approved design version frozen (isFrozen = true)
+ *   - Every rejection must preserve: actor, timestamp, reason, rejectionType
+ *   - Piece history is append-only (never deleted)
+ *   - No Piece hard-deleted
+ *   - No approved Design Version hard-deleted
+ *   - No approved Production Request hard-deleted
+ *   - Rejection type: REWORK (same piece, new work session) or COMPLETE_REJECT (close piece)
  */
 
 /* ────────────────────────────── ENUMS ────────────────────────────── */
@@ -35,7 +52,6 @@ export type DesignStatus = "DRAFT" | "APPROVED" | "FROZEN";
 export type SampleDesignStatus = "DRAFT" | "APPROVED" | "FROZEN";
 export type SamplePieceStatus = "IN_WORK" | "COMPLETE";
 export type PieceKind = "PHYSICAL" | "SAMPLE";
-export type PieceStatus = "active" | "closed" | "replaced";
 
 /** Physical piece lifecycle stage (atomic tracking unit). */
 export type PieceStage =
@@ -51,6 +67,9 @@ export type PieceStage =
   | "STORE"
   | "STORE_OUT"
   | "REJECTED";
+
+/** High-level piece status (supplementary to stage). */
+export type PieceStatus = "active" | "in_rework" | "closed" | "replaced";
 
 export type PRStatus =
   | "DRAFT"
@@ -74,17 +93,32 @@ export type StoreOutReason =
 export type MovementDirection = "FORWARD" | "REVERSE";
 export type MovementSource = "MANUAL" | "SYSTEM";
 
+export type RejectionType = "REWORK" | "COMPLETE_REJECT";
+
 /* ─────────────────────── CATALOGUE DESIGN ─────────────────────── */
 
+/**
+ * Collection: catalogueDesigns
+ * ID: KL-XXXX (transaction-safe sequential)
+ * A design pattern on fabric in the collection.
+ *
+ * Owner approval freezes the design for production.
+ * After approval, Designer assigns catalogueShortName + designNumber.
+ * V2 = new version, not modification (version is incremented).
+ */
 export interface DesignDoc {
-  id: string; // "KL-2001"
+  id: string; // "KL-0001"
   designType: "catalogue";
   name: string;
   description: string;
-  image: string; // Primary image URL
-  images: string[]; // Additional images
-  status: DesignStatus; // DRAFT | APPROVED | FROZEN
+  image: string;
+  images: string[];
+  status: DesignStatus; // DRAFT → APPROVED → FROZEN
   currentVersion: number;
+  isFrozen: boolean; // true once Owner approves
+  catalogueShortName: string | null; // Designer assigns AFTER Owner approval
+  designNumber: string | null; // Designer assigns AFTER Owner approval
+  designerUid: string; // who created this design
   approvedBy: string | null;
   approvedByName: string | null;
   approvedAt: string | null;
@@ -92,8 +126,6 @@ export interface DesignDoc {
   createdByName: string;
   createdAt: string;
   updatedAt: string;
-  /** Per-design piece sequence counter (atomic, used to derive KL-2001-NN). */
-  nextPieceSeq: number;
 }
 
 /** Immutable snapshot written on approval (v1) and freeze (v2+). */
@@ -111,9 +143,16 @@ export interface DesignVersionDoc {
 
 /* ───────────────────────── SAMPLE DESIGN ───────────────────────── */
 
+/**
+ * Collection: sampleDesigns
+ * ID: SAMPLE-DESIGN-XXXX
+ * Small fabric piece showing a portion of a design, used by salesmen.
+ * Independent entity; optionally linked to a Catalogue Design via `catalogDesignId`.
+ */
 export interface SampleDesignDoc {
-  id: string; // "SAMPLE-10021"
-  catalogDesignId: string | null; // "KL-2001" if related to a catalogue design
+  id: string; // "SAMPLE-DESIGN-0001"
+  originalSampleId: string | null; // legacy: original SAMPLE-10021 format (preserve for backward-compat)
+  catalogDesignId: string | null; // FK → catalogueDesigns/{id}
   name: string;
   description: string;
   image: string;
@@ -143,10 +182,16 @@ export interface SampleDesignVersionDoc {
 
 /* ────────────────────────── SAMPLE PIECE ───────────────────────── */
 
+/**
+ * Collection: samplePieces
+ * ID: SAMPLE-PIECE-XXXX
+ * One complete garment made for catalogue approval. Normally only one per design.
+ * After Owner approves the Sample Piece, it becomes the catalogue reference.
+ */
 export interface SamplePieceDoc {
-  id: string; // "SAMPLE-10021-P1"
-  designId: string; // Catalogue design this sample is for: "KL-2001"
-  sampleDesignId: string | null; // Swatch it is based on, if any
+  id: string; // "SAMPLE-PIECE-0001"
+  designId: string; // FK → catalogueDesigns/{id}
+  sampleDesignId: string | null; // FK → sampleDesigns/{id} (swatch it is based on)
   status: SamplePieceStatus; // IN_WORK | COMPLETE
   notes: string;
   image: string; // Photo of completed garment (on COMPLETE)
@@ -158,12 +203,17 @@ export interface SamplePieceDoc {
 
 /* ─────────────────────── PRODUCTION REQUEST ────────────────────── */
 
-export interface PRLine {
-  designId: string;
-  designName: string;
-  quantity: number; // Must be > 0 to submit
-}
-
+/**
+ * Collection: productionRequests
+ * ID: PR-XXXX
+ * Dispatch creates reproduction/production requests.
+ * Quantity defaults to 0; PR cannot be submitted when quantity = 0.
+ * After Owner approval, originalOrderedQty is immutable.
+ * Additional quantity always requires a new PR.
+ *
+ * Post-approval edits: Owner/Admin may modify urgency & requiredDate only,
+ * with audit history (PRAuditDoc).
+ */
 export interface ProductionRequestDoc {
   id: string; // "PR-0001"
   requestedBy: string;
@@ -171,18 +221,42 @@ export interface ProductionRequestDoc {
   requestedByRole: string; // "dispatch" | "admin" | "owner"
   createdAt: string;
   updatedAt: string;
-  lines: PRLine[];
-  /** Frozen copy of `lines` written by the server at Owner approval. Immutable. */
-  originalQuantity: PRLine[];
+
+  /** The catalogue design this request reproduces. */
+  designId: string | null;
+  garmentType: string | null;
+
+  // Quantity tracking (6 fields)
+  originalOrderedQty: number; // Immutable after Owner approval (frozen)
+  currentActiveQty: number;   // pieces currently in production/rework
+  completedQty: number;       // pieces that passed QC & dispatched
+  reworkQty: number;          // pieces currently in rework
+  rejectedQty: number;        // permanently rejected pieces
+  pendingQty: number;         // pieces not yet started
+  totalPieceCount: number;    // sum = originalOrderedQty
+
+  /** True after Owner approval; rules enforce originalOrderedQty immutability. */
+  originalQtyFrozen: boolean;
+
   status: PRStatus;
   approvedBy: string | null;
   approvedByName: string | null;
   approvedAt: string | null;
-  totalPieceCount: number;
+
+  // Rejection tracking
+  rejectedBy: string | null;
+  rejectedByName: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+
   urgency: UrgencyLevel;
   requiredDate: string; // ISO date — production deadline
+
   cancelledBy: string | null;
   cancelledAt: string | null;
+
+  createdBy: string;
+  createdByName: string;
 }
 
 /** Post-approval edit history (urgency / requiredDate only). */
@@ -199,32 +273,60 @@ export interface PRAuditDoc {
 
 /* ────────────────────────── PHYSICAL PIECE ─────────────────────── */
 
+/**
+ * Collection: pieces
+ * ID: PIECE-XXXX (global sequential, not per-design)
+ * The atomic unit of production. Every physical piece gets its own Piece ID.
+ * Piece IDs are NEVER reused after deletion/closure.
+ *
+ * REWORK: keeps same Piece ID, returns to work stage, new work session created.
+ * COMPLETE_REJECT: permanently closes Piece, manual replacement with NEW Piece ID
+ *   linked to the rejected piece via ReplacementLinkDoc.
+ *
+ * Replacement: new PIECE doc gets replacesPieceId → the rejected piece.
+ * Rejected piece gets replacedByPieceId → the new piece.
+ * Original quantity frozen; additional quantity = new PR.
+ */
 export interface PieceDoc {
-  id: string; // "KL-2001-01" — immutable
-  designId: string;
-  prId: string | null;
+  id: string; // "PIECE-0001"
+  designId: string; // FK → catalogueDesigns/{id}
+  prId: string | null; // FK → productionRequests/{id}
   kind: PieceKind; // "PHYSICAL" | "SAMPLE"
   stage: PieceStage;
-  status: PieceStatus; // active | closed | replaced
+  status: PieceStatus; // active | in_rework | closed | replaced
+
   assignedKarigars: string[];
   lastKarigarIds: string[];
   totalLabourMinutes: number;
   totalLabourCost: number;
   firstWorkAt: string | null;
   lastWorkAt: string | null;
+
+  // QC / Rejection tracking
   qcVerdict: "PASS" | "REWORK" | "COMPLETE_REJECT" | null;
   rejectionReason: string | null;
+  rejectionType: RejectionType | null; // "REWORK" | "COMPLETE_REJECT" | null
+  rejectedAt: string | null;
+  rejectedBy: string | null; // guard uid
+  rejectedByName: string | null;
   reworkCount: number;
   lastGuardQcId: string | null;
+
+  // Tailor tracking
   tailorSessionId: string | null;
   tailorStartAt: string | null;
   tailorEndAt: string | null;
+
+  // Store tracking
   storeInAt: string | null;
   storeOutAt: string | null;
   storeOutId: string | null;
   billNumber: string | null;
-  replacesPieceId: string | null;
-  replacedByPieceId: string | null;
+
+  // Replacement link
+  replacesPieceId: string | null; // this piece replaces rejectedPieceId
+  replacedByPieceId: string | null; // this piece was replaced by newPieceId
+
   notes: string;
   createdBy: string;
   createdByName: string;
@@ -232,20 +334,31 @@ export interface PieceDoc {
   updatedAt: string;
 }
 
-/** Every stage transition — forward or reverse — appends one record. Never deleted. */
+/**
+ * Collection: pieceMovementHistory
+ * Every stage transition — forward or reverse — appends one record. NEVER deleted.
+ *
+ * action: the movement action, e.g. "WORK_START", "QC_PASS", "REWORK",
+ *   "COMPLETE_REJECT", "TAILOR_START", "STORE_IN", "STORE_OUT", "REPLACE"
+ *
+ * Reverse movement = another forward record (preserves full audit trail).
+ */
 export interface MovementDoc {
   id: string;
   pieceId: string;
   fromStage: PieceStage;
   toStage: PieceStage;
   direction: MovementDirection;
+  action: string; // e.g. "WORK_START" | "QC_PASS" | "REWORK" | "COMPLETE_REJECT" | "STORE_IN"
   at: string;
   actorUid: string;
   actorName: string;
   actorRole: string;
   source: MovementSource;
   reason: string | null;
-  revertsMvId: string | null;
+  relatedRequestId: string | null; // FK → productionRequests (PR context)
+  relatedPieceId: string | null; // related piece (e.g. replacement / QC / tailor link)
+  revertsMvId: string | null; // reversal reference
   snapshot: {
     pieceStage: PieceStage;
     totalLabourMinutes: number;
@@ -255,8 +368,15 @@ export interface MovementDoc {
 
 /* ──────────────────────────── KARIGAR ──────────────────────────── */
 
+/**
+ * Collection: karigars
+ * ID: K-XXXX
+ * Karigar master data — NOT a login user.
+ * Required: karigarId, name, mobile, hourlyRate, active, createdAt, updatedAt.
+ * Additional fields preserved for existing Admin UI compatibility.
+ */
 export interface KarigarDoc {
-  id: string; // "K-001"
+  id: string; // "K-0001"
   name: string;
   mobile: string;
   skillTags: string[];
@@ -271,8 +391,16 @@ export interface KarigarDoc {
   updatedAt: string;
 }
 
-/* ───────────────────────── LABOUR SESSION ──────────────────────── */
+/* ───────────────────────── WORK SESSION ───────────────────────── */
 
+/**
+ * Collection: pieceWorkSessions
+ * ID: LS-XXXX
+ * PM selects any Karigar to start/stop work on a Piece.
+ * Multiple Karigars can work on the same Piece.
+ * Labour = Piece + Karigar combination. Hourly rate calculates cost.
+ * Type: FIRST or REWORK (rework session has reworkOf = previous session id).
+ */
 export interface LabourSessionDoc {
   id: string;
   pieceId: string;
@@ -302,6 +430,12 @@ export interface QCAction {
   note: string;
 }
 
+/**
+ * Collection: guardQCRecords
+ * Guard performs QC, records detailed actions.
+ * REJECT requires reason + rejectionType (REWORK | COMPLETE_REJECT).
+ * After PASS → piece moves to Dispatch.
+ */
 export interface GuardQCRecordDoc {
   id: string;
   pieceId: string;
@@ -316,6 +450,13 @@ export interface GuardQCRecordDoc {
 
 /* ────────────────────────── TAILOR SESSION ─────────────────────── */
 
+/**
+ * Collection: tailorSessions
+ * Dispatch assigns stitching to Tailor.
+ * Tailor records start time and complete time.
+ * Stitched Piece goes directly to Store (never Grading).
+ * Garment image is compulsory on completion.
+ */
 export interface TailorSessionDoc {
   id: string;
   pieceId: string;
@@ -330,6 +471,10 @@ export interface TailorSessionDoc {
 
 /* ─────────────────────────── STORE / SO ────────────────────────── */
 
+/**
+ * Collection: storeOuts
+ * Store-Out requires selected Pieces and bill number (mandatory).
+ */
 export interface StoreOutDoc {
   id: string; // "SO-0001"
   storeOutNumber: string;
@@ -342,6 +487,13 @@ export interface StoreOutDoc {
   createdAt: string;
 }
 
+/**
+ * Collection: storeOutIssues
+ * Store-Out problem requires controlled reason + Other.
+ * 5 standard reasons: DAMAGE_IN_TRANSIT, SIZE_MISMATCH, QUALITY_REJECT,
+ *   BILLING_DISPUTE, OTHER.
+ * When reason = OTHER, otherText is mandatory.
+ */
 export interface StoreOutIssueDoc {
   id: string;
   storeOutId: string;
@@ -355,6 +507,10 @@ export interface StoreOutIssueDoc {
 
 /* ─────────────────────── REPLACEMENT LINK ──────────────────────── */
 
+/**
+ * Collection: replacementLinks
+ * Replacement is manual: PM creates new Piece ID linked to rejected Piece.
+ */
 export interface ReplacementLinkDoc {
   id: string;
   rejectedPieceId: string;
@@ -367,6 +523,12 @@ export interface ReplacementLinkDoc {
 
 /* ──────────────────────────── STAFF ────────────────────────────── */
 
+/**
+ * Collection: staff
+ * Staff identity doc — admin-only CRUD, own read.
+ * Role: owner | admin | designer | pm | dispatch | guard | tailor | store
+ *   (accounts/analysis are e-commerce roles, preserved).
+ */
 export interface StaffDoc {
   uid: string; // Firebase Auth uid
   displayName: string;
@@ -380,11 +542,17 @@ export interface StaffDoc {
 
 /* ────────────────────────── AUDIT LOG ──────────────────────────── */
 
+/**
+ * Collection: auditLogs
+ * Append-only. Admin read only. Never deleted.
+ */
+
 export type AuditAction =
   | "DESIGN_CREATE"
   | "DESIGN_UPDATE"
   | "DESIGN_APPROVE"
   | "DESIGN_FREEZE"
+  | "DESIGN_SET_CATALOGUE_META" // Designer assigns catalogueShortName + designNumber
   | "SAMPLE_DESIGN_CREATE"
   | "SAMPLE_DESIGN_UPDATE"
   | "SAMPLE_DESIGN_APPROVE"
@@ -398,6 +566,7 @@ export type AuditAction =
   | "PR_CANCEL"
   | "PR_EDIT_URGENCY"
   | "PR_EDIT_REQUIREDDATE"
+  | "PR_EDIT_QTY" // post-approval qty adjustment (immutable after approval; only pre-approval)
   | "PIECE_CREATE"
   | "PIECE_STAGE_MOVE"
   | "PIECE_REVERSE_MOVE"
@@ -437,6 +606,11 @@ export interface AuditLogDoc {
 
 /* ────────────────────────── ID COUNTER ─────────────────────────── */
 
+/**
+ * Collection: idCounters (server-managed, deny-all at client).
+ * Domain key → prefix → sequential ID.
+ * IDs are never reused after deletion/closure.
+ */
 export interface IdCounterDoc {
   domain: string;
   prefix: string;

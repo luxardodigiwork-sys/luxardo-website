@@ -63,17 +63,32 @@ function writeAudit(
  *
  * Input : { domain: string }
  *         domain is one of: "design", "sampleDesign", "samplePiece",
- *         "karigar", "pr", "so", "storeOutIssue", "guardQc",
+ *         "piece", "karigar", "pr", "so", "storeOutIssue", "guardQc",
  *         "tailorSession", "labourSession"
  * Output: { id: string }
  *
  * IdCounter doc: idCounters/{domain}  { domain, prefix, next, updatedAt }
+ *
+ * ID families (finalized):
+ *   Catalogue Design  KL-XXXX
+ *   Sample Design     SAMPLE-DESIGN-XXXX
+ *   Sample Piece      SAMPLE-PIECE-XXXX
+ *   Physical Piece    PIECE-XXXX
+ *   Production Request PR-XXXX
+ *   Karigar           K-XXXX
+ *   Store-Out         SO-XXXX
+ *   Store-Out Issue   SOI-XXXX
+ *   Guard QC Record   QC-XXXX
+ *   Work Session      LS-XXXX
+ *
+ * IDs are NEVER reused after deletion/closure (monotonic counter).
  * ═══════════════════════════════════════════════════════════════════ */
 
 const ID_PREFIXES: Record<string, string> = {
-  design:           "KL-2001",
-  sampleDesign:     "SAMPLE-10021",
-  samplePiece:      "SAMPLE-10021-P",
+  design:           "KL-",           // KL-0001, KL-0002, ...
+  sampleDesign:     "SAMPLE-DESIGN-", // SAMPLE-DESIGN-0001, ...
+  samplePiece:      "SAMPLE-PIECE-",  // SAMPLE-PIECE-0001, ...
+  piece:            "PIECE-",         // PIECE-0001, PIECE-0002, ... (global sequential)
   karigar:          "K-",
   pr:               "PR-",
   so:               "SO-",

@@ -33,7 +33,7 @@
       ]
     },
     {
-      "collectionGroup": "labourSessions",
+      "collectionGroup": "pieceWorkSessions",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "pieceId", "order": "ASCENDING" },
@@ -41,7 +41,7 @@
       ]
     },
     {
-      "collectionGroup": "labourSessions",
+      "collectionGroup": "pieceWorkSessions",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "karigarId", "order": "ASCENDING" },
@@ -49,7 +49,7 @@
       ]
     },
     {
-      "collectionGroup": "movementRecords",
+      "collectionGroup": "pieceMovementHistory",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "pieceId", "order": "ASCENDING" },
@@ -74,7 +74,7 @@
       ]
     },
     {
-      "collectionGroup": "designs",
+      "collectionGroup": "catalogueDesigns",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
