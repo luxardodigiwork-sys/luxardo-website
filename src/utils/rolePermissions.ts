@@ -42,7 +42,42 @@ type Module =
   | 'accounts.dashboard' // payments + invoices
   | 'accounts.refund'
   | 'analysis.dashboard' // reports + analytics
-  | 'owner.dashboard';
+  | 'owner.dashboard'
+
+  // ── Production (Loom) modules ─────────────────────
+  | 'production.designs'
+  | 'production.designs.write'
+  | 'production.designs.approve'
+  | 'production.sampleDesigns'
+  | 'production.sampleDesigns.write'
+  | 'production.sampleDesigns.approve'
+  | 'production.samplePieces'
+  | 'production.samplePieces.write'
+  | 'production.requests'
+  | 'production.requests.approve'
+  | 'production.requests.reject'
+  | 'production.requests.edit'
+  | 'production.pieces'
+  | 'production.pieces.move'
+  | 'production.pieces.reverse'
+  | 'production.pieces.replace'
+  | 'production.pieces.assignKarigar'
+  | 'production.karigars'
+  | 'production.karigars.write'
+  | 'production.labour'
+  | 'production.labour.startStop'
+  | 'production.qc'
+  | 'production.qc.perform'
+  | 'production.tailor'
+  | 'production.tailor.startComplete'
+  | 'production.store'
+  | 'production.store.out'
+  | 'production.store.out.issue'
+  | 'production.reports'
+  | 'production.reports.export'
+  | 'production.audit'
+  | 'production.staff'
+  | 'production.movement';
 
 const MATRIX: Record<Module, Role[]> = {
   // ── Admin module ───────────────────────────────
@@ -76,6 +111,41 @@ const MATRIX: Record<Module, Role[]> = {
 
   // ── Owner portal ───────────────────────────────
   'owner.dashboard':      ['super_admin', 'admin', 'owner'],
+
+  // ── Production (Loom) — read / write / control ──
+  'production.designs':              ['super_admin','admin','owner','designer','pm','dispatch','tailor','store'],
+  'production.designs.write':        ['super_admin','admin','owner','designer'],
+  'production.designs.approve':      ['super_admin','admin','owner'],
+  'production.sampleDesigns':        ['super_admin','admin','owner','designer','pm','dispatch'],
+  'production.sampleDesigns.write':  ['super_admin','admin','owner','designer'],
+  'production.sampleDesigns.approve':['super_admin','admin','owner'],
+  'production.samplePieces':         ['super_admin','admin','owner','designer','pm','dispatch'],
+  'production.samplePieces.write':   ['super_admin','admin','owner','designer'],
+  'production.requests':             ['super_admin','admin','owner','pm','dispatch'],
+  'production.requests.approve':     ['super_admin','admin','owner'],
+  'production.requests.reject':      ['super_admin','owner'],
+  'production.requests.edit':        ['super_admin','admin','owner'],
+  'production.pieces':               ['super_admin','admin','owner','pm','dispatch','guard','tailor','store'],
+  'production.pieces.move':          ['super_admin','admin','owner','pm','dispatch','guard'],
+  'production.pieces.reverse':       ['super_admin','admin','owner'],
+  'production.pieces.replace':       ['super_admin','admin','owner','pm'],
+  'production.pieces.assignKarigar': ['super_admin','admin','owner','pm'],
+  'production.karigars':             ['super_admin','admin','owner','pm','dispatch'],
+  'production.karigars.write':       ['super_admin','admin','owner','pm'],
+  'production.labour':               ['super_admin','admin','owner','pm','dispatch'],
+  'production.labour.startStop':     ['super_admin','admin','owner','pm'],
+  'production.qc':                   ['super_admin','admin','owner','pm','dispatch','guard'],
+  'production.qc.perform':           ['guard'],
+  'production.tailor':               ['super_admin','admin','owner','pm','dispatch','tailor'],
+  'production.tailor.startComplete': ['super_admin','admin','owner','dispatch','tailor'],
+  'production.store':                ['super_admin','admin','owner','designer','pm','dispatch'],
+  'production.store.out':            ['super_admin','admin','owner','dispatch'],
+  'production.store.out.issue':      ['super_admin','admin','owner','pm','dispatch'],
+  'production.reports':              ['super_admin','owner'],
+  'production.reports.export':       ['super_admin','owner'],
+  'production.audit':                ['super_admin','admin','owner'],
+  'production.staff':                ['super_admin','admin','owner'],
+  'production.movement':             ['super_admin','admin','owner','pm','dispatch','guard','tailor'],
 };
 
 /**
@@ -105,6 +175,11 @@ export function roleLabel(role: Role | undefined | null): string {
     case 'dispatch': return 'Dispatch';
     case 'accounts': return 'Accounts';
     case 'analysis': return 'Analytics';
+    case 'designer': return 'Designer';
+    case 'pm': return 'Production Manager';
+    case 'guard': return 'Guard';
+    case 'tailor': return 'Tailor';
+    case 'store': return 'Store';
     case 'customer': return 'Customer';
     default: return 'Guest';
   }

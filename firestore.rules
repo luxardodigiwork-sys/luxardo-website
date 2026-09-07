@@ -51,6 +51,139 @@ service cloud.firestore {
     }
     match /contactMessages/{id} { allow create: if true; allow read, update, delete: if isAdmin(); }
     match /newsletterSubscribers/{id} { allow create: if true; allow read, update, delete: if isAdmin(); }
+    /* ── V1 Production System — helpers ─────────────────────────────── */
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getStaffRole() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/staff/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role
+        : '';
+    }
+
+    function isStaffWithRole(role) {
+      return getStaffRole() == role;
+    }
+
+    function isStaffInRoles(roles) {
+      return getStaffRole() in roles;
+    }
+
+    /* Staff identity doc — admin-only CRUD, own read */
+    match /staff/{uid} {
+      allow read: if isStaffWithRole(uid) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    /* ── Catalogue Designs ─────────────────────────────────────────── */
+    match /designs/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','designer','pm','dispatch','tailor','store']);
+      allow create, update: if isAdmin() || isStaffWithRole('designer');
+      allow delete: if false; // no-delete immutability
+    }
+
+    /* ── Sample Designs ─────────────────────────────────────────────── */
+    match /sampleDesigns/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','designer','pm','dispatch']);
+      allow create, update: if isAdmin() || isStaffWithRole('designer');
+      allow delete: if false;
+    }
+
+    /* ── Sample Pieces ──────────────────────────────────────────────── */
+    match /samplePieces/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','designer','pm','dispatch']);
+      allow create, update: if isAdmin() || isStaffWithRole('designer');
+      allow delete: if false;
+    }
+
+    /* ── Production Requests ────────────────────────────────────────── */
+    match /productionRequests/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
+      allow create: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
+      allow update: if isAdmin() || isStaffInRoles(['owner','pm']);
+      allow delete: if false;
+    }
+
+    /* ── Physical Pieces (atomic tracking unit) ──────────────────────── */
+    match /pieces/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch','guard','tailor','store']);
+      allow create, update: if isAdmin() || isStaffInRoles(['owner','pm','dispatch','guard','tailor','store']);
+      allow delete: if false;
+    }
+
+    /* ── Karigars (registry, not login users) ──────────────────────── */
+    match /karigars/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
+      allow create, update: if isAdmin() || isStaffWithRole('pm');
+      allow delete: if false;
+    }
+
+    /* ── Labour Sessions ────────────────────────────────────────────── */
+    match /labourSessions/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
+      allow create: if isSignedIn() && isStaffInRoles(['admin','owner','pm']);
+      allow update: if isAdmin() || isStaffInRoles(['owner','pm']);
+      allow delete: if false;
+    }
+
+    /* ── Guard QC Records ───────────────────────────────────────────── */
+    match /guardQCRecords/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','guard']);
+      allow create: if isStaffWithRole('guard');
+      allow update, delete: if false;
+    }
+
+    /* ── Tailor Sessions ────────────────────────────────────────────── */
+    match /tailorSessions/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','tailor']);
+      allow create, update: if isStaffWithRole('tailor');
+      allow delete: if false;
+    }
+
+    /* ── Store Outs ─────────────────────────────────────────────────── */
+    match /storeOuts/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch','store']);
+      allow create: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch','store']);
+      allow update, delete: if false;
+    }
+
+    /* ── Store Out Issues ───────────────────────────────────────────── */
+    match /storeOutIssues/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','store']);
+      allow create: if isStaffWithRole('store');
+      allow update, delete: if false;
+    }
+
+    /* ── Replacement Links ──────────────────────────────────────────── */
+    match /replacementLinks/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm']);
+      allow create: if isAdmin() || isStaffWithRole('pm');
+      allow update, delete: if false;
+    }
+
+    /* ── Movement Records (append-only audit) ────────────────────────── */
+    match /movementRecords/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch','guard','tailor']);
+      allow create: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch','guard','tailor']);
+      allow update, delete: if false;
+    }
+
+    /* ── Audit Logs (append-only, admin read) ────────────────────────── */
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn(); // Cloud Functions write via Admin SDK, client-side blocked
+      allow update, delete: if false;
+    }
+
+    /* ── ID Counters (atomic, server-managed) ────────────────────────── */
+    match /idCounters/{domain} {
+      allow read, write: if false; // Cloud Functions only (Admin SDK bypasses rules)
+    }
+
+    /* ── Deny-all (catch-all) ───────────────────────────────────────── */
     match /{document=**} { allow read, write: if false; }
   }
 }

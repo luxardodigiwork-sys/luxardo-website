@@ -57,6 +57,30 @@ export const BUSINESS_CONFIG = {
   currencySymbol: "INR"
 };
 
+/**
+ * LUXARDO FASHION — V1 PRODUCTION SYSTEM configuration.
+ * Additive block for the production-management workflow. Values mirror the
+ * finalized business rules: controlled urgency levels, controlled store-out
+ * reasons (5 controlled + OTHER), and karigar hourly-rate defaults.
+ */
+export const PRODUCTION_CONFIG = {
+  urgencyLevels: [
+    { value: "HIGH", label: "High" },
+    { value: "MEDIUM", label: "Medium" },
+    { value: "LOW", label: "Low" },
+  ] as const,
+  storeOutReasons: [
+    { value: "DAMAGE_IN_TRANSIT", label: "Damage in transit" },
+    { value: "SIZE_MISMATCH", label: "Size mismatch" },
+    { value: "QUALITY_REJECT", label: "Quality reject" },
+    { value: "BILLING_DISPUTE", label: "Billing dispute" },
+    { value: "OTHER", label: "Other" },
+  ] as const,
+  defaultHourlyRateRange: { min: 50, max: 500 },
+  qcChecklistDefaults: ["fabric_integrity", "pattern_accuracy", "finish_quality"],
+  productionRoles: ["owner", "admin", "designer", "pm", "dispatch", "guard", "tailor", "store"] as const,
+};
+
 export function isCODEligible(pinCode: string): boolean {
   return BUSINESS_CONFIG.CODAvailablePINs.includes(pinCode.trim());
 }

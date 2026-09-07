@@ -1,91 +1,82 @@
 import React, { useState } from 'react';
-import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Package, FileText, Shield, LogOut, Layers, Crown, Image as ImageIcon, Send, Truck, Settings, Users, BarChart3, Wallet, Menu, X, Mail, Newspaper, Hammer } from 'lucide-react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard, Users, Layers, Package, FileText,
+  LogOut, Menu, X, ChevronRight, Settings, Shield
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import AdminAssistantChatbot from './AdminAssistantChatbot';
+import { can } from '../../utils/rolePermissions';
 import { AnimatePresence, motion } from 'framer-motion';
 
-export default function AdminLayout() {
-  const navigate = useNavigate();
+export default function ProductionLayout() {
   const location = useLocation();
-  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const staffRole = user?.staffRole || '';
+  const effectiveRole = staffRole || user?.role || '';
+
+  const navGroups = [
+    {
+      title: 'Overview',
+      items: [
+        { path: '/production', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin','super_admin','owner','pm','designer','dispatch','guard','tailor','store'] },
+      ],
+    },
+    {
+      title: 'Master Data',
+      items: [
+        { path: '/production/staff', label: 'Staff', icon: Users, roles: ['admin','super_admin','owner'] },
+        { path: '/production/karigars', label: 'Karigars', icon: Users, roles: ['admin','super_admin','owner','pm','dispatch'], show: can(effectiveRole as any, 'production.karigars') },
+      ],
+    },
+    {
+      title: 'System',
+      items: [
+        { path: '/admin/dashboard', label: 'Admin Portal', icon: Shield, roles: ['admin','super_admin'] },
+        { path: '/backend', label: 'E-Commerce Portal', icon: Settings, roles: ['admin','super_admin','owner','dispatch','accounts','analysis'] },
+      ],
+    },
+  ];
+
+  const filteredGroups = navGroups.map(g => ({
+    ...g,
+    items: g.items.filter(it => it.roles.includes(effectiveRole) || (it as any).show !== false),
+  })).filter(g => g.items.length > 0);
 
   const handleLogout = async () => {
     await logout();
     navigate('/admin/login');
   };
 
-  const navGroups = [
-    {
-      title: 'Store',
-      items: [
-        { path: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { path: '/admin/products', label: 'Products', icon: Package },
-        { path: '/admin/collections', label: 'Collections', icon: Layers },
-      ]
-    },
-    {
-      title: 'Content',
-      items: [
-        { path: '/admin/media', label: 'Media', icon: ImageIcon },
-        { path: '/admin/content', label: 'Site Content', icon: FileText },
-        { path: '/admin/prime-content', label: 'Prime Content', icon: Crown },
-        { path: '/admin/policies', label: 'Policies', icon: Shield },
-      ]
-    },
-    {
-      title: 'Customers',
-      items: [
-        { path: '/admin/prime-members', label: 'Prime Members', icon: Users },
-        { path: '/admin/bespoke-requests', label: 'Bespoke Requests', icon: Send },
-        { path: '/admin/partners', label: 'Partners', icon: Wallet },
-        { path: '/admin/contact-messages', label: 'Contact Messages', icon: Mail },
-        { path: '/admin/newsletter', label: 'Newsletter', icon: Newspaper },
-      ]
-    },
-    {
-      title: 'System',
-      items: [
-        { path: '/admin/backend-management', label: 'Staff & Roles', icon: Shield },
-        { path: '/admin/settings', label: 'Settings', icon: Settings },
-      ]
-    },
-    {
-      title: 'Loom',
-      items: [
-        { path: '/production', label: 'Production', icon: Hammer },
-      ]
-    }
-  ];
-
   return (
     <div className="min-h-screen bg-gray-50 flex font-sans text-black selection:bg-black selection:text-white">
-      <AdminAssistantChatbot />
-
-      {/* --- DESKTOP SIDEBAR --- */}
+      {/* ── Desktop Sidebar ── */}
       <aside className="w-64 bg-white border-r border-gray-200 flex-col hidden md:flex h-screen sticky top-0 z-20">
         <div className="p-8 border-b border-gray-100 flex flex-col justify-center min-h-[100px]">
-          <h1 className="font-display text-xl tracking-[0.2em] uppercase text-black">LUXARDO FASHION</h1>
-          <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-2 font-bold">Admin Portal</p>
+          <h1 className="font-display text-xl tracking-[0.2em] uppercase text-black">LUXARDO</h1>
+          <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-2 font-bold">Loom · Production</p>
         </div>
-        
+
         <nav className="flex-1 px-4 py-8 space-y-8 overflow-y-auto no-scrollbar">
-          {navGroups.map((group) => (
+          {filteredGroups.map(group => (
             <div key={group.title} className="space-y-3">
               <h3 className="text-[9px] uppercase tracking-[0.2em] font-bold text-gray-400 px-4 select-none">
                 {group.title}
               </h3>
               <div className="space-y-1">
-                {group.items.map((item) => {
-                  const isActive = location.pathname.startsWith(item.path);
+                {group.items.map(item => {
+                  const isActive = item.path === '/production'
+                    ? location.pathname === '/production'
+                    : location.pathname.startsWith(item.path);
                   return (
                     <Link
                       key={item.path}
                       to={item.path}
                       className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-all duration-200 rounded-lg group ${
-                        isActive 
-                          ? 'bg-black text-white font-medium shadow-sm' 
+                        isActive
+                          ? 'bg-black text-white font-medium shadow-sm'
                           : 'text-gray-500 hover:bg-gray-50 hover:text-black'
                       }`}
                     >
@@ -100,6 +91,9 @@ export default function AdminLayout() {
         </nav>
 
         <div className="p-4 border-t border-gray-100 bg-white">
+          <div className="px-4 pb-3 text-[9px] text-gray-400 uppercase tracking-widest font-bold truncate">
+            {user?.name} · {staffRole || user?.role}
+          </div>
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 px-4 py-3 text-sm text-gray-500 hover:bg-gray-50 hover:text-black w-full text-left transition-all duration-200 rounded-lg group"
@@ -110,7 +104,7 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      {/* --- MOBILE SIDEBAR OVERLAY --- */}
+      {/* ── Mobile Sidebar Overlay ── */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -131,31 +125,30 @@ export default function AdminLayout() {
               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
                 <div>
                   <h1 className="font-display text-lg tracking-[0.2em] uppercase text-black">LUXARDO</h1>
-                  <p className="text-[9px] text-gray-400 uppercase tracking-widest mt-1 font-bold">Admin Portal</p>
+                  <p className="text-[9px] text-gray-400 uppercase tracking-widest mt-1 font-bold">Loom · Production</p>
                 </div>
-                <button 
-                  onClick={() => setIsMobileMenuOpen(false)} 
-                  className="p-2 -mr-2 text-gray-400 hover:text-black hover:bg-gray-50 rounded-lg transition-colors"
-                >
+                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 -mr-2 text-gray-400 hover:text-black hover:bg-gray-50 rounded-lg transition-colors">
                   <X size={20} />
                 </button>
               </div>
-              
+
               <nav className="flex-1 px-4 py-6 space-y-8 overflow-y-auto no-scrollbar">
-                {navGroups.map((group) => (
+                {filteredGroups.map(group => (
                   <div key={group.title} className="space-y-2">
                     <h3 className="text-[9px] uppercase tracking-[0.2em] font-bold text-gray-400 px-4">{group.title}</h3>
                     <div className="space-y-1">
-                      {group.items.map((item) => {
-                        const isActive = location.pathname.startsWith(item.path);
+                      {group.items.map(item => {
+                        const isActive = item.path === '/production'
+                          ? location.pathname === '/production'
+                          : location.pathname.startsWith(item.path);
                         return (
                           <Link
                             key={item.path}
                             to={item.path}
                             onClick={() => setIsMobileMenuOpen(false)}
                             className={`flex items-center gap-3 px-4 py-3 text-sm transition-all duration-200 rounded-lg ${
-                              isActive 
-                                ? 'bg-black text-white font-medium' 
+                              isActive
+                                ? 'bg-black text-white font-medium'
                                 : 'text-gray-500 hover:bg-gray-50 hover:text-black'
                             }`}
                           >
@@ -183,29 +176,21 @@ export default function AdminLayout() {
         )}
       </AnimatePresence>
 
-      {/* --- MAIN CONTENT WRAPPER --- */}
+      {/* ── Main Content ── */}
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden bg-gray-50/50">
-        
         {/* Mobile Header */}
         <header className="md:hidden bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 h-16 flex justify-between items-center sticky top-0 z-30 shadow-sm">
           <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setIsMobileMenuOpen(true)} 
-              className="p-2 -ml-2 text-black hover:bg-gray-100 rounded-lg transition-colors"
-            >
+            <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 text-black hover:bg-gray-100 rounded-lg transition-colors">
               <Menu size={20} />
             </button>
-            <h1 className="font-display text-sm tracking-[0.2em] uppercase text-black">LUXARDO</h1>
+            <h1 className="font-display text-sm tracking-[0.2em] uppercase text-black">Loom</h1>
           </div>
-          <button 
-            onClick={handleLogout} 
-            className="p-2 -mr-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-colors"
-          >
+          <button onClick={handleLogout} className="p-2 -mr-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-colors">
             <LogOut size={18} />
           </button>
         </header>
 
-        {/* Content Outlet */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8 lg:p-10">
           <Outlet />
         </div>

@@ -89,6 +89,14 @@ import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
 import AnalysisLayout from "./components/analysis/AnalysisLayout";
 import AnalysisDashboardPage from "./pages/analysis/AnalysisDashboardPage";
 
+// V1 Production System
+import ProtectedProductionRoute from "./components/production/ProtectedProductionRoute";
+import ProductionLayout from "./components/production/ProductionLayout";
+import ProductionHomePage from "./pages/production/ProductionHomePage";
+import StaffManagementPage from "./pages/production/StaffManagementPage";
+import KarigarListPage from "./pages/production/KarigarListPage";
+import KarigarCreatePage from "./pages/production/KarigarCreatePage";
+
 const ProtectedBackendRoute = ({
   role,
   permission,
@@ -287,6 +295,21 @@ export default function App() {
                 element={<Navigate to="/analysis/dashboard" replace />}
               />
               <Route path="dashboard" element={<AnalysisDashboardPage />} />
+            </Route>
+
+            {/* ── V1 Production System (Loom) ────────────────────────── */}
+            <Route
+              path="/production"
+              element={
+                <ProtectedProductionRoute>
+                  <ProductionLayout />
+                </ProtectedProductionRoute>
+              }
+            >
+              <Route index element={<ProductionHomePage />} />
+              <Route path="staff" element={<StaffManagementPage />} />
+              <Route path="karigars" element={<KarigarListPage />} />
+              <Route path="karigars/new" element={<KarigarCreatePage />} />
             </Route>
 
             <Route path="/" element={<Layout />}>

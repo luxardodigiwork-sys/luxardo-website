@@ -177,3 +177,6 @@ export const razorpayWebhook = onRequest(
 
 // Email notifications (Day 3 — existing)
 export { sendOrderEmail } from "./emailSender";
+
+// V1 Production System — master-data CRUD + atomic ID generation
+export { nextId, staffCreate, staffUpdate, karigarCreate, karigarUpdate } from "./production";

@@ -20,6 +20,15 @@ service firebase.storage {
     match /users/{uid}/{p=**} { allow read: if true; allow write: if isOwner(uid) && isImage() && maxSize(5); }
     match /orders/{uid}/{p=**} { allow read: if isOwner(uid) || isAdmin(); allow write: if isAdmin() && maxSize(15); }
     match /bespoke/{uid}/{p=**} { allow read: if isOwner(uid) || isAdmin(); allow write: if isOwner(uid) && maxSize(10); }
+    /* ── V1 Production Storage ──────────────────────────────────────── */
+    match /production/designs/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /production/sampleDesigns/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /production/samplePieces/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /production/guardQC/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin() && isImage() && maxSize(10); }
+    match /production/tailor/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin() && isImage() && maxSize(10); }
+    match /production/store/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+
+    /* ── Deny-all ──────────────────────────────────────────────────────── */
     match /{p=**} { allow read, write: if false; }
   }
 }

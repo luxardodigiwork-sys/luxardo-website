@@ -55,6 +55,11 @@ export default function BackendGatewayPage() {
   // If already signed in with a recognised staff role, route them straight to their dashboard.
   useEffect(() => {
     if (!isAuthReady || !user) return;
+    // V1 production staff (designer/pm/guard/tailor/store) go to the Loom production portal
+    if (user.staffRole) {
+      navigate('/production', { replace: true });
+      return;
+    }
     const role = (user.role || '').toLowerCase();
     if (['admin', 'super_admin'].includes(role)) {
       navigate('/admin/dashboard', { replace: true });

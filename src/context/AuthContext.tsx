@@ -10,6 +10,7 @@ interface User {
   name: string;
   email?: string;
   role: string;
+  staffRole?: string | null; // V1 production role (designer/pm/guard/tailor/store) from staff/{uid} doc
   isPrimeMember: boolean;
   permissions?: Record<string, boolean>;
   country?: string;
@@ -91,11 +92,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (customerDoc.exists()) {
             const data = customerDoc.data();
+
+            // ── V1 production staff identity ──────────────────────────────
+            // Read staff/{uid} in parallel to get the production role (designer/pm/guard/tailor/store).
+            // This is additive — does not modify the existing customer flow.
+            let staffRole: string | null = null;
+            try {
+              const staffRef = doc(db, 'staff', firebaseUser.uid);
+              const staffDoc = await getDoc(staffRef);
+              if (staffDoc.exists()) {
+                const s = staffDoc.data();
+                staffRole = s.role || null;
+              }
+            } catch (e) {
+              // Non-fatal: staff doc may not exist for non-production users
+            }
+
             const userData: User = {
               id: firebaseUser.uid,
               name: data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : data.name || 'User',
               email: data.email || firebaseUser.email || '',
               role: data.role || 'customer',
+              staffRole,
               isPrimeMember: data.isPrimeMember || false,
               phone: data.phone || firebaseUser.phoneNumber || '',
               country: data.country, language: data.language, currency: data.currency,
@@ -116,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               name: firebaseUser.displayName || 'User',
               email: firebaseUser.email || '',
               role: 'customer',
+              staffRole: null,
               isPrimeMember: false,
               phone: firebaseUser.phoneNumber || '',
             };
@@ -178,6 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name: data.user.full_name || data.user.email,
       email: data.user.email,
       role: data.user.role,
+      staffRole: null, // SQLite JWT login — no production staff role
       isPrimeMember: false,
       permissions: data.user.permissions || {},
       forcePasswordReset: data.user.force_password_reset === 1,
