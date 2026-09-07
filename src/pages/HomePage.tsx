@@ -5,24 +5,17 @@ import { Country, Language } from "../types";
 import { storage } from "../utils/localStorage";
 import { useAuth } from "../context/AuthContext";
 import { db } from '../firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs } from 'firebase/firestore';
 import { subscribeSiteContent } from '../utils/siteContentSync';
 
 const isMissingImage = (src?: string) => !src || src === '/placeholder.svg' || src.endsWith('placeholder.svg') || src.startsWith('data:');
 
 const HERO_SLIDES = [
-  { id: 1, imageUrl: '', heading: 'Modern Ethnic Menswear', subtext: 'Premium fabrics. Structured silhouettes. Crafted in Bhilwara.', cta: 'Shop Collections', link: '/collections' },
-  { id: 2, imageUrl: '', heading: 'Constructed With Intent', subtext: 'A philosophy of slow luxury and disciplined craftsmanship.', cta: 'Discover Our Story', link: '/about' },
-  { id: 3, imageUrl: '', heading: 'Designed for Every Occasion', subtext: 'From wedding festivities to formal excellence.', cta: 'View Collections', link: '/collections' }
+  { id: 1, imageUrl: '', heading: 'Modern Ethnic Menswear', subtext: 'Premium fabrics. Structured silhouettes. Crafted in Bhilwara.', cta: 'Shop Collections', link: '/collections' }
 ];
 
 const FALLBACK_STORY_STEPS = [
-  { title: "Our Story.", subtitle: "Design Sketching", description: "From the world's finest mills to your wardrobe. A journey of uncompromising quality, expert craftsmanship, and timeless design.", image: "/placeholder.svg" },
-  { title: "Global Sourcing", subtitle: "01 / Premium Fabric", description: "We import premium fabrics from across the entire world, meticulously selecting only the finest materials.", image: "/placeholder.svg" },
-  { title: "Fabric Finishing", subtitle: "02 / Treatment", description: "Each fabric undergoes specialized finishing processes, enhancing its natural texture, drape, and longevity.", image: "/placeholder.svg" },
-  { title: "Personalized Sketching", subtitle: "03 / Design", description: "Our master designers sketch personalized, bespoke designs, translating your vision into detailed sartorial blueprints.", image: "/placeholder.svg" },
-  { title: "Expert Craftsmanship", subtitle: "04 / Tailoring", description: "Master tailors bring designs to life with traditional techniques refined over generations.", image: "/placeholder.svg" },
-  { title: "Ready For You", subtitle: "05 / Box Packing", description: "The journey concludes with the ready-to-stitch fabric elegantly folded and secured in our premium box packing.", image: "/placeholder.svg" }
+  { title: "Our Story.", subtitle: "Design Sketching", description: "From the world's finest mills to your wardrobe.", image: "/placeholder.svg" }
 ];
 
 function HomeOurStorySection({ siteContent }: { siteContent: any }) {
@@ -100,6 +93,9 @@ function HomeOurStorySection({ siteContent }: { siteContent: any }) {
                 <span className="text-[10px] uppercase tracking-[0.4em] font-bold text-brand-secondary mb-3 block">{currentStep.subtitle}</span>
                 <h3 className="text-3xl font-display tracking-tight text-brand-black mb-3">{isFirst ? <span className="font-bold text-brand-black">Our Story.</span> : currentStep.title}</h3>
                 <p className="text-sm text-brand-secondary/80 font-light leading-relaxed mb-6">{currentStep.description}</p>
+                <div className="flex flex-col gap-4 pt-6 border-t border-brand-black/10">
+                  <Link to="/about" className="text-[10px] uppercase tracking-[0.3em] font-bold text-brand-black border-b border-brand-black pb-1 w-fit">Read Full Story</Link>
+                </div>
               </motion.div>
             </AnimatePresence>
           </div>
@@ -130,18 +126,37 @@ function AnimatedCounter({ value, suffix = "", start = 0, duration = 2.5 }: { va
 
 export default function HomePage() {
   const { selectedCountry } = useOutletContext<{ selectedCountry: Country | null; selectedLanguage: Language }>();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [wholesaleLoading, setWholesaleLoading] = useState(false);
   const [wholesaleSuccess, setWholesaleSuccess] = useState(false);
   
-  // 🚀 LIVE FIREBASE SYNC
+  // LIVE FIREBASE SYNC FOR CONTENT
   const [siteContent, setSiteContent] = useState(storage.getSiteContent());
+  // 🚀 MASTER FIX: LIVE FIREBASE SYNC FOR COLLECTIONS (Directly from Admin)
+  const [liveCollections, setLiveCollections] = useState<any[]>([]);
   
   useEffect(() => {
     const unsubscribe = subscribeSiteContent((content) => {
       if (content) setSiteContent(content);
     });
+
+    // Fetch REAL collections from Firestore 'categories'
+    const fetchLiveCollections = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'categories'));
+        const cats = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        cats.sort((a: any, b: any) => a.sortOrder - b.sortOrder);
+        setLiveCollections(cats.filter((c: any) => c.isVisible));
+      } catch (err) {
+        console.error("Failed to load live collections", err);
+      }
+    };
+    fetchLiveCollections();
+
     return () => unsubscribe();
   }, []);
 
@@ -224,23 +239,78 @@ export default function HomePage() {
     <div className="bg-brand-bg text-brand-black">
       <section className="relative min-h-[100dvh] md:min-h-0 md:h-[92vh] overflow-hidden bg-brand-black" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
         {siteContent.homepage.hero.mediaType === 'video' && siteContent.homepage.hero.videoUrl ? (
+          // ── MODE: Custom video loop ──
           <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden">
-            <video className="absolute top-1/2 left-1/2 w-full h-full object-cover -translate-x-1/2 -translate-y-1/2" src={siteContent.homepage.hero.videoUrl} autoPlay muted loop playsInline />
+            <video
+              className="absolute top-1/2 left-1/2 w-full h-full object-cover -translate-x-1/2 -translate-y-1/2"
+              src={siteContent.homepage.hero.videoUrl}
+              autoPlay muted loop playsInline
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-brand-black/30 via-brand-black/10 to-brand-black/70 pointer-events-none" />
+          </div>
+        ) : isMissingImage(heroSlides[currentSlide]?.imageUrl) ? (
+          // ── MODE: Image slides — typography fallback when no image uploaded ──
+          <div className="absolute inset-0 bg-gradient-to-br from-[#1a1a1a] via-brand-black to-[#0d0d0d]">
+            <div className="absolute inset-0 opacity-[0.06]" style={{
+              backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
+              backgroundSize: '80px 80px',
+            }} />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="text-[40vw] md:text-[28vw] font-display text-white/[0.04] leading-none tracking-tighter select-none">L</span>
+            </div>
           </div>
         ) : (
-          <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden">
-            <iframe src="https://www.youtube.com/embed/1zOfwTVrcbE?autoplay=1&mute=1&loop=1&playlist=1zOfwTVrcbE&controls=0&showinfo=0&rel=0&modestbranding=1" title="Laxardo Background Video" className="absolute top-1/2 left-1/2 w-[100vw] h-[56.25vw] min-h-[100vh] min-w-[177.77vh] -translate-x-1/2 -translate-y-1/2 object-cover opacity-60" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen style={{ pointerEvents: 'none' }}></iframe>
-          </div>
+          // ── MODE: Image slides — real images carousel ──
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={heroSlides[currentSlide]?.id || currentSlide}
+              initial={{ opacity: 0, scale: 1.05 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1.5, ease: 'easeInOut' }}
+              className="absolute inset-0"
+            >
+              <img
+                src={heroSlides[currentSlide].imageUrl}
+                alt={heroSlides[currentSlide].heading || 'LUXARDO'}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-brand-black/40 via-brand-black/15 to-brand-black/80 pointer-events-none" />
+            </motion.div>
+          </AnimatePresence>
         )}
         <div className="absolute inset-0 flex flex-col items-start justify-center text-brand-white text-left px-6 md:px-16 lg:px-24 z-30 pt-20 md:pt-0">
           <div className="w-full max-w-2xl">
             <AnimatePresence mode="wait">
-              <motion.div key={`content-video`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.8 }} className="flex flex-col items-start gap-6 md:gap-8">
-                <div className="flex items-center gap-3 opacity-90"><span className="w-10 md:w-14 h-[1px] bg-white/60"></span><span className="text-[9px] md:text-[11px] uppercase tracking-[0.4em] font-bold text-white/70">LUXARDO · FASHION</span></div>
-                <h1 className="text-4xl md:text-6xl lg:text-8xl font-display tracking-tight leading-[1.05] font-light drop-shadow-lg">{heroSlides[0]?.heading || 'LAXARDO'}</h1>
-                <p className="text-sm md:text-lg text-white/90 font-light max-w-md leading-relaxed drop-shadow-md">{heroSlides[0]?.subtext || ''}</p>
-                <Link to='/collections' className="mt-2 inline-flex items-center gap-3 bg-white text-brand-black px-8 md:px-10 py-4 text-[10px] md:text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-white/90 transition-colors">
-                  Discover the Collection <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+              <motion.div
+                key={`content-${siteContent.homepage.hero.mediaType === 'video' ? 'video' : currentSlide}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.8 }}
+                className="flex flex-col items-start gap-6 md:gap-8"
+              >
+                <div className="flex items-center gap-3 opacity-90">
+                  <span className="w-10 md:w-14 h-[1px] bg-white/60"></span>
+                  <span className="text-[9px] md:text-[11px] uppercase tracking-[0.4em] font-bold text-white/70">LUXARDO · FASHION</span>
+                </div>
+                <h1 className="text-4xl md:text-6xl lg:text-8xl font-display tracking-tight leading-[1.05] font-light drop-shadow-lg">
+                  {heroSlides[currentSlide]?.heading || siteContent.homepage.hero.title || 'LUXARDO'}
+                </h1>
+                {(heroSlides[currentSlide]?.subtext || siteContent.homepage.hero.subtitle) && (
+                  <p className="text-sm md:text-lg text-white/90 font-light max-w-md leading-relaxed drop-shadow-md">
+                    {heroSlides[currentSlide]?.subtext || siteContent.homepage.hero.subtitle}
+                  </p>
+                )}
+                <Link
+                  to={heroSlides[currentSlide]?.link || siteContent.homepage.hero.primaryCtaLink || '/collections'}
+                  className="mt-2 inline-flex items-center gap-3 bg-white text-brand-black px-8 md:px-10 py-4 text-[10px] md:text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-white/90 transition-colors"
+                >
+                  {heroSlides[currentSlide]?.cta || siteContent.homepage.hero.primaryCtaText || 'Discover the Collection'}
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
                 </Link>
               </motion.div>
             </AnimatePresence>
@@ -248,33 +318,44 @@ export default function HomePage() {
         </div>
       </section>
 
-      <div className="w-full bg-brand-black border-t border-brand-white/10 py-4 md:py-6">
-        <div className="max-w-[1600px] mx-auto px-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-3 md:gap-12 text-center">
-          <span className="text-[9px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.3em] font-bold text-brand-white/80 whitespace-nowrap">Ready to Stitch Fabric</span><span className="hidden md:block w-1 h-1 rounded-full bg-brand-white/30"></span>
-          <span className="text-[9px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.3em] font-bold text-brand-white/80 whitespace-nowrap">Full Customization</span><span className="hidden md:block w-1 h-1 rounded-full bg-brand-white/30"></span>
-          <span className="text-[9px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.3em] font-bold text-brand-white/80 whitespace-nowrap">Available for Bulk Quantity</span>
-        </div>
-      </div>
-
       <section className="bg-[#F8F8F8] py-16 md:py-28 overflow-hidden border-t border-brand-black/10">
         <div className="max-w-[1600px] mx-auto px-4 md:px-12 text-center flex flex-col items-center">
           <span className="w-[1px] h-12 md:h-16 bg-brand-black/20 mb-6 md:mb-8"></span>
-          <p className="text-[10px] uppercase tracking-[0.5em] font-bold text-brand-secondary mb-4 md:mb-6">{siteContent.homepage.collections.label}</p>
-          <h2 className="text-4xl md:text-7xl font-display tracking-tight text-brand-black">{siteContent.homepage.collections.heading}</h2>
+          <p className="text-[10px] uppercase tracking-[0.5em] font-bold text-brand-secondary mb-4 md:mb-6">{siteContent.homepage.collections.label || 'Collections'}</p>
+          <h2 className="text-4xl md:text-7xl font-display tracking-tight text-brand-black">{siteContent.homepage.collections.heading || 'Our Masterpieces'}</h2>
         </div>
       </section>
 
+      {/* 🚀 RENDER LIVE COLLECTIONS FROM FIREBASE */}
       <div className="relative bg-brand-black">
-        {(siteContent.homepage.collections.items || []).map((collection: any, index: number) => {
+        {liveCollections.map((collection: any, index: number) => {
           const isLeft = index % 2 === 0;
+          const total = liveCollections.length;
+          // Use heroImageUrl from Firebase
+          const missingImage = isMissingImage(collection.heroImageUrl);
           return (
-            <section key={index} className="relative min-h-[75vh] md:min-h-0 md:h-screen w-full overflow-hidden bg-brand-black">
-              <motion.img initial={{ scale: 1.15 }} whileInView={{ scale: 1 }} transition={{ duration: 2, ease: 'easeOut' }} viewport={{ once: true, amount: 0.1 }} src={collection.image} alt={collection.title} className="absolute inset-0 w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-b from-brand-black/40 via-brand-black/60 to-brand-black/90 md:bg-gradient-to-br md:from-brand-black/70 md:via-brand-black/30 md:to-brand-black/70" />
+            <section key={collection.id} className="relative min-h-[75vh] md:min-h-0 md:h-screen w-full overflow-hidden bg-brand-black">
+              {missingImage ? (
+                <div className="absolute inset-0 bg-gradient-to-br from-[#1c1c1c] via-brand-black to-[#0a0a0a] flex items-center justify-center">
+                  <span className="text-[55vw] md:text-[40vw] font-display text-white/[0.05] leading-none tracking-tighter select-none">{String(index + 1).padStart(2, '0')}</span>
+                </div>
+              ) : (
+                <>
+                  <motion.img initial={{ scale: 1.15 }} whileInView={{ scale: 1 }} transition={{ duration: 2, ease: 'easeOut' }} viewport={{ once: true, amount: 0.1 }} src={collection.heroImageUrl} alt={collection.name} className="absolute inset-0 w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-brand-black/40 via-brand-black/60 to-brand-black/90 md:bg-gradient-to-br md:from-brand-black/70 md:via-brand-black/30 md:to-brand-black/70" />
+                </>
+              )}
               <div className={`absolute inset-0 flex flex-col items-center md:items-${isLeft ? 'start' : 'end'} justify-end md:justify-center pb-24 md:pb-0 px-6 md:px-16 lg:px-32 z-10 text-center md:text-${isLeft ? 'left' : 'right'}`}>
                 <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="max-w-2xl w-full">
-                  <h3 className="text-4xl md:text-7xl lg:text-8xl font-display font-light tracking-tight text-white mb-4 md:mb-10 leading-[1.05]">{collection.title}</h3>
-                  <Link to={collection.link || '/collections'} className="inline-flex items-center justify-center gap-3 bg-white text-brand-black px-8 md:px-10 py-3.5 md:py-4 w-full md:w-auto text-[10px] md:text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-white/90 group">Explore {collection.title}</Link>
+                  <div className={`flex items-center gap-4 mb-4 md:mb-8 justify-center md:justify-${isLeft ? 'start' : 'end'}`}>
+                    <span className="w-8 md:w-16 h-[1px] bg-white/60"></span>
+                    <span className="text-[10px] md:text-xs uppercase tracking-[0.4em] font-bold text-white/70">Collection {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}</span>
+                  </div>
+                  <h3 className="text-4xl md:text-7xl lg:text-8xl font-display font-light tracking-tight text-white mb-4 md:mb-10 leading-[1.05]">{collection.name}</h3>
+                  <p className="text-sm md:text-xl text-white/80 font-light max-w-xl mx-auto md:mx-0 leading-relaxed mb-8 md:mb-12">{collection.shortDescription}</p>
+                  
+                  {/* Link passes the SLUG perfectly */}
+                  <Link to={`/collections/${collection.slug}`} className="inline-flex items-center justify-center gap-3 bg-white text-brand-black px-8 md:px-10 py-3.5 md:py-4 w-full md:w-auto text-[10px] md:text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-white/90 group">Explore {collection.name}</Link>
                 </motion.div>
               </div>
             </section>
@@ -284,7 +365,7 @@ export default function HomePage() {
 
       <HomeOurStorySection siteContent={siteContent} />
 
-      <section ref={storyRef} className="bg-brand-white pb-16 md:pb-24 pt-8 md:pt-12 overflow-hidden">
+      <section className="bg-brand-white pb-16 md:pb-24 pt-8 md:pt-12 overflow-hidden">
         <div className="max-w-[1400px] mx-auto px-6 md:px-12">
           <motion.div style={{ y: statsY }} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 md:gap-8 pt-8 md:pt-12 border-t border-brand-black/10">
             <div className="text-center flex flex-col items-center"><span className="text-4xl md:text-6xl font-display font-light text-brand-black mb-2"><AnimatedCounter value={2015} start={2000} duration={2} /></span><span className="text-[9px] uppercase tracking-[0.3em] font-bold text-brand-secondary">Year Established</span></div>

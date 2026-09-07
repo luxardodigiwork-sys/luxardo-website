@@ -22,3 +22,4 @@ LUXARDO FASHION.db
 *.db
 src/pages/admin/*.old
 luxardo fashion-production-setup.sh
+.aider*

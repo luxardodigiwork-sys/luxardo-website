@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Instagram, Facebook, Twitter, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Instagram, Facebook, Twitter, Youtube, Linkedin, ArrowRight, CheckCircle2 } from "lucide-react";
 import { BUSINESS_CONFIG } from "../constants/businessConfig";
 import Logo from "./Logo";
 // Firebase imports for Newsletter
@@ -110,10 +110,12 @@ export default function ComplianceFooter() {
             {/* Social Section */}
             <div className="space-y-4">
               <h4 className="text-[11px] uppercase tracking-[0.25em] font-semibold text-neutral-400">Find Us On</h4>
-              <div className="flex gap-4 lg:justify-end text-neutral-400">
-                <a href="#" className="hover:text-white transition-colors" aria-label="Instagram"><Instagram size={18} /></a>
-                <a href="#" className="hover:text-white transition-colors" aria-label="Facebook"><Facebook size={18} /></a>
-                <a href="#" className="hover:text-white transition-colors" aria-label="Twitter"><Twitter size={18} /></a>
+              <div className="flex gap-4 lg:justify-end text-neutral-400 flex-wrap">
+                <a href="https://instagram.com/luxardofashion" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors" aria-label="Instagram"><Instagram size={18} /></a>
+                <a href="https://facebook.com/luxardofashion" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors" aria-label="Facebook"><Facebook size={18} /></a>
+                <a href="https://twitter.com/luxardofashion" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors" aria-label="Twitter / X"><Twitter size={18} /></a>
+                <a href="https://youtube.com/@luxardofashion" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors" aria-label="YouTube"><Youtube size={18} /></a>
+                <a href="https://linkedin.com/company/luxardofashion" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors" aria-label="LinkedIn"><Linkedin size={18} /></a>
               </div>
             </div>
           </div>

@@ -32,6 +32,14 @@ export const BUSINESS_CONFIG = {
     "302044", "302046", "302048",
     "303001", "303050"
   ],
+  socials: {
+    instagram: "https://instagram.com/luxardofashion",
+    facebook: "https://facebook.com/luxardofashion",
+    twitter: "https://twitter.com/luxardofashion",
+    youtube: "https://youtube.com/@luxardofashion",
+    linkedin: "https://linkedin.com/company/luxardofashion",
+    pinterest: "",
+  },
   upiId: "",
   bankAccount: { 
     name: "LUXARDO FASHION WORLD PRIVATE LIMITED",
