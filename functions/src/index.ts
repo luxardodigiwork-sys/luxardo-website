@@ -229,3 +229,8 @@ export {
   labourStart,
   labourStop,
 } from "./labour";
+
+// Phase 3 · Block 5 — Guard QC domain
+export {
+  guardQcPerform,
+} from "./guardQc";

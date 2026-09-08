@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { doc, getDoc, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { ArrowLeft, Loader2, Package, Clock, User, RefreshCw, AlertCircle, ChevronRight, X, Users, Play, Square } from 'lucide-react';
+import { ArrowLeft, Loader2, Package, Clock, User, RefreshCw, AlertCircle, ChevronRight, X, Users, Play, Square, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/rolePermissions';
 import { functions } from '../../firebase';
@@ -89,12 +89,17 @@ export default function PieceDetailPage() {
   const [pendingMove, setPendingMove] = useState<string | null>(null);
   const [moveBusy, setMoveBusy] = useState(false);
   const [moveNotice, setMoveNotice] = useState('');
+  const [qcVerdict, setQcVerdict] = useState('');
+  const [qcReason, setQcReason] = useState('');
+  const [qcBusy, setQcBusy] = useState(false);
+  const [qcNotice, setQcNotice] = useState('');
 
   const effectiveRole = (user?.staffRole || user?.role || '') as any;
   const canAssignKarigar = can(effectiveRole, 'production.pieces.assignKarigar');
   const canReadLabour = can(effectiveRole, 'production.labour');
   const canStartStop = can(effectiveRole, 'production.labour.startStop');
   const canMove = can(effectiveRole, 'production.pieces.move');
+  const canPerformQc = can(effectiveRole, 'production.qc.perform');
 
   const callFn = async (fnName: string, data: Record<string, unknown>) => {
     try {
@@ -274,6 +279,32 @@ export default function PieceDetailPage() {
       await load();
     }
     setMoveBusy(false);
+  };
+
+  const handleQc = async () => {
+    if (!qcVerdict || qcBusy) return;
+    if (qcVerdict !== 'PASS' && !qcReason.trim()) {
+      setQcNotice('A reason is mandatory for REWORK and COMPLETE_REJECT.');
+      return;
+    }
+    setQcBusy(true);
+    setQcNotice('');
+    try {
+      await httpsCallable(functions, 'guardQcPerform')({
+        pieceId: piece.id,
+        verdict: qcVerdict,
+        reason: qcReason.trim(),
+      });
+      setQcVerdict('');
+      setQcReason('');
+      setQcNotice('QC recorded.');
+      await load();
+    } catch (err: any) {
+      console.error('guardQcPerform failed:', err);
+      setQcNotice(err?.message || 'QC failed. Please try again.');
+    } finally {
+      setQcBusy(false);
+    }
   };
 
   return (
@@ -466,6 +497,62 @@ export default function PieceDetailPage() {
             </div>
           )}
           {moveNotice && <p className="mt-3 text-xs text-emerald-600">{moveNotice}</p>}
+        </div>
+      )}
+
+      {/* Guard QC */}
+      {canPerformQc && piece.stage === 'QC_PENDING' && !isClosed && (
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400">Guard QC</h2>
+            <span className="inline-flex items-center gap-1.5 text-[10px] text-gray-400 font-mono">
+              <ShieldCheck size={12} />
+              QC_PENDING
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mb-4">
+            {['PASS', 'REWORK', 'COMPLETE_REJECT'].map(v => (
+              <button
+                key={v}
+                onClick={() => { setQcVerdict(v); setQcNotice(''); }}
+                disabled={qcBusy}
+                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors disabled:opacity-40 ${
+                  qcVerdict === v
+                    ? (v === 'PASS' ? 'bg-emerald-600 text-white' : v === 'REWORK' ? 'bg-orange-600 text-white' : 'bg-red-600 text-white')
+                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+
+          {qcVerdict && qcVerdict !== 'PASS' && (
+            <textarea
+              value={qcReason}
+              onChange={e => setQcReason(e.target.value)}
+              rows={3}
+              disabled={qcBusy}
+              placeholder="Mandatory reason for REWORK / COMPLETE_REJECT…"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all mb-3"
+            />
+          )}
+
+          {qcVerdict && (
+            <button
+              onClick={handleQc}
+              disabled={qcBusy}
+              className="px-4 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:opacity-80 transition-opacity disabled:opacity-40"
+            >
+              {qcBusy ? 'Recording…' : `Confirm ${qcVerdict}`}
+            </button>
+          )}
+          {qcNotice && (
+            <p className={`mt-3 text-xs ${qcNotice === 'QC recorded.' ? 'text-emerald-600' : 'text-red-500'}`}>
+              {qcNotice}
+            </p>
+          )}
         </div>
       )}
 

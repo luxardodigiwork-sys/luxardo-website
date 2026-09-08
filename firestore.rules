@@ -156,11 +156,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    /* ── Guard QC Records ───────────────────────────────────────────── */
+    /* ── Guard QC Records ─────────────────────────────────────────────
+     * All writes via Cloud Functions (guardQcPerform) — client read-only.
+     */
     match /guardQCRecords/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','guard']);
-      allow create: if isStaffWithRole('guard');
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     /* ── Tailor Sessions ────────────────────────────────────────────── */
