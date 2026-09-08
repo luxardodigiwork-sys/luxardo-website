@@ -111,6 +111,7 @@ import ProductionRequestCreatePage from "./pages/production/ProductionRequestCre
 import ProductionRequestDetailPage from "./pages/production/ProductionRequestDetailPage";
 import PieceListPage from "./pages/production/PieceListPage";
 import PieceDetailPage from "./pages/production/PieceDetailPage";
+import GuardQcWorkspacePage from "./pages/production/GuardQcWorkspacePage";
 
 const ProtectedBackendRoute = ({
   role,
@@ -341,6 +342,7 @@ export default function App() {
               {/* Phase 2 — Production Pieces */}
               <Route path="pieces" element={<PieceListPage />} />
               <Route path="pieces/:id" element={<PieceDetailPage />} />
+              <Route path="qc" element={<GuardQcWorkspacePage />} />
             </Route>
 
             <Route path="/" element={<Layout />}>
