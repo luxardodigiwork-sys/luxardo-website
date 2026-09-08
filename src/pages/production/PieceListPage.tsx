@@ -1,10 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../../firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { Package, Search, Loader2, Eye } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/rolePermissions';
+
+const STAGE_FILTERS = [
+  'ALL', 'OPEN', 'IN_WORK', 'QC_PENDING', 'REWORK', 'QC_PASS', 'DISPATCH_READY',
+  'STORE_OUT', 'REJECTED',
+];
+
+const FILTER_CHIP: Record<string, string> = {
+  ALL: 'bg-black text-white',
+  OPEN: 'bg-gray-100 text-gray-600',
+  IN_WORK: 'bg-blue-50 text-blue-600',
+  QC_PENDING: 'bg-amber-50 text-amber-600',
+  REWORK: 'bg-orange-50 text-orange-600',
+  QC_PASS: 'bg-emerald-50 text-emerald-600',
+  DISPATCH_READY: 'bg-emerald-50 text-emerald-700',
+  STORE_OUT: 'bg-teal-50 text-teal-700',
+  REJECTED: 'bg-red-50 text-red-500',
+};
 
 const STAGE_COLORS: Record<string, string> = {
   OPEN: 'bg-gray-100 text-gray-600',
@@ -25,13 +42,22 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function PieceListPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const [pieces, setPieces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const stageFilterRaw = searchParams.get('stage') || 'ALL';
+  const stageFilter = STAGE_FILTERS.includes(stageFilterRaw) ? stageFilterRaw : 'ALL';
+
   const effectiveRole = (user?.staffRole || user?.role || '') as any;
   const canView = can(effectiveRole, 'production.pieces');
+
+  const setStageFilter = (s: string) => {
+    if (s === 'ALL') setSearchParams({});
+    else setSearchParams({ stage: s });
+  };
 
   const loadPieces = useCallback(async () => {
     try {
@@ -47,12 +73,15 @@ export default function PieceListPage() {
 
   useEffect(() => { loadPieces(); }, [loadPieces]);
 
-  const filtered = pieces.filter(p =>
-    p.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.prId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.designId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.stage || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = pieces.filter(p => {
+    const matchesStage = stageFilter === 'ALL' || (p.stage || 'OPEN') === stageFilter;
+    const matchesSearch =
+      p.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.prId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.designId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.stage || '').toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesStage && matchesSearch;
+  });
 
   if (!canView) {
     return (
@@ -69,6 +98,24 @@ export default function PieceListPage() {
           <h1 className="text-2xl font-display text-black tracking-wide">Production Pieces</h1>
           <p className="text-xs text-gray-500 font-sans mt-1">Physical piece tracking — generated from approved PRs</p>
         </div>
+      </div>
+
+      {/* Stage filter chips (drill-down from the dashboard pipeline) */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {STAGE_FILTERS.map(s => (
+          <button
+            key={s}
+            onClick={() => setStageFilter(s)}
+            className={`inline-flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors ${
+              stageFilter === s ? FILTER_CHIP[s] : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            {s}
+            {s !== 'ALL' && (
+              <span className="ml-1.5 opacity-60">{pieces.filter(p => (p.stage || 'OPEN') === s).length}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Search */}
