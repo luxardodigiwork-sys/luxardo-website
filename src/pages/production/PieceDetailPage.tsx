@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { doc, getDoc, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { ArrowLeft, Loader2, Package, Clock, User, RefreshCw, AlertCircle, ChevronRight, X, Users, Play, Square, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Loader2, Package, Clock, User, RefreshCw, AlertCircle, ChevronRight, X, Users, Play, Square, ShieldCheck, RotateCcw, Ban, CopyPlus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/rolePermissions';
 import { functions } from '../../firebase';
@@ -93,6 +93,12 @@ export default function PieceDetailPage() {
   const [qcReason, setQcReason] = useState('');
   const [qcBusy, setQcBusy] = useState(false);
   const [qcNotice, setQcNotice] = useState('');
+  const [lifecycleAction, setLifecycleAction] = useState('');
+  const [lifecycleReason, setLifecycleReason] = useState('');
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [lifecycleNotice, setLifecycleNotice] = useState('');
+  const [lifecycleError, setLifecycleError] = useState(false);
+  const [replacementPieceId, setReplacementPieceId] = useState('');
 
   const effectiveRole = (user?.staffRole || user?.role || '') as any;
   const canAssignKarigar = can(effectiveRole, 'production.pieces.assignKarigar');
@@ -100,6 +106,7 @@ export default function PieceDetailPage() {
   const canStartStop = can(effectiveRole, 'production.labour.startStop');
   const canMove = can(effectiveRole, 'production.pieces.move');
   const canPerformQc = can(effectiveRole, 'production.qc.perform');
+  const canLifecycle = can(effectiveRole, 'production.pieces.replace');
 
   const callFn = async (fnName: string, data: Record<string, unknown>) => {
     try {
@@ -220,6 +227,12 @@ export default function PieceDetailPage() {
   const isClosed = piece.status === 'closed' || piece.status === 'replaced';
   const currentStage = piece.stage || 'OPEN';
   const nextStages = NEXT_STAGES[currentStage] || [];
+  const isReworked = piece.status === 'in_rework' || currentStage === 'REWORK';
+  const isCompletelyRejected =
+    piece.status === 'closed' &&
+    currentStage === 'REJECTED' &&
+    piece.rejectionType === 'COMPLETE_REJECT' &&
+    !piece.replacedByPieceId;
 
   const handleAssign = async () => {
     if (!selectedKarigar || busy) return;
@@ -304,6 +317,40 @@ export default function PieceDetailPage() {
       setQcNotice(err?.message || 'QC failed. Please try again.');
     } finally {
       setQcBusy(false);
+    }
+  };
+
+  const handleLifecycle = async () => {
+    if (!lifecycleAction || lifecycleBusy) return;
+    const reason = lifecycleReason.trim();
+    if (!reason) { setLifecycleNotice('A reason is mandatory.'); setLifecycleError(true); return; }
+    setLifecycleBusy(true);
+    setLifecycleNotice('');
+    setLifecycleError(false);
+    try {
+      if (lifecycleAction === 'REWORK') {
+        await httpsCallable(functions, 'recordRework')({ pieceId: piece.id, reason });
+        setLifecycleNotice('Piece marked for rework.');
+        setReplacementPieceId('');
+      } else if (lifecycleAction === 'COMPLETE_REJECT') {
+        await httpsCallable(functions, 'completeRejectPiece')({ pieceId: piece.id, reason });
+        setLifecycleNotice('Piece completely rejected.');
+        setReplacementPieceId('');
+      } else if (lifecycleAction === 'REPLACE') {
+        const res: any = await httpsCallable(functions, 'createManualReplacementPiece')({ rejectedPieceId: piece.id, reason });
+        const newId = res?.data?.pieceId || '';
+        setReplacementPieceId(newId);
+        setLifecycleNotice(newId ? `Replacement created: ${newId}.` : 'Replacement created.');
+      }
+      setLifecycleAction('');
+      setLifecycleReason('');
+      await load();
+    } catch (err: any) {
+      console.error('lifecycle action failed:', err);
+      setLifecycleNotice(err?.message || 'Action failed. Please try again.');
+      setLifecycleError(true);
+    } finally {
+      setLifecycleBusy(false);
     }
   };
 
@@ -551,6 +598,106 @@ export default function PieceDetailPage() {
           {qcNotice && (
             <p className={`mt-3 text-xs ${qcNotice === 'QC recorded.' ? 'text-emerald-600' : 'text-red-500'}`}>
               {qcNotice}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Lifecycle actions (rework / complete reject / replacement) */}
+      {canLifecycle && (
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400">Lifecycle Actions</h2>
+            <span className="text-[10px] text-gray-400 font-mono">{piece.reworkCount || 0} rework{piece.reworkCount === 1 ? '' : 's'}</span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {!isClosed && !isReworked && (
+              <button
+                onClick={() => { setLifecycleAction('REWORK'); setLifecycleNotice(''); setLifecycleError(false); setReplacementPieceId(''); }}
+                disabled={lifecycleBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-orange-100 transition-colors disabled:opacity-40"
+              >
+                <RotateCcw size={12} />
+                Mark Rework
+              </button>
+            )}
+            {!isClosed && (
+              <button
+                onClick={() => { setLifecycleAction('COMPLETE_REJECT'); setLifecycleNotice(''); setLifecycleError(false); setReplacementPieceId(''); }}
+                disabled={lifecycleBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-red-100 transition-colors disabled:opacity-40"
+              >
+                <Ban size={12} />
+                Complete Reject
+              </button>
+            )}
+            {isCompletelyRejected && (
+              <button
+                onClick={() => { setLifecycleAction('REPLACE'); setLifecycleNotice(''); setLifecycleError(false); setReplacementPieceId(''); }}
+                disabled={lifecycleBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity disabled:opacity-40"
+              >
+                <CopyPlus size={12} />
+                Create Replacement
+              </button>
+            )}
+            {!isClosed && isReworked && (
+              <p className="w-full text-xs text-gray-400">This piece is currently in rework. Use Complete Reject to escalate, or move it back to work.</p>
+            )}
+            {isClosed && !isCompletelyRejected && (
+              <p className="w-full text-xs text-gray-400">This piece is permanently closed. No lifecycle actions are available.</p>
+            )}
+          </div>
+
+          {lifecycleAction && (
+            <div className="mt-4 p-3 bg-gray-50 rounded-xl">
+              <p className="text-sm text-gray-700 mb-2">
+                {lifecycleAction === 'REWORK' && <>Mark <span className="font-mono">{piece.id}</span> as <span className="font-semibold">REWORK</span>?</>}
+                {lifecycleAction === 'COMPLETE_REJECT' && <>Permanently <span className="font-semibold">COMPLETE REJECT</span> <span className="font-mono">{piece.id}</span>?</>}
+                {lifecycleAction === 'REPLACE' && <>Create a manual replacement for the rejected piece <span className="font-mono">{piece.id}</span>?</>}
+              </p>
+              <textarea
+                value={lifecycleReason}
+                onChange={e => setLifecycleReason(e.target.value)}
+                rows={3}
+                disabled={lifecycleBusy}
+                placeholder="Mandatory reason…"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all mb-3"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleLifecycle}
+                  disabled={lifecycleBusy || !lifecycleReason.trim()}
+                  className="px-4 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:opacity-80 transition-opacity disabled:opacity-40"
+                >
+                  {lifecycleBusy ? 'Working…' : 'Confirm'}
+                </button>
+                <button
+                  onClick={() => { setLifecycleAction(''); setLifecycleReason(''); setLifecycleNotice(''); setLifecycleError(false); }}
+                  disabled={lifecycleBusy}
+                  className="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-200 transition-colors disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {replacementPieceId && (
+            <p className="mt-3 text-xs text-emerald-600">
+              Replacement created:{' '}
+              <button
+                onClick={() => navigate(`/production/pieces/${replacementPieceId}`)}
+                className="underline font-mono text-black hover:text-gray-600 transition-colors"
+              >
+                {replacementPieceId}
+              </button>
+            </p>
+          )}
+          {lifecycleNotice && (
+            <p className={`mt-3 text-xs ${lifecycleError ? 'text-red-500' : 'text-emerald-600'}`}>
+              {lifecycleNotice}
             </p>
           )}
         </div>
