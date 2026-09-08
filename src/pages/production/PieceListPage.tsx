@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../../firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { Package, Search, Loader2, Eye } from 'lucide-react';
+import { Package, Search, Loader2, Eye, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/rolePermissions';
 
@@ -45,14 +45,17 @@ export default function PieceListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const [pieces, setPieces] = useState<any[]>([]);
+  const [karigars, setKarigars] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [karigarFilter, setKarigarFilter] = useState('ALL');
 
   const stageFilterRaw = searchParams.get('stage') || 'ALL';
   const stageFilter = STAGE_FILTERS.includes(stageFilterRaw) ? stageFilterRaw : 'ALL';
 
   const effectiveRole = (user?.staffRole || user?.role || '') as any;
   const canView = can(effectiveRole, 'production.pieces');
+  const canReadKarigars = can(effectiveRole, 'production.karigars');
 
   const setStageFilter = (s: string) => {
     if (s === 'ALL') setSearchParams({});
@@ -71,16 +74,34 @@ export default function PieceListPage() {
     }
   }, []);
 
+  const loadKarigars = useCallback(async () => {
+    if (!canReadKarigars) return;
+    try {
+      const q = query(collection(db, 'karigars'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      setKarigars(snap.docs.map(d => d.data()));
+    } catch (err) {
+      console.error('Failed to load karigars:', err);
+    }
+  }, [canReadKarigars]);
+
   useEffect(() => { loadPieces(); }, [loadPieces]);
+  useEffect(() => { loadKarigars(); }, [loadKarigars]);
+
+  const karigarName = (kid: string) =>
+    karigars.find(k => k.id === kid)?.name || kid;
 
   const filtered = pieces.filter(p => {
     const matchesStage = stageFilter === 'ALL' || (p.stage || 'OPEN') === stageFilter;
+    const matchesKarigar =
+      karigarFilter === 'ALL' ||
+      (Array.isArray(p.assignedKarigars) && p.assignedKarigars.includes(karigarFilter));
     const matchesSearch =
       p.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.prId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.designId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.stage || '').toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesStage && matchesSearch;
+    return matchesStage && matchesKarigar && matchesSearch;
   });
 
   if (!canView) {
@@ -117,6 +138,31 @@ export default function PieceListPage() {
           </button>
         ))}
       </div>
+
+      {/* Karigar filter */}
+      {canReadKarigars && (
+        <div className="mb-4 flex items-center gap-2">
+          <User size={14} className="text-gray-400" />
+          <select
+            value={karigarFilter}
+            onChange={e => setKarigarFilter(e.target.value)}
+            className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all bg-white"
+          >
+            <option value="ALL">All karigars</option>
+            {karigars.map(k => (
+              <option key={k.id} value={k.id}>{k.name} · {k.id}</option>
+            ))}
+          </select>
+          {karigarFilter !== 'ALL' && (
+            <button
+              onClick={() => setKarigarFilter('ALL')}
+              className="text-xs text-gray-400 hover:text-black underline transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative mb-6">
@@ -181,7 +227,7 @@ export default function PieceListPage() {
                     </td>
                     <td className="px-6 py-4 text-xs text-gray-600">
                       {Array.isArray(piece.assignedKarigars) && piece.assignedKarigars.length > 0
-                        ? piece.assignedKarigars.join(', ')
+                        ? piece.assignedKarigars.map(karigarName).join(', ')
                         : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-6 py-4 text-xs text-gray-600 text-right">{piece.totalLabourMinutes || 0}</td>

@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { doc, getDoc, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { ArrowLeft, Loader2, Package, Clock, User, RefreshCw, AlertCircle, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Loader2, Package, Clock, User, RefreshCw, AlertCircle, ChevronRight, X, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/rolePermissions';
+import { functions } from '../../firebase';
+import { httpsCallable } from 'firebase/functions';
 
 const STAGE_COLORS: Record<string, string> = {
   OPEN: 'bg-gray-100 text-gray-600',
@@ -54,9 +56,40 @@ export default function PieceDetailPage() {
   const [design, setDesign] = useState<any>(null);
   const [version, setVersion] = useState<any>(null);
   const [movements, setMovements] = useState<MovementDoc[]>([]);
+  const [karigars, setKarigars] = useState<any[]>([]);
+  const [selectedKarigar, setSelectedKarigar] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
 
   const effectiveRole = (user?.staffRole || user?.role || '') as any;
+  const canAssignKarigar = can(effectiveRole, 'production.pieces.assignKarigar');
+
+  const callFn = async (fnName: string, data: Record<string, unknown>) => {
+    try {
+      await httpsCallable(functions, fnName)(data);
+      return true;
+    } catch (err: any) {
+      console.error(`${fnName} failed:`, err);
+      setNotice(err?.message || 'Action failed. Please try again.');
+      return false;
+    }
+  };
+
+  const refreshKarigars = useCallback(async () => {
+    if (!canAssignKarigar) return;
+    try {
+      const q = query(
+        collection(db, 'karigars'),
+        where('active', '==', true),
+        orderBy('createdAt', 'desc')
+      );
+      const snap = await getDocs(q);
+      setKarigars(snap.docs.map(d => d.data()));
+    } catch (err) {
+      console.error('Failed to load karigars:', err);
+    }
+  }, [canAssignKarigar]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -65,6 +98,7 @@ export default function PieceDetailPage() {
       if (!snap.exists()) { setLoading(false); return; }
       const p = snap.data();
       setPiece(p);
+      refreshKarigars();
 
       // Parallel-serial: resolve related docs
       const promises: Promise<void>[] = [];
@@ -109,7 +143,7 @@ export default function PieceDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, refreshKarigars]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -133,6 +167,27 @@ export default function PieceDetailPage() {
   }
 
   const isClosed = piece.status === 'closed' || piece.status === 'replaced';
+
+  const handleAssign = async () => {
+    if (!selectedKarigar || busy) return;
+    setBusy(true);
+    setNotice('');
+    const ok = await callFn('pieceAssignKarigar', { pieceId: piece.id, karigarId: selectedKarigar });
+    if (ok) {
+      setSelectedKarigar('');
+      await load();
+    }
+    setBusy(false);
+  };
+
+  const handleRemove = async (karigarId: string) => {
+    if (busy) return;
+    setBusy(true);
+    setNotice('');
+    const ok = await callFn('pieceRemoveKarigar', { pieceId: piece.id, karigarId });
+    if (ok) await load();
+    setBusy(false);
+  };
 
   return (
     <div className="min-h-screen p-6 md:p-8 max-w-5xl">
@@ -268,19 +323,73 @@ export default function PieceDetailPage() {
       </div>
 
       {/* Assigned karigars */}
-      {Array.isArray(piece.assignedKarigars) && piece.assignedKarigars.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-6">
-          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Assigned Karigars</h2>
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400">Assigned Karigars</h2>
+          {canAssignKarigar && (
+            <button
+              onClick={handleAssign}
+              disabled={busy || !selectedKarigar}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:opacity-80 transition-opacity disabled:opacity-40"
+            >
+              <Users size={12} />
+              Assign
+            </button>
+          )}
+        </div>
+
+        {Array.isArray(piece.assignedKarigars) && piece.assignedKarigars.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {piece.assignedKarigars.map((kid: string) => (
               <span key={kid} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-mono text-gray-700">
                 <User size={12} className="text-gray-400" />
-                {kid}
+                {karigars.find(k => k.id === kid)?.name || kid}
+                {canAssignKarigar && (
+                  <button
+                    onClick={() => handleRemove(kid)}
+                    disabled={busy}
+                    className="ml-1 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-40"
+                    title="Remove karigar"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
               </span>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-sm text-gray-400">No karigars assigned to this piece yet.</p>
+        )}
+
+        {/* Assign karigar selector (active registry only) */}
+        {canAssignKarigar && karigars.length > 0 && (
+          <div className="mt-4 flex flex-col sm:flex-row gap-2">
+            <select
+              value={selectedKarigar}
+              onChange={e => { setSelectedKarigar(e.target.value); setNotice(''); }}
+              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all"
+            >
+              <option value="">Select karigar to assign…</option>
+              {karigars
+                .filter(k => !(Array.isArray(piece.assignedKarigars) && piece.assignedKarigars.includes(k.id)))
+                .map(k => (
+                  <option key={k.id} value={k.id}>{k.name} · {k.id}</option>
+                ))}
+            </select>
+            <button
+              onClick={handleAssign}
+              disabled={busy || !selectedKarigar}
+              className="px-4 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:opacity-80 transition-opacity disabled:opacity-40"
+            >
+              Assign Karigar
+            </button>
+          </div>
+        )}
+        {canAssignKarigar && karigars.length === 0 && (
+          <p className="mt-3 text-xs text-gray-400">No active karigars in the registry to assign.</p>
+        )}
+        {notice && <p className="mt-3 text-xs text-red-500">{notice}</p>}
+      </div>
 
       {/* Rejection / rework info */}
       {(piece.rejectionReason || piece.rejectionType) && (
