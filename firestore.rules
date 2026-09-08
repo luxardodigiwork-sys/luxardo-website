@@ -129,26 +129,31 @@ service cloud.firestore {
       }
     }
 
-    /* ── Physical Pieces (atomic tracking unit) ──────────────────────── */
+    /* ── Physical Pieces (atomic tracking unit) ────────────────────────
+     * All writes via Cloud Functions (pieceAssignKarigar / RemoveKarigar,
+     * recordRework, completeRejectPiece, createManualReplacementPiece,
+     * recordPieceMovement, prGeneratePieces). A client can never mutate a
+     * piece or its frozen fields directly.
+     */
     match /pieces/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch','guard','tailor','store']);
-      allow create, update: if isAdmin() || isStaffInRoles(['owner','pm','dispatch','guard','tailor','store']);
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
-    /* ── Karigars (registry, not login users) ──────────────────────── */
+    /* ── Karigars (registry, not login users) ────────────────────────
+     * All writes via Cloud Functions (karigarCreate / karigarUpdate).
+     */
     match /karigars/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
-      allow create, update: if isAdmin() || isStaffWithRole('pm');
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
-    /* ── Work Sessions (pieceWorkSessions) ──────────────────────────── */
+    /* ── Work Sessions (pieceWorkSessions) ────────────────────────────
+     * All writes via Cloud Functions (labourStart / labourStop).
+     */
     match /pieceWorkSessions/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
-      allow create: if isSignedIn() && isStaffInRoles(['admin','owner','pm']);
-      allow update: if isAdmin() || isStaffInRoles(['owner','pm']);
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     /* ── Guard QC Records ───────────────────────────────────────────── */
@@ -179,25 +184,27 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    /* ── Replacement Links ──────────────────────────────────────────── */
+    /* ── Replacement Links ────────────────────────────────────────────
+     * Written only by createManualReplacementPiece (Cloud Function).
+     */
     match /replacementLinks/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm']);
-      allow create: if isAdmin() || isStaffWithRole('pm');
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
-    /* ── Piece Movement History (append-only audit) ─────────────────── */
+    /* ── Piece Movement History (append-only audit) ───────────────────
+     * Written only by recordMovement (Cloud Function). NEVER mutated or
+     * deleted by a client — reverse movements are new records.
+     */
     match /pieceMovementHistory/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch','guard','tailor']);
-      allow create: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch','guard','tailor']);
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
-    /* ── Audit Logs (append-only, admin read) ────────────────────────── */
+    /* ── Audit Logs (append-only, admin/owner read) ─────────────────── */
     match /auditLogs/{id} {
-      allow read: if isAdmin();
-      allow create: if isSignedIn(); // Cloud Functions write via Admin SDK, client-side blocked
-      allow update, delete: if false;
+      allow read: if isAdmin() || isStaffWithRole('owner');
+      allow create, update, delete: if false; // Cloud Functions only (Admin SDK)
     }
 
     /* ── ID Counters (atomic, server-managed) ────────────────────────── */

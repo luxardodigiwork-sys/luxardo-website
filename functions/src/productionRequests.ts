@@ -24,6 +24,7 @@ import * as crypto from "crypto";
 import { generateId } from "./production";
 import { requireStaff, hasAnyRole, StaffIdentity } from "./staffAuth";
 import { auditDoc, writeAudit } from "./audit";
+import { recordMovement } from "./movement";
 
 const db = admin.firestore();
 
@@ -31,6 +32,7 @@ const PR_CREATORS = ["admin", "owner", "dispatch"];
 const PR_EDITORS = ["admin", "owner", "dispatch"];
 const PR_APPROVERS = ["admin", "owner"];
 const PR_AUDIT_EDITORS = ["admin", "owner"];
+const PIECE_GENERATORS = ["admin", "owner", "pm"]; // PM generates physical pieces for approved PRs
 
 const URGENCY_LEVELS = ["HIGH", "MEDIUM", "LOW"];
 const REQUIRED_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -377,4 +379,200 @@ export const prEditApproved = onCall(async (request) => {
     }
   });
   return { ok: true, id };
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+ * prReproduce — Dispatch/Admin/Owner creates a REPRODUCTION request.
+ * The reproduction is ALWAYS a NEW PR with its OWN PR-XXXX ID.
+ * It reproduces the same approved (frozen) design version as the source PR.
+ * Original quantities of the source PR are never touched.
+ * Input : { sourcePrId, quantity?, urgency?, requiredDate?, garmentType? }
+ * ═══════════════════════════════════════════════════════════════════ */
+export const prReproduce = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const actor = await requireStaff(request.auth.uid);
+  if (!hasAnyRole(actor, PR_CREATORS)) {
+    throw new HttpsError("permission-denied", "Dispatch/Admin/Owner access required.");
+  }
+
+  const { sourcePrId, quantity, urgency, requiredDate, garmentType } = (request.data || {}) as {
+    sourcePrId?: string; quantity?: number; urgency?: string; requiredDate?: string; garmentType?: string;
+  };
+  if (!sourcePrId) throw new HttpsError("invalid-argument", "sourcePrId is required.");
+
+  // The source PR binds the approved design version to reproduce.
+  const srcSnap = await db.doc(`productionRequests/${sourcePrId}`).get();
+  if (!srcSnap.exists) throw new HttpsError("not-found", `Source PR ${sourcePrId} not found.`);
+  const src = srcSnap.data()!;
+  const designId = String(src.designId || "");
+  const designVersionId = String(src.designVersionId || "");
+  if (!designId || !designVersionId) {
+    throw new HttpsError("failed-precondition", "Source PR has no approved design version to reproduce.");
+  }
+  await assertFrozenDesignVersion(designId, designVersionId);
+
+  const qty = normalizeQty(quantity ?? 0);
+  const urgencyLevel = String(urgency ?? "MEDIUM").toUpperCase();
+  if (!URGENCY_LEVELS.includes(urgencyLevel)) throw new HttpsError("invalid-argument", "Invalid urgency level.");
+  if (requiredDate !== undefined && !REQUIRED_DATE_RE.test(String(requiredDate))) {
+    throw new HttpsError("invalid-argument", "requiredDate must be YYYY-MM-DD.");
+  }
+
+  const prId = await generateId("pr");
+  const now = new Date().toISOString();
+  const pr = {
+    id: prId,
+    requestedBy: actor.uid,
+    requestedByName: actor.name,
+    requestedByRole: actor.role,
+    createdAt: now,
+    updatedAt: now,
+    designId,
+    designVersionId,
+    garmentType: String(garmentType ?? ""),
+    ...qtyMap(qty),
+    piecesGeneratedCount: 0,
+    originalQtyFrozen: false,
+    status: "DRAFT",
+    approvedBy: null,
+    approvedByName: null,
+    approvedAt: null,
+    rejectedBy: null,
+    rejectedByName: null,
+    rejectedAt: null,
+    rejectionReason: null,
+    urgency: urgencyLevel as "HIGH" | "MEDIUM" | "LOW",
+    requiredDate: String(requiredDate ?? ""),
+    cancelledBy: null,
+    cancelledAt: null,
+    createdBy: actor.uid,
+    createdByName: actor.name,
+  };
+
+  await db.doc(`productionRequests/${prId}`).set(pr);
+  await writeAudit("PR_REPRODUCE", "productionRequests", prId, actor, null, {
+    pr, sourcePrId, designId, designVersionId,
+  });
+
+  return { ok: true, id: prId, pr };
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+ * prGeneratePieces — generate physical PIECE-XXXX docs for an APPROVED PR.
+ * Owner approval (originalQtyFrozen) is mandatory. Piece IDs are generated
+ * via the shared transaction-safe ID counter (never client-side).
+ * A piece can NEVER exceed totalPieceCount; stems duplicates within a call.
+ * Input : { prId, count? }  — count defaults to (originalOrderedQty - already generated)
+ * ═══════════════════════════════════════════════════════════════════ */
+export const prGeneratePieces = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const actor = await requireStaff(request.auth.uid);
+  if (!hasAnyRole(actor, PIECE_GENERATORS)) {
+    throw new HttpsError("permission-denied", "PM/Admin/Owner access required.");
+  }
+
+  const { prId, count } = (request.data || {}) as { prId?: string; count?: number };
+  if (!prId) throw new HttpsError("invalid-argument", "prId is required.");
+
+  const prRef = db.doc(`productionRequests/${prId}`);
+  const prSnap = await prRef.get();
+  if (!prSnap.exists) throw new HttpsError("not-found", `PR ${prId} not found.`);
+  const pr = prSnap.data()!;
+  if (pr.status !== "APPROVED" || !pr.originalQtyFrozen) {
+    throw new HttpsError("failed-precondition", "Pieces can only be generated after Owner approval.");
+  }
+
+  const ordered = Number(pr.originalOrderedQty) || 0;
+  const existing = Number(pr.piecesGeneratedCount) || 0;
+  const remaining = ordered - existing;
+  if (remaining <= 0) throw new HttpsError("failed-precondition", "All ordered pieces already generated.");
+
+  const toCreate = Math.min(Math.floor(Number(count ?? remaining)), remaining);
+  if (toCreate <= 0) throw new HttpsError("invalid-argument", "No pieces to generate (count is 0 or exceeds remaining).");
+
+  const designId = String(pr.designId || "");
+  const designVersionId = String(pr.designVersionId || "");
+  await assertFrozenDesignVersion(designId, designVersionId);
+
+  // Pre-generate Piece IDs (each its own atomic counter transaction).
+  const pieceIds: string[] = [];
+  for (let i = 0; i < toCreate; i++) {
+    pieceIds.push(await generateId("piece"));
+  }
+
+  const now = new Date().toISOString();
+  // Atomic: PR capacity + pieces written together; re-read inside the tx for safety.
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(prRef);
+    const cur = snap.data()!;
+    const gen = Number(cur.piecesGeneratedCount) || 0;
+    if (gen + toCreate > Number(cur.originalOrderedQty) || Number(cur.originalOrderedQty) <= 0) {
+      throw new HttpsError("failed-precondition", "Piece generation would exceed the approved quantity.");
+    }
+    tx.update(prRef, {
+      piecesGeneratedCount: gen + toCreate,
+      updatedAt: new Date().toISOString(),
+    });
+
+    for (const pieceId of pieceIds) {
+      tx.set(db.doc(`pieces/${pieceId}`), {
+        id: pieceId,
+        designId,
+        prId,
+        designVersionId,
+        kind: "PHYSICAL",
+        stage: "OPEN",
+        status: "active",
+        assignedKarigars: [],
+        lastKarigarIds: [],
+        totalLabourMinutes: 0,
+        totalLabourCost: 0,
+        firstWorkAt: null,
+        lastWorkAt: null,
+        qcVerdict: null,
+        rejectionReason: null,
+        rejectionType: null,
+        rejectedAt: null,
+        rejectedBy: null,
+        rejectedByName: null,
+        reworkCount: 0,
+        lastGuardQcId: null,
+        tailorSessionId: null,
+        tailorStartAt: null,
+        tailorEndAt: null,
+        storeInAt: null,
+        storeOutAt: null,
+        storeOutId: null,
+        billNumber: null,
+        replacesPieceId: null,
+        replacedByPieceId: null,
+        notes: "Generated from approved production request",
+        createdBy: actor.uid,
+        createdByName: actor.name,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  });
+
+  // Append creation movement records (append-only, after the atomic state change).
+  for (const pieceId of pieceIds) {
+    await recordMovement({
+      pieceId,
+      fromStage: null,
+      toStage: "OPEN",
+      direction: "FORWARD",
+      action: "PIECE_CREATE",
+      actor,
+      reason: `Generated from approved PR ${prId}`,
+      relatedRequestId: prId,
+      source: "SYSTEM",
+      snapshot: { pieceStage: "OPEN", totalLabourMinutes: 0, totalLabourCost: 0 },
+    });
+  }
+
+  await writeAudit("PR_GENERATE_PIECES", "productionRequests", prId, actor,
+    { piecesGeneratedCount: existing }, { piecesGeneratedCount: existing + toCreate, pieceIds });
+
+  return { ok: true, prId, pieceIds, generated: toCreate };
 });

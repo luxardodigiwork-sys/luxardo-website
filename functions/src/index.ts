@@ -210,4 +210,22 @@ export {
   prApprove,
   prReject,
   prEditApproved,
+  prReproduce,
+  prGeneratePieces,
 } from "./productionRequests";
+
+// Phase 2 · Block 3 — Physical Piece domain
+export {
+  pieceAssignKarigar,
+  pieceRemoveKarigar,
+  recordRework,
+  completeRejectPiece,
+  createManualReplacementPiece,
+  recordPieceMovement,
+} from "./pieces";
+
+// Phase 2 · Block 4 — Karigar + Labour domain
+export {
+  labourStart,
+  labourStop,
+} from "./labour";

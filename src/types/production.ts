@@ -251,6 +251,9 @@ export interface ProductionRequestDoc {
   pendingQty: number;         // pieces not yet started
   totalPieceCount: number;    // sum = originalOrderedQty
 
+  /** Physical pieces generated so far from this approved PR (atomic counter). */
+  piecesGeneratedCount: number;
+
   /** True after Owner approval; rules enforce originalOrderedQty immutability. */
   originalQtyFrozen: boolean;
 
@@ -307,6 +310,7 @@ export interface PieceDoc {
   id: string; // "PIECE-0001"
   designId: string; // FK → catalogueDesigns/{id}
   prId: string | null; // FK → productionRequests/{id}
+  designVersionId: string | null; // FK → designVersions/{id} (approved design version)
   kind: PieceKind; // "PHYSICAL" | "SAMPLE"
   stage: PieceStage;
   status: PieceStatus; // active | in_rework | closed | replaced
@@ -362,7 +366,7 @@ export interface PieceDoc {
 export interface MovementDoc {
   id: string;
   pieceId: string;
-  fromStage: PieceStage;
+  fromStage: PieceStage | null; // null for a piece's initial creation record
   toStage: PieceStage;
   direction: MovementDirection;
   action: string; // e.g. "WORK_START" | "QC_PASS" | "REWORK" | "COMPLETE_REJECT" | "STORE_IN"
@@ -587,10 +591,15 @@ export type AuditAction =
   | "PR_EDIT_URGENCY"
   | "PR_EDIT_REQUIREDDATE"
   | "PR_EDIT_QTY" // post-approval qty adjustment (immutable after approval; only pre-approval)
+  | "PR_REPRODUCE" // Dispatch created a NEW PR reproducing an approved request/design
+  | "PR_GENERATE_PIECES" // physical PIECE-XXXX docs generated for an approved PR
   | "PIECE_CREATE"
   | "PIECE_STAGE_MOVE"
   | "PIECE_REVERSE_MOVE"
   | "PIECE_ASSIGN_KARIGAR"
+  | "PIECE_REMOVE_KARIGAR"
+  | "PIECE_REWORK" // PM moves a piece back to work (same Piece ID, new work session)
+  | "PIECE_COMPLETE_REJECT" // permanent close of a physical piece (mandatory reason)
   | "LABOUR_START"
   | "LABOUR_STOP"
   | "GUARD_QC_PASS"
