@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { doc, getDoc, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { ArrowLeft, Loader2, Package, Clock, User, RefreshCw, AlertCircle, ChevronRight, X, Users } from 'lucide-react';
+import { ArrowLeft, Loader2, Package, Clock, User, RefreshCw, AlertCircle, ChevronRight, X, Users, Play, Square } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/rolePermissions';
 import { functions } from '../../firebase';
@@ -61,9 +61,15 @@ export default function PieceDetailPage() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [startKarigar, setStartKarigar] = useState('');
+  const [sessionBusy, setSessionBusy] = useState(false);
+  const [sessionNotice, setSessionNotice] = useState('');
 
   const effectiveRole = (user?.staffRole || user?.role || '') as any;
   const canAssignKarigar = can(effectiveRole, 'production.pieces.assignKarigar');
+  const canReadLabour = can(effectiveRole, 'production.labour');
+  const canStartStop = can(effectiveRole, 'production.labour.startStop');
 
   const callFn = async (fnName: string, data: Record<string, unknown>) => {
     try {
@@ -138,12 +144,27 @@ export default function PieceDetailPage() {
       } catch (err) {
         console.error('Failed to load movement history:', err);
       }
+
+      // Work sessions (labour)
+      if (canReadLabour) {
+        try {
+          const sq = query(
+            collection(db, 'pieceWorkSessions'),
+            where('pieceId', '==', id),
+            orderBy('startedAt', 'desc')
+          );
+          const ssnap = await getDocs(sq);
+          setSessions(ssnap.docs.map(d => d.data()));
+        } catch (err) {
+          console.error('Failed to load work sessions:', err);
+        }
+      }
     } catch (err) {
       console.error('Failed to load piece:', err);
     } finally {
       setLoading(false);
     }
-  }, [id, refreshKarigars]);
+  }, [id, refreshKarigars, canReadLabour]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -187,6 +208,27 @@ export default function PieceDetailPage() {
     const ok = await callFn('pieceRemoveKarigar', { pieceId: piece.id, karigarId });
     if (ok) await load();
     setBusy(false);
+  };
+
+  const handleStartSession = async () => {
+    if (!startKarigar || sessionBusy) return;
+    setSessionBusy(true);
+    setSessionNotice('');
+    const ok = await callFn('labourStart', { pieceId: piece.id, karigarId: startKarigar });
+    if (ok) {
+      setStartKarigar('');
+      await load();
+    }
+    setSessionBusy(false);
+  };
+
+  const handleStopSession = async (sessionId: string) => {
+    if (sessionBusy) return;
+    setSessionBusy(true);
+    setSessionNotice('');
+    const ok = await callFn('labourStop', { sessionId });
+    if (ok) await load();
+    setSessionBusy(false);
   };
 
   return (
@@ -390,6 +432,94 @@ export default function PieceDetailPage() {
         )}
         {notice && <p className="mt-3 text-xs text-red-500">{notice}</p>}
       </div>
+
+      {/* Work sessions (labour) */}
+      {canReadLabour && (
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400">Work Sessions</h2>
+            <span className="text-[10px] text-gray-400 font-mono">{sessions.length} total</span>
+          </div>
+
+          {/* Start session */}
+          {canStartStop && Array.isArray(piece.assignedKarigars) && piece.assignedKarigars.length > 0 && (
+            <div className="flex flex-col sm:flex-row gap-2 mb-4">
+              <select
+                value={startKarigar}
+                onChange={e => { setStartKarigar(e.target.value); setSessionNotice(''); }}
+                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all"
+              >
+                <option value="">Start session for karigar…</option>
+                {piece.assignedKarigars.map((kid: string) => {
+                  const hasOpen = sessions.some(s => s.karigarId === kid && !s.endedAt);
+                  return (
+                    <option key={kid} value={kid} disabled={!!hasOpen}>
+                      {karigars.find(k => k.id === kid)?.name || kid}
+                      {hasOpen ? ' (in progress)' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              <button
+                onClick={handleStartSession}
+                disabled={sessionBusy || !startKarigar}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:opacity-80 transition-opacity disabled:opacity-40"
+              >
+                <Play size={12} />
+                Start Session
+              </button>
+            </div>
+          )}
+          {canStartStop && !(Array.isArray(piece.assignedKarigars) && piece.assignedKarigars.length > 0) && (
+            <p className="text-xs text-gray-400 mb-4">Assign a karigar above to start a work session.</p>
+          )}
+          {sessionNotice && <p className="mb-3 text-xs text-red-500">{sessionNotice}</p>}
+
+          {sessions.length === 0 ? (
+            <p className="text-sm text-gray-400">No work sessions recorded for this piece.</p>
+          ) : (
+            <div className="space-y-2">
+              {sessions.map(s => {
+                const inProgress = !s.endedAt;
+                return (
+                  <div key={s.id} className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-xl">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-medium text-black">{s.id}</span>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded ${
+                          s.type === 'REWORK' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'
+                        }`}>
+                          {s.type || 'FIRST'}
+                        </span>
+                        {inProgress && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-emerald-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            In progress
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {s.karigarName || s.karigarId} · ₹{s.hourlyRate}/hr · started {new Date(s.startedAt).toLocaleString()}
+                        {s.endedAt && <> · {s.minutes} min · ₹{Number(s.labourCost || 0).toFixed(2)}</>}
+                      </p>
+                    </div>
+                    {inProgress && canStartStop && (
+                      <button
+                        onClick={() => handleStopSession(s.id)}
+                        disabled={sessionBusy}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-red-100 transition-colors disabled:opacity-40"
+                      >
+                        <Square size={11} />
+                        Stop
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Rejection / rework info */}
       {(piece.rejectionReason || piece.rejectionType) && (
