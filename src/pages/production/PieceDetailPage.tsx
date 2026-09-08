@@ -23,6 +23,27 @@ const STAGE_COLORS: Record<string, string> = {
   REJECTED: 'bg-red-50 text-red-500',
 };
 
+/**
+ * Legal forward stage transitions for the finalized Loom pipeline.
+ * Linear production flow + rework loop + tailor branch. REJECTED is terminal.
+ * The trusted backend callable (recordPieceMovement) is the authority on
+ * validity; this map drives which forward moves the UI exposes.
+ */
+const NEXT_STAGES: Record<string, string[]> = {
+  OPEN: ['IN_WORK'],
+  IN_WORK: ['QC_PENDING'],
+  QC_PENDING: ['QC_PASS', 'REWORK'],
+  REWORK: ['IN_WORK'],
+  QC_PASS: ['DISPATCH_READY'],
+  DISPATCH_READY: ['TAILOR_ASSIGNED', 'STORE'],
+  TAILOR_ASSIGNED: ['STITCHING'],
+  STITCHING: ['STITCH_COMPLETE'],
+  STITCH_COMPLETE: ['STORE'],
+  STORE: ['STORE_OUT'],
+  STORE_OUT: [],
+  REJECTED: [],
+};
+
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-emerald-50 text-emerald-600',
   in_rework: 'bg-orange-50 text-orange-600',
@@ -65,11 +86,15 @@ export default function PieceDetailPage() {
   const [startKarigar, setStartKarigar] = useState('');
   const [sessionBusy, setSessionBusy] = useState(false);
   const [sessionNotice, setSessionNotice] = useState('');
+  const [pendingMove, setPendingMove] = useState<string | null>(null);
+  const [moveBusy, setMoveBusy] = useState(false);
+  const [moveNotice, setMoveNotice] = useState('');
 
   const effectiveRole = (user?.staffRole || user?.role || '') as any;
   const canAssignKarigar = can(effectiveRole, 'production.pieces.assignKarigar');
   const canReadLabour = can(effectiveRole, 'production.labour');
   const canStartStop = can(effectiveRole, 'production.labour.startStop');
+  const canMove = can(effectiveRole, 'production.pieces.move');
 
   const callFn = async (fnName: string, data: Record<string, unknown>) => {
     try {
@@ -188,6 +213,8 @@ export default function PieceDetailPage() {
   }
 
   const isClosed = piece.status === 'closed' || piece.status === 'replaced';
+  const currentStage = piece.stage || 'OPEN';
+  const nextStages = NEXT_STAGES[currentStage] || [];
 
   const handleAssign = async () => {
     if (!selectedKarigar || busy) return;
@@ -229,6 +256,24 @@ export default function PieceDetailPage() {
     const ok = await callFn('labourStop', { sessionId });
     if (ok) await load();
     setSessionBusy(false);
+  };
+
+  const handleMovePiece = async () => {
+    if (!pendingMove || moveBusy) return;
+    setMoveBusy(true);
+    setMoveNotice('');
+    const ok = await callFn('recordPieceMovement', {
+      pieceId: piece.id,
+      toStage: pendingMove,
+      action: 'STAGE_MOVE',
+      direction: 'FORWARD',
+    });
+    if (ok) {
+      setPendingMove(null);
+      setMoveNotice(`Moved ${piece.id} → ${pendingMove}`);
+      await load();
+    }
+    setMoveBusy(false);
   };
 
   return (
@@ -363,6 +408,66 @@ export default function PieceDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Stage movement */}
+      {canMove && (
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400">Stage Movement</h2>
+            <span className={`inline-flex items-center px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md ${STAGE_COLORS[currentStage] || 'bg-gray-100 text-gray-600'}`}>
+              {currentStage}
+            </span>
+          </div>
+
+          {nextStages.length === 0 ? (
+            <p className="text-sm text-gray-400">No forward moves available from this stage.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {nextStages.map(stage => (
+                <button
+                  key={stage}
+                  onClick={() => { setPendingMove(stage); setMoveNotice(''); }}
+                  disabled={moveBusy}
+                  className={`inline-flex items-center px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors disabled:opacity-40 ${
+                    pendingMove === stage
+                      ? 'bg-black text-white'
+                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {stage}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {pendingMove && (
+            <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-gray-50 rounded-xl">
+              <p className="text-sm text-gray-700 flex-1">
+                Move <span className="font-mono">{piece.id}</span> from{' '}
+                <span className="font-mono">{currentStage}</span> →{' '}
+                <span className="font-mono font-semibold">{pendingMove}</span>?
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleMovePiece}
+                  disabled={moveBusy}
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:opacity-80 transition-opacity disabled:opacity-40"
+                >
+                  {moveBusy ? 'Moving…' : 'Confirm Move'}
+                </button>
+                <button
+                  onClick={() => setPendingMove(null)}
+                  disabled={moveBusy}
+                  className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-200 transition-colors disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          {moveNotice && <p className="mt-3 text-xs text-emerald-600">{moveNotice}</p>}
+        </div>
+      )}
 
       {/* Assigned karigars */}
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-6">
