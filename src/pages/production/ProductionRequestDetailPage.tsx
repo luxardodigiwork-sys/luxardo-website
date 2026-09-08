@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/rolePermissions';
 import {
   ArrowLeft, Loader2, Send, Check, X, Clock, User, FileText,
-  Pencil, AlertCircle
+  Pencil, AlertCircle, Package, ChevronRight
 } from 'lucide-react';
 import type { ProductionRequestDoc, PRAuditDoc } from '../../types/production';
 
@@ -49,6 +49,10 @@ export default function ProductionRequestDetailPage() {
   const [postUrgency, setPostUrgency] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('MEDIUM');
   const [postRequiredDate, setPostRequiredDate] = useState('');
 
+  // Generate Pieces dialog
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [genCount, setGenCount] = useState<number>(0);
+
   const effectiveRole = user?.staffRole || user?.role || '';
   const isPM = effectiveRole === 'pm';
   const canEdit = can(effectiveRole as any, 'production.requests.edit');
@@ -56,6 +60,7 @@ export default function ProductionRequestDetailPage() {
   const canReject = can(effectiveRole as any, 'production.requests.reject');
   // Submit is allowed for the creator roles (dispatch/admin/owner), not PM
   const canSubmit = can(effectiveRole as any, 'production.requests') && !isPM;
+  const canGeneratePieces = can(effectiveRole as any, 'production.pieces');
 
   const loadRequest = useCallback(async () => {
     if (!id) return;
@@ -140,6 +145,22 @@ export default function ProductionRequestDetailPage() {
       await loadRequest();
     } catch (err: any) {
       setToast({ type: 'error', message: err.message || 'Failed to update approved request.' });
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleGeneratePieces = async () => {
+    setActing(true);
+    setToast(null);
+    try {
+      const fn = httpsCallable(functions, 'prGeneratePieces');
+      await fn({ prId: request!.id, count: genCount || undefined });
+      setShowGenerate(false);
+      setToast({ type: 'success', message: `${genCount || 'All remaining'} piece(s) generated.` });
+      await loadRequest();
+    } catch (err: any) {
+      setToast({ type: 'error', message: err.message || 'Failed to generate pieces.' });
     } finally {
       setActing(false);
     }
@@ -406,6 +427,79 @@ export default function ProductionRequestDetailPage() {
           ))}
         </div>
       </div>
+
+      {/* Generate Pieces (post-approval) */}
+      {isApproved && canGeneratePieces && (
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-6">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Generate Pieces</h2>
+          {(() => {
+            const ordered = Number(request.originalOrderedQty) || 0;
+            const generated = Number(request.piecesGeneratedCount) || 0;
+            const remaining = Math.max(0, ordered - generated);
+            return (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-3xl font-display text-black">{remaining}</span>
+                    <span className="text-xs text-gray-500">remaining of {ordered} ordered</span>
+                  </div>
+                  <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">{generated} already generated</p>
+                </div>
+                {remaining > 0 && (
+                  <button
+                    disabled={acting}
+                    onClick={() => { setGenCount(remaining); setShowGenerate(true); }}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-black text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors shrink-0"
+                  >
+                    <Package size={14} />
+                    Generate Pieces ({remaining})
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Generate Pieces dialog */}
+      {showGenerate && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-display text-black tracking-wide mb-2">Generate Pieces</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Create physical PIECE records for this approved request. Quantity is immutable and frozen.
+            </p>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Number of pieces</label>
+              <input
+                type="number"
+                min={1}
+                max={Number(request.originalOrderedQty) - (Number(request.piecesGeneratedCount) || 0)}
+                value={genCount}
+                onChange={e => setGenCount(Math.max(1, Number(e.target.value)))}
+                className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">
+                Max: {Math.max(0, (Number(request.originalOrderedQty) || 0) - (Number(request.piecesGeneratedCount) || 0))}
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => { setShowGenerate(false); setGenCount(0); }}
+                className="px-4 py-2 text-sm text-gray-500 hover:text-black transition-colors">
+                Cancel
+              </button>
+              <button
+                disabled={acting || genCount <= 0}
+                onClick={handleGeneratePieces}
+                className="flex items-center gap-2 px-4 py-2 bg-black text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              >
+                {acting ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />}
+                Generate {genCount} Piece{genCount !== 1 ? 's' : ''}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Requestor info */}
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-6">

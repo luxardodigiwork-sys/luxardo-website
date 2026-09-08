@@ -147,6 +147,18 @@ export default function ProductionHomePage() {
               </div>
             </a>
           )}
+          {can(effectiveRole as any, 'production.pieces') && (
+            <a
+              href="/production/pieces"
+              className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              <Package size={18} className="text-gray-400" />
+              <div>
+                <p className="text-sm font-medium text-black">Production Pieces</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest">PIECE-XXXX · tracking</p>
+              </div>
+            </a>
+          )}
         </div>
       </div>
     </div>

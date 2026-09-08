@@ -109,6 +109,8 @@ import SamplePieceDetailPage from "./pages/production/SamplePieceDetailPage";
 import ProductionRequestListPage from "./pages/production/ProductionRequestListPage";
 import ProductionRequestCreatePage from "./pages/production/ProductionRequestCreatePage";
 import ProductionRequestDetailPage from "./pages/production/ProductionRequestDetailPage";
+import PieceListPage from "./pages/production/PieceListPage";
+import PieceDetailPage from "./pages/production/PieceDetailPage";
 
 const ProtectedBackendRoute = ({
   role,
@@ -336,6 +338,9 @@ export default function App() {
               <Route path="requests" element={<ProductionRequestListPage />} />
               <Route path="requests/new" element={<ProductionRequestCreatePage />} />
               <Route path="requests/:id" element={<ProductionRequestDetailPage />} />
+              {/* Phase 2 — Production Pieces */}
+              <Route path="pieces" element={<PieceListPage />} />
+              <Route path="pieces/:id" element={<PieceDetailPage />} />
             </Route>
 
             <Route path="/" element={<Layout />}>
