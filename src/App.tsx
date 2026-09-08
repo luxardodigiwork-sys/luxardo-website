@@ -96,6 +96,19 @@ import ProductionHomePage from "./pages/production/ProductionHomePage";
 import StaffManagementPage from "./pages/production/StaffManagementPage";
 import KarigarListPage from "./pages/production/KarigarListPage";
 import KarigarCreatePage from "./pages/production/KarigarCreatePage";
+// Phase 2 — Design → Sample Design → Sample Piece → Production Request
+import DesignListPage from "./pages/production/DesignListPage";
+import DesignCreatePage from "./pages/production/DesignCreatePage";
+import DesignDetailPage from "./pages/production/DesignDetailPage";
+import SampleDesignListPage from "./pages/production/SampleDesignListPage";
+import SampleDesignCreatePage from "./pages/production/SampleDesignCreatePage";
+import SampleDesignDetailPage from "./pages/production/SampleDesignDetailPage";
+import SamplePieceListPage from "./pages/production/SamplePieceListPage";
+import SamplePieceCreatePage from "./pages/production/SamplePieceCreatePage";
+import SamplePieceDetailPage from "./pages/production/SamplePieceDetailPage";
+import ProductionRequestListPage from "./pages/production/ProductionRequestListPage";
+import ProductionRequestCreatePage from "./pages/production/ProductionRequestCreatePage";
+import ProductionRequestDetailPage from "./pages/production/ProductionRequestDetailPage";
 
 const ProtectedBackendRoute = ({
   role,
@@ -310,6 +323,19 @@ export default function App() {
               <Route path="staff" element={<StaffManagementPage />} />
               <Route path="karigars" element={<KarigarListPage />} />
               <Route path="karigars/new" element={<KarigarCreatePage />} />
+              {/* Phase 2 — Design chain */}
+              <Route path="designs" element={<DesignListPage />} />
+              <Route path="designs/new" element={<DesignCreatePage />} />
+              <Route path="designs/:id" element={<DesignDetailPage />} />
+              <Route path="sample-designs" element={<SampleDesignListPage />} />
+              <Route path="sample-designs/new" element={<SampleDesignCreatePage />} />
+              <Route path="sample-designs/:id" element={<SampleDesignDetailPage />} />
+              <Route path="sample-pieces" element={<SamplePieceListPage />} />
+              <Route path="sample-pieces/new" element={<SamplePieceCreatePage />} />
+              <Route path="sample-pieces/:id" element={<SamplePieceDetailPage />} />
+              <Route path="requests" element={<ProductionRequestListPage />} />
+              <Route path="requests/new" element={<ProductionRequestCreatePage />} />
+              <Route path="requests/:id" element={<ProductionRequestDetailPage />} />
             </Route>
 
             <Route path="/" element={<Layout />}>

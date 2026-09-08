@@ -78,44 +78,55 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    /* ── Catalogue Designs ─────────────────────────────────────────── */
+    /* ── Catalogue Designs ───────────────────────────────────────────
+     * All writes go through Cloud Functions (designCreate / Update /
+     * Submit / Approve / SetCatalogueMeta / NewVersion) so that Owner
+     * approval, freeze and version archiving stay server-enforced and a
+     * client can never self-approve or silently rewrite a frozen version.
+     */
     match /catalogueDesigns/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','designer','pm','dispatch','tailor','store']);
-      allow create: if isAdmin() || isStaffWithRole('designer');
-      allow update: if (isAdmin() || isStaffWithRole('designer') || isStaffWithRole('owner')) && (
-        !resource.data.isFrozen ||
-        // Allow designer to set catalogueShortName/designNumber AFTER owner approval
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'catalogueShortName', 'designNumber', 'updatedAt'
-        ])
-      );
-      allow delete: if false; // no-delete immutability
+      allow create, update, delete: if false;
     }
 
-    /* ── Sample Designs ─────────────────────────────────────────────── */
+    /* ── Design Versions (append-only archives) ─────────────────────── */
+    match /designVersions/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','designer','pm','dispatch','tailor','store']);
+      allow write: if false; // Cloud Functions only (Admin SDK)
+    }
+
+    /* ── Sample Designs (fabric swatch) ─────────────────────────────── */
     match /sampleDesigns/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','designer','pm','dispatch']);
-      allow create, update: if isAdmin() || isStaffWithRole('designer');
-      allow delete: if false;
+      allow create, update, delete: if false; // all writes via Cloud Functions
     }
 
-    /* ── Sample Pieces ──────────────────────────────────────────────── */
+    /* ── Sample Pieces (complete garment) ───────────────────────────── */
     match /samplePieces/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['admin','owner','designer','pm','dispatch']);
-      allow create, update: if isAdmin() || isStaffWithRole('designer');
-      allow delete: if false;
+      allow create, update, delete: if false; // all writes via Cloud Functions
     }
 
-    /* ── Production Requests ────────────────────────────────────────── */
+    /* ── Production Requests ──────────────────────────────────────────
+     * All writes via Cloud Functions (prCreate / Update / Submit /
+     * Approve / Reject / EditApproved). PM sees ONLY Owner-approved PRs.
+     * Approved PR quantity + design version can never be changed by rules
+     * itself — the CF freeze guards are the strong gate.
+     */
     match /productionRequests/{id} {
-      allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
-      allow create: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
-      allow update: if (isAdmin() || isStaffInRoles(['owner','pm'])) && (
-        !resource.data.originalQtyFrozen ||
-        // After approval, originalOrderedQty is immutable
-        request.resource.data.originalOrderedQty == resource.data.originalOrderedQty
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isStaffWithRole('owner') ||
+        isStaffWithRole('dispatch') ||
+        (isStaffWithRole('pm') && (resource.data.status in ['APPROVED','IN_PRODUCTION','COMPLETED']))
       );
-      allow delete: if false;
+      allow create, update, delete: if false;
+
+      /* ── PR post-approval edit trail (urgency / requiredDate only) ── */
+      match /audit/{auditId} {
+        allow read: if isSignedIn() && isStaffInRoles(['admin','owner','pm','dispatch']);
+        allow write: if false;
+      }
     }
 
     /* ── Physical Pieces (atomic tracking unit) ──────────────────────── */

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Layers, Package, FileText,
-  LogOut, Menu, X, ChevronRight, Settings, Shield
+  LogOut, Menu, X, ChevronRight, Settings, Shield, Palette, Scissors, Shirt, ClipboardList
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/rolePermissions';
@@ -29,6 +29,15 @@ export default function ProductionLayout() {
       items: [
         { path: '/production/staff', label: 'Staff', icon: Users, roles: ['admin','super_admin','owner'] },
         { path: '/production/karigars', label: 'Karigars', icon: Users, roles: ['admin','super_admin','owner','pm','dispatch'], show: can(effectiveRole as any, 'production.karigars') },
+      ],
+    },
+    {
+      title: 'Design Chain',
+      items: [
+        { path: '/production/designs', label: 'Catalogue Designs', icon: Palette, roles: ['admin','super_admin','owner','designer','pm','dispatch'], show: can(effectiveRole as any, 'production.designs') },
+        { path: '/production/sample-designs', label: 'Sample Designs', icon: Scissors, roles: ['admin','super_admin','owner','designer','pm','dispatch'], show: can(effectiveRole as any, 'production.sampleDesigns') },
+        { path: '/production/sample-pieces', label: 'Sample Pieces', icon: Shirt, roles: ['admin','super_admin','owner','designer','pm','dispatch'], show: can(effectiveRole as any, 'production.samplePieces') },
+        { path: '/production/requests', label: 'Production Requests', icon: ClipboardList, roles: ['admin','super_admin','owner','pm','dispatch'], show: can(effectiveRole as any, 'production.requests') },
       ],
     },
     {

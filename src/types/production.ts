@@ -48,9 +48,9 @@ export type StaffRole =
   | "accounts"
   | "analysis";
 
-export type DesignStatus = "DRAFT" | "APPROVED" | "FROZEN";
-export type SampleDesignStatus = "DRAFT" | "APPROVED" | "FROZEN";
-export type SamplePieceStatus = "IN_WORK" | "COMPLETE";
+export type DesignStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "FROZEN";
+export type SampleDesignStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "FROZEN";
+export type SamplePieceStatus = "IN_WORK" | "COMPLETE" | "APPROVED";
 export type PieceKind = "PHYSICAL" | "SAMPLE";
 
 /** Physical piece lifecycle stage (atomic tracking unit). */
@@ -102,9 +102,12 @@ export type RejectionType = "REWORK" | "COMPLETE_REJECT";
  * ID: KL-XXXX (transaction-safe sequential)
  * A design pattern on fabric in the collection.
  *
+ * Lifecycle: DRAFT → PENDING_APPROVAL → APPROVED (isFrozen = true).
  * Owner approval freezes the design for production.
  * After approval, Designer assigns catalogueShortName + designNumber.
- * V2 = new version, not modification (version is incremented).
+ * V2 = new version, not modification (version is incremented) — the frozen
+ * version stays archived in designVersions and existing production never
+ * switches to the newer version silently.
  */
 export interface DesignDoc {
   id: string; // "KL-0001"
@@ -128,9 +131,15 @@ export interface DesignDoc {
   updatedAt: string;
 }
 
-/** Immutable snapshot written on approval (v1) and freeze (v2+). */
+/**
+ * Collection: designVersions (top-level, append-only; written by Cloud Function)
+ * ID: {designId}-v{versionNo}  e.g. "KL-0001-v1"
+ * Immutable snapshot written on Owner approval. Never overwritten;
+ * existing production always references the approved frozen version.
+ */
 export interface DesignVersionDoc {
-  id: string; // "v1", "v2"
+  id: string; // "KL-0001-v1"
+  designId: string;
   versionNo: number;
   snapshot: DesignDoc;
   frozen: boolean;
@@ -153,11 +162,12 @@ export interface SampleDesignDoc {
   id: string; // "SAMPLE-DESIGN-0001"
   originalSampleId: string | null; // legacy: original SAMPLE-10021 format (preserve for backward-compat)
   catalogDesignId: string | null; // FK → catalogueDesigns/{id}
+  designVersionId: string | null; // FK → designVersions/{id} (approved design version)
   name: string;
   description: string;
   image: string;
   images: string[];
-  status: SampleDesignStatus;
+  status: SampleDesignStatus; // DRAFT → PENDING_APPROVAL → APPROVED (frozen)
   currentVersion: number;
   approvedBy: string | null;
   approvedByName: string | null;
@@ -191,10 +201,14 @@ export interface SampleDesignVersionDoc {
 export interface SamplePieceDoc {
   id: string; // "SAMPLE-PIECE-0001"
   designId: string; // FK → catalogueDesigns/{id}
+  designVersionId: string | null; // FK → designVersions/{id} (approved design version)
   sampleDesignId: string | null; // FK → sampleDesigns/{id} (swatch it is based on)
-  status: SamplePieceStatus; // IN_WORK | COMPLETE
+  status: SamplePieceStatus; // IN_WORK → COMPLETE (garment photo) → APPROVED (owner)
   notes: string;
-  image: string; // Photo of completed garment (on COMPLETE)
+  image: string; // Photo of completed garment (compulsory on COMPLETE)
+  approvedBy: string | null;
+  approvedByName: string | null;
+  approvedAt: string | null;
   createdBy: string;
   createdByName: string;
   createdAt: string;
@@ -224,6 +238,8 @@ export interface ProductionRequestDoc {
 
   /** The catalogue design this request reproduces. */
   designId: string | null;
+  /** FK → designVersions/{id} — the Owner-approved (frozen) version to produce. */
+  designVersionId: string | null;
   garmentType: string | null;
 
   // Quantity tracking (6 fields)
@@ -550,15 +566,19 @@ export interface StaffDoc {
 export type AuditAction =
   | "DESIGN_CREATE"
   | "DESIGN_UPDATE"
+  | "DESIGN_SUBMIT" // designer submits for owner review
   | "DESIGN_APPROVE"
   | "DESIGN_FREEZE"
+  | "DESIGN_NEW_VERSION" // V2 revision started from a frozen design
   | "DESIGN_SET_CATALOGUE_META" // Designer assigns catalogueShortName + designNumber
   | "SAMPLE_DESIGN_CREATE"
   | "SAMPLE_DESIGN_UPDATE"
+  | "SAMPLE_DESIGN_SUBMIT"
   | "SAMPLE_DESIGN_APPROVE"
   | "SAMPLE_DESIGN_FREEZE"
   | "SAMPLE_PIECE_CREATE"
   | "SAMPLE_PIECE_COMPLETE"
+  | "SAMPLE_PIECE_APPROVE"
   | "PR_CREATE"
   | "PR_SUBMIT"
   | "PR_APPROVE"

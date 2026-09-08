@@ -1,6 +1,38 @@
 {
   "indexes": [
     {
+      "collectionGroup": "designVersions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "designId", "order": "ASCENDING" },
+        { "fieldPath": "versionNo", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sampleDesigns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "catalogDesignId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "samplePieces",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "designId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productionRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "designId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "pieces",
       "queryScope": "COLLECTION",
       "fields": [

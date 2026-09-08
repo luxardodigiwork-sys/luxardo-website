@@ -98,15 +98,13 @@ const ID_PREFIXES: Record<string, string> = {
   labourSession:    "LS-",
 };
 
-export const nextId = onCall(async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  const { domain } = request.data as { domain?: string };
-  if (!domain || !ID_PREFIXES[domain]) {
-    throw new HttpsError("invalid-argument", `Invalid domain. Allowed: ${Object.keys(ID_PREFIXES).join(", ")}`);
-  }
-
+/**
+ * generateId — shared atomic ID generator (used by nextId and Phase 2 CFs).
+ * Transaction-safe: increments idCounters/{domain} and returns the new ID.
+ */
+export async function generateId(domain: string): Promise<string> {
   const counterRef = db.doc(`idCounters/${domain}`);
-  const newId = await db.runTransaction(async (tx) => {
+  return db.runTransaction(async (tx) => {
     const snap = await tx.get(counterRef);
     let next: number;
     let prefix: string;
@@ -123,6 +121,16 @@ export const nextId = onCall(async (request) => {
     const padded = String(next).padStart(4, "0");
     return `${prefix}${padded}`;
   });
+}
+
+export const nextId = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const { domain } = request.data as { domain?: string };
+  if (!domain || !ID_PREFIXES[domain]) {
+    throw new HttpsError("invalid-argument", `Invalid domain. Allowed: ${Object.keys(ID_PREFIXES).join(", ")}`);
+  }
+
+  const newId = await generateId(domain);
 
   return { id: newId };
 });

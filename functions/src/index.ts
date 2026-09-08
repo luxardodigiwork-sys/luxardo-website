@@ -180,3 +180,34 @@ export { sendOrderEmail } from "./emailSender";
 
 // V1 Production System — master-data CRUD + atomic ID generation
 export { nextId, staffCreate, staffUpdate, karigarCreate, karigarUpdate } from "./production";
+
+// Phase 2 · Block 2.1 — Catalogue Design management + version preservation
+export {
+  designCreate,
+  designUpdate,
+  designSubmit,
+  designApprove,
+  designSetCatalogueMeta,
+  designNewVersion,
+} from "./designs";
+
+// Phase 2 · Block 2.2/2.3 — Sample Design (fabric swatch) + Sample Piece (garment)
+export {
+  sampleDesignCreate,
+  sampleDesignUpdate,
+  sampleDesignSubmit,
+  sampleDesignApprove,
+  samplePieceCreate,
+  samplePieceComplete,
+  samplePieceApprove,
+} from "./samples";
+
+// Phase 2 · Block 2.4 — Production Request foundation
+export {
+  prCreate,
+  prUpdate,
+  prSubmit,
+  prApprove,
+  prReject,
+  prEditApproved,
+} from "./productionRequests";

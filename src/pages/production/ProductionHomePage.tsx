@@ -1,11 +1,12 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { roleLabel } from '../../utils/rolePermissions';
-import { Layers, Users, Package, FileText, TrendingUp } from 'lucide-react';
+import { roleLabel, can } from '../../utils/rolePermissions';
+import { Layers, Users, Package, FileText, TrendingUp, Palette, Scissors, Shirt, ClipboardList } from 'lucide-react';
 
 export default function ProductionHomePage() {
   const { user } = useAuth();
   const staffRole = user?.staffRole || user?.role || '';
+  const effectiveRole = staffRole || user?.role || '';
 
   return (
     <div className="min-h-screen p-6 md:p-8">
@@ -91,6 +92,61 @@ export default function ProductionHomePage() {
               <p className="text-[10px] text-gray-400 uppercase tracking-widest">E-commerce admin dashboard</p>
             </div>
           </a>
+        </div>
+      </div>
+
+      {/* Design Chain quick links */}
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mt-6">
+        <h3 className="font-bold text-sm uppercase tracking-widest text-black mb-4">Design → Production Request</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {can(effectiveRole as any, 'production.designs') && (
+            <a
+              href="/production/designs"
+              className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              <Palette size={18} className="text-gray-400" />
+              <div>
+                <p className="text-sm font-medium text-black">Catalogue Designs</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest">KL-XXXX · versions</p>
+              </div>
+            </a>
+          )}
+          {can(effectiveRole as any, 'production.sampleDesigns') && (
+            <a
+              href="/production/sample-designs"
+              className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              <Scissors size={18} className="text-gray-400" />
+              <div>
+                <p className="text-sm font-medium text-black">Sample Designs</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest">fabric swatches</p>
+              </div>
+            </a>
+          )}
+          {can(effectiveRole as any, 'production.samplePieces') && (
+            <a
+              href="/production/sample-pieces"
+              className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              <Shirt size={18} className="text-gray-400" />
+              <div>
+                <p className="text-sm font-medium text-black">Sample Pieces</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest">catalogue garments</p>
+              </div>
+            </a>
+          )}
+          {can(effectiveRole as any, 'production.requests') && (
+            <a
+              href="/production/requests"
+              className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              <ClipboardList size={18} className="text-gray-400" />
+              <div>
+                <p className="text-sm font-medium text-black">Production Requests</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest">PR-XXXX · approvals</p>
+              </div>
+            </a>
+          )}
         </div>
       </div>
     </div>
