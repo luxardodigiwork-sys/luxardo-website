@@ -41,7 +41,23 @@ export async function requireStaff(uid: string): Promise<StaffIdentity> {
   throw new HttpsError("permission-denied", "Production staff access required.");
 }
 
-/** True when the actor identity matches one of the given roles. */
+/**
+ * True when the actor identity satisfies one of the given roles.
+ *
+ * `super_admin` is a privileged SUPERSET of `admin` for production
+ * authorization: any allow-list that grants `admin` also grants
+ * `super_admin`. This is the only elevation — `super_admin` never gains an
+ * operation that `admin` would not, and lists that exclude `admin`
+ * (e.g. the guard-only QC list) still exclude `super_admin`. Role semantics
+ * for owner/pm/guard/designer/dispatch/tailor/store are unchanged.
+ *
+ * This never relaxes authentication: the caller must already hold a valid
+ * staff identity resolved by requireStaff() (which itself fails closed when
+ * no staff/{uid} identity exists).
+ */
 export function hasAnyRole(identity: StaffIdentity, roles: string[]): boolean {
-  return roles.includes((identity.role || "").toLowerCase());
+  const r = (identity.role || "").toLowerCase();
+  if (roles.includes(r)) return true;
+  if (r === "super_admin" && roles.includes("admin")) return true;
+  return false;
 }

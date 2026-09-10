@@ -5,7 +5,8 @@
  *
  * All functions:
  *  - require Firebase Auth (request.auth.uid)
- *  - verify admin role from customers/{uid} doc
+ *  - verify admin role from staff/{uid} (Loom identity), with a
+ *    customers/{uid} fallback for the legacy B2C admin identity
  *  - run inside Firestore transactions for atomicity
  *  - append audit logs (never delete)
  */
@@ -19,14 +20,29 @@ const db = admin.firestore();
 /* ───────────────────── HELPER: verify admin ─────────────────────── */
 
 async function requireAdmin(uid: string): Promise<{ name: string; role: string }> {
-  const snap = await db.doc(`customers/${uid}`).get();
-  if (!snap.exists) throw new HttpsError("permission-denied", "User doc not found.");
-  const d = snap.data()!;
-  const role = (d.role || "").toLowerCase();
-  if (role !== "admin" && role !== "super_admin") {
-    throw new HttpsError("permission-denied", "Admin role required.");
+  // Canonical Loom production identity: staff/{uid}. These callables are
+  // master-data / registry operations, so only admin / super_admin qualify.
+  const staffSnap = await db.doc(`staff/${uid}`).get();
+  if (staffSnap.exists) {
+    const s = staffSnap.data()!;
+    const sRole = String(s.role || "").toLowerCase();
+    if ((sRole === "admin" || sRole === "super_admin") && s.active !== false) {
+      return { name: String(s.displayName || s.name || "Admin"), role: sRole };
+    }
   }
-  return { name: d.firstName ? `${d.firstName} ${d.lastName || ""}`.trim() : d.name || "Admin", role };
+  // B2C fallback: legacy admin identity in customers/{uid}. This is a
+  // server-side authorization check only — it is NOT the Loom client
+  // authentication path and does not run in the browser.
+  const snap = await db.doc(`customers/${uid}`).get();
+  if (snap.exists) {
+    const d = snap.data()!;
+    const role = (d.role || "").toLowerCase();
+    if (role === "admin" || role === "super_admin") {
+      return { name: d.firstName ? `${d.firstName} ${d.lastName || ""}`.trim() : d.name || "Admin", role };
+    }
+  }
+  // Fail closed: no staff/{uid} admin identity and no customers/{uid} admin.
+  throw new HttpsError("permission-denied", "Admin role required.");
 }
 
 /* ──────────────────── HELPER: audit log ─────────────────────────── */
