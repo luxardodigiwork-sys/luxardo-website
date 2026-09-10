@@ -11,6 +11,7 @@ import {
 } from 'firebase/auth';
 import { auth, db } from '../../firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { normalizeStaffRole, isCanonicalStaffRole, isLoomHost, isPrivilegedEmail, privilegedRoleForEmail } from '../../utils/loomIdentity';
 
 const MAX_FAILED_ATTEMPTS = 3;
 const LOCKOUT_DURATION_MINUTES = 15;
@@ -30,16 +31,26 @@ export default function AdminLoginPage() {
   const [isLocked, setIsLocked] = useState(false);
   const [lockTimer, setLockTimer] = useState<number>(0);
 
-  const from = (location.state as any)?.from?.pathname || '/admin/dashboard';
+  const fromPath = (location.state as any)?.from?.pathname as string | undefined;
+  const from = fromPath || '/admin/dashboard';
 
   useEffect(() => {
     if (isAuthReady && user) {
-      if (['admin', 'super_admin'].includes(user.role)) {
+      if (isLoomHost()) {
+        // LUXARDO FLOW: this page authenticates the two privileged Gmail
+        // identities — Super Admin and Admin.
+        if (privilegedRoleForEmail(user.email) || ['admin', 'super_admin'].includes(user.role)) {
+          navigate(fromPath || '/production', { replace: true });
+        } else if (isCanonicalStaffRole(user.staffRole)) {
+          // An ordinary staff member landed here — send them to the common page.
+          navigate('/login', { replace: true });
+        }
+      } else if (['admin', 'super_admin'].includes(user.role)) {
         navigate(from, { replace: true });
       }
     }
     checkLocalLock();
-  }, [user, isAuthReady, navigate, from]);
+  }, [user, isAuthReady, navigate, from, fromPath]);
 
   // LOCAL STORAGE LOCK LOGIC
   const checkLocalLock = () => {
@@ -71,24 +82,52 @@ export default function AdminLoginPage() {
     }
   };
 
-  const verifyAdminRole = async (uid: string) => {
-    // App stores roles in customers/{uid} (AuthContext source of truth)
+  // Returns 'admin' for admin/super_admin, or 'staff' for any other canonical
+  // Loom staff role (only accepted on the Loom host, which has no /backend).
+  const verifyAdminRole = async (uid: string): Promise<'admin' | 'staff'> => {
+    // ── LUXARDO FLOW: this page authenticates the two PRIVILEGED Gmail
+    // identities — Super Admin and Admin. Recognised by identifier, not by a
+    // role doc, so this works with zero dependency on staff/{uid}. Ordinary
+    // staff use the common LUXARDO FLOW staff login page.
+    if (isLoomHost()) {
+      if (isPrivilegedEmail(auth.currentUser?.email)) return 'admin';
+      await signOut(auth);
+      throw new Error('This sign-in is for Super Admin / Admin only. Staff members use the LUXARDO FLOW staff login page.');
+    }
+
+    // Primary source of truth is customers/{uid} (shared AuthContext).
     const userDoc = await getDoc(doc(db, 'customers', uid));
-    if (!userDoc.exists()) {
+    let role: string | undefined = userDoc.exists()
+      ? userDoc.data()?.role?.toLowerCase()
+      : undefined;
+
+    // Fallback: Loom staff whose identity lives only in staff/{uid}.
+    if (!role) {
+      const staffDoc = await getDoc(doc(db, 'staff', uid));
+      if (staffDoc.exists() && staffDoc.data()?.active !== false) {
+        role = normalizeStaffRole(staffDoc.data()?.role) ?? undefined;
+      }
+    }
+
+    if (!role) {
       await signOut(auth);
       throw new Error("Admin record not found. Sign-in again or contact support.");
     }
 
-    const role = userDoc.data()?.role?.toLowerCase();
     if (['admin', 'super_admin'].includes(role)) {
-      return true;
-    } else if (['dispatch', 'accounts', 'owner'].includes(role)) {
+      return 'admin';
+    }
+    // Loom host: any other canonical staff role is a valid production sign-in.
+    if (isLoomHost() && isCanonicalStaffRole(role)) {
+      return 'staff';
+    }
+    // B2C behaviour unchanged.
+    if (['dispatch', 'accounts', 'owner'].includes(role)) {
       await signOut(auth);
       throw new Error('Please use the Backend Gateway (/backend) for your role.');
-    } else {
-      await signOut(auth);
-      throw new Error('Access denied: Unauthorised account.');
     }
+    await signOut(auth);
+    throw new Error('Access denied: Unauthorised account.');
   };
 
   const errMsg = (code: string) => {
@@ -100,6 +139,8 @@ export default function AdminLoginPage() {
         return 'No account found.';
       case 'auth/invalid-email':
         return 'Invalid email format.';
+      case 'auth/account-exists-with-different-credential':
+        return 'This email already has a password login. Sign in with email and password first, then link Google.';
       default:
         return 'Authentication failed.';
     }
@@ -119,14 +160,14 @@ export default function AdminLoginPage() {
 
       const submitEmail = email.trim().toLowerCase();
       const cred = await signInWithEmailAndPassword(auth, submitEmail, password);
-      
+
       // Verify role in firestore
-      await verifyAdminRole(cred.user.uid);
-      
+      const kind = await verifyAdminRole(cred.user.uid);
+
       // Success -> Clear lock
       localStorage.removeItem('admin_attempts');
       localStorage.removeItem('admin_lock');
-      navigate(from, { replace: true });
+      navigate(isLoomHost() ? '/production' : (kind === 'admin' ? from : (fromPath || '/production')), { replace: true });
 
     } catch (err: any) {
       // 🚀 FIX: Ab HAR error par strike count hoga (Password galat ho ya Database Role missing ho)
@@ -155,11 +196,11 @@ export default function AdminLoginPage() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       const cred = await signInWithPopup(auth, provider);
-      await verifyAdminRole(cred.user.uid);
-      
+      const kind = await verifyAdminRole(cred.user.uid);
+
       localStorage.removeItem('admin_attempts');
       localStorage.removeItem('admin_lock');
-      navigate(from, { replace: true });
+      navigate(isLoomHost() ? '/production' : (kind === 'admin' ? from : (fromPath || '/production')), { replace: true });
     } catch (err: any) {
       recordLocalFailure();
       if (err?.message && (err.message.includes('Admin record not found') || err.message.includes('Access denied') || err.message.includes('Backend Gateway'))) {
@@ -195,8 +236,12 @@ export default function AdminLoginPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 bg-black rounded-full mb-4 shadow-md">
             <Lock size={20} className="text-white" />
           </div>
-          <h1 className="font-display text-2xl text-black tracking-[0.3em] uppercase">LUXARDO</h1>
-          <p className="text-[10px] tracking-[0.4em] text-gray-500 mt-1">ADMIN ACCESS</p>
+          <h1 className="font-display text-2xl text-black tracking-[0.3em] uppercase">
+            {isLoomHost() ? 'LUXARDO FLOW' : 'LUXARDO'}
+          </h1>
+          <p className="text-[10px] tracking-[0.4em] text-gray-500 mt-1">
+            ADMIN ACCESS
+          </p>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-xl relative overflow-hidden">
@@ -222,7 +267,7 @@ export default function AdminLoginPage() {
             {mode === 'login' ? 'Sign In' : 'Reset Password'}
           </h2>
           <p className="text-[10px] tracking-widest uppercase text-gray-400 text-center mb-6">
-            Admin personnel only
+            {isLoomHost() ? 'Super Admin & Admin only' : 'Admin personnel only'}
           </p>
 
           {error && (

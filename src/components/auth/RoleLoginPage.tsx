@@ -11,6 +11,7 @@ import {
 } from 'firebase/auth';
 import { auth, db } from '../../firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { normalizeStaffRole, isCanonicalStaffRole, isPrivilegedEmail } from '../../utils/loomIdentity';
 
 const MAX_FAILED_ATTEMPTS = 3;
 const LOCKOUT_DURATION_MINUTES = 15;
@@ -30,6 +31,13 @@ export interface RoleLoginConfig {
   tagline?: string;
   /** Where to send wrong-role users (default /backend). */
   wrongRoleRedirect?: string;
+  /**
+   * Common LUXARDO FLOW staff login: accept ANY canonical staff role except
+   * Super Admin (who has a dedicated page), resolve identity from staff/{uid},
+   * always land on /production, and hide the (inoperable) email-reset flow —
+   * the staff identifiers are not real mailboxes.
+   */
+  common?: boolean;
 }
 
 export default function RoleLoginPage({
@@ -40,6 +48,7 @@ export default function RoleLoginPage({
   attemptsKey,
   tagline = 'Authorised personnel only',
   wrongRoleRedirect = '/backend',
+  common = false,
 }: RoleLoginConfig) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -56,14 +65,23 @@ export default function RoleLoginPage({
   const [lockTimer, setLockTimer] = useState<number>(0);
 
   const from = (location.state as any)?.from?.pathname || redirectPath;
+  // Common staff page always lands on /production; role decides what renders.
+  const successTarget = common
+    ? ((location.state as any)?.from?.pathname || '/production')
+    : from;
 
   useEffect(() => {
-    if (isAuthReady && user && allowedRoles.includes(user.role)) {
-      navigate(from, { replace: true });
+    if (isAuthReady && user) {
+      const alreadyAllowed = common
+        // Common page = ordinary staff only. Super Admin and Admin both have
+        // the dedicated privileged page.
+        ? (isCanonicalStaffRole(user.staffRole) && !isPrivilegedEmail(user.email))
+        : allowedRoles.includes(user.role);
+      if (alreadyAllowed) navigate(successTarget, { replace: true });
     }
     checkLocalLock();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, isAuthReady, navigate, from]);
+  }, [user, isAuthReady, navigate, successTarget]);
 
   const checkLocalLock = () => {
     const lockData = localStorage.getItem(lockKey);
@@ -96,18 +114,60 @@ export default function RoleLoginPage({
   };
 
   const verifyRole = async (uid: string) => {
-    // App's source of truth for roles is `customers/{uid}` (AuthContext).
-    const userDoc = await getDoc(doc(db, 'customers', uid));
-    if (!userDoc.exists()) {
+    // ── Common LUXARDO FLOW staff login ──────────────────────────────
+    // Ordinary staff only. Identity/role come from staff/{uid} (the sole
+    // client-readable role source on the Loom project). Super Admin and Admin
+    // are turned away — they use the dedicated privileged page.
+    if (common) {
+      if (isPrivilegedEmail(auth.currentUser?.email)) {
+        await signOut(auth);
+        throw new Error('Super Admin / Admin: please sign in on the dedicated admin page.');
+      }
+      let staffRole: string | undefined;
+      try {
+        const staffDoc = await getDoc(doc(db, 'staff', uid));
+        if (staffDoc.exists() && staffDoc.data()?.active !== false) {
+          staffRole = normalizeStaffRole(staffDoc.data()?.role) ?? undefined;
+        }
+      } catch {
+        // permission / network error → treated as "no identity" below
+      }
+      if (!staffRole) {
+        await signOut(auth);
+        throw new Error('This account is not a recognised LUXARDO FLOW staff member. Contact your administrator.');
+      }
+      return true;
+    }
+
+    // ── Dedicated per-role page (B2C) ───────────────────────────────
+    // Primary source of truth is `customers/{uid}` (shared B2C AuthContext).
+    let role: string | undefined;
+    try {
+      const userDoc = await getDoc(doc(db, 'customers', uid));
+      role = userDoc.exists() ? userDoc.data()?.role?.toLowerCase() : undefined;
+    } catch {
+      role = undefined; // customers/{uid} not readable here → fall through to staff/{uid}
+    }
+
+    // Fallback: Loom staff whose identity lives only in `staff/{uid}`
+    // (no customers mirror yet). Only triggers when the customer doc is
+    // absent, so existing B2C behaviour is unchanged.
+    if (!role) {
+      const staffDoc = await getDoc(doc(db, 'staff', uid));
+      if (staffDoc.exists() && staffDoc.data()?.active !== false) {
+        role = normalizeStaffRole(staffDoc.data()?.role) ?? undefined;
+      }
+    }
+
+    if (!role) {
       await signOut(auth);
       throw new Error('Account record not found. Contact support.');
     }
-    const role = userDoc.data()?.role?.toLowerCase();
     if (allowedRoles.includes(role)) return true;
 
     // Recognised but wrong-role users get a friendly redirect
     await signOut(auth);
-    if (['admin', 'super_admin', 'owner', 'dispatch', 'accounts', 'analysis'].includes(role)) {
+    if (isCanonicalStaffRole(role) || ['admin', 'super_admin'].includes(role)) {
       throw new Error(`This page is for "${roleLabel}". Your role is "${role.toUpperCase()}". Use the right portal.`);
     }
     throw new Error('Access denied: this account is not authorised for staff portal.');
@@ -130,6 +190,8 @@ export default function RoleLoginPage({
         return 'Sign-in cancelled.';
       case 'auth/popup-blocked':
         return 'Popup blocked. Allow popups and try again.';
+      case 'auth/account-exists-with-different-credential':
+        return 'This email already has a password login. Sign in with your email and password first, then link Google from your account.';
       default:
         return 'Authentication failed.';
     }
@@ -150,7 +212,7 @@ export default function RoleLoginPage({
       await verifyRole(cred.user.uid);
       localStorage.removeItem(attemptsKey);
       localStorage.removeItem(lockKey);
-      navigate(from, { replace: true });
+      navigate(successTarget, { replace: true });
     } catch (err: any) {
       recordLocalFailure();
       setError(err?.code ? errMsg(err.code) : (err?.message || 'Authentication failed.'));
@@ -174,7 +236,7 @@ export default function RoleLoginPage({
       await verifyRole(cred.user.uid);
       localStorage.removeItem(attemptsKey);
       localStorage.removeItem(lockKey);
-      navigate(from, { replace: true });
+      navigate(successTarget, { replace: true });
     } catch (err: any) {
       recordLocalFailure();
       setError(err?.code ? errMsg(err.code) : (err?.message || 'Google sign-in failed.'));
@@ -187,9 +249,17 @@ export default function RoleLoginPage({
     e.preventDefault();
     setError('');
     setOkMsg('');
+    const target = email.trim().toLowerCase();
+    // The common staff page has no email-reset workflow at all — the staff
+    // identifiers are not mailboxes. (This handler is only reachable from the
+    // non-common per-role pages and the privileged admin page.)
+    if (common) {
+      setError('Ask your administrator to reset your staff password.');
+      return;
+    }
     setLoading(true);
     try {
-      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+      await sendPasswordResetEmail(auth, target);
       setOkMsg('Password reset link sent. Check your inbox.');
       setTimeout(() => setMode('login'), 3000);
     } catch (err: any) {
@@ -202,16 +272,22 @@ export default function RoleLoginPage({
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
-        <Link to={wrongRoleRedirect} className="inline-flex items-center gap-2 text-xs text-gray-500 hover:text-black mb-6">
-          <ArrowLeft size={14} /> Back to portal selection
-        </Link>
+        {!common && (
+          <Link to={wrongRoleRedirect} className="inline-flex items-center gap-2 text-xs text-gray-500 hover:text-black mb-6">
+            <ArrowLeft size={14} /> Back to portal selection
+          </Link>
+        )}
 
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-black rounded-full mb-4 shadow-md">
             <Lock size={20} className="text-white" />
           </div>
-          <h1 className="font-display text-2xl text-black tracking-[0.3em] uppercase">LUXARDO</h1>
-          <p className="text-[10px] tracking-[0.4em] text-gray-500 mt-1">{roleLabel} ACCESS</p>
+          <h1 className="font-display text-2xl text-black tracking-[0.3em] uppercase">
+            {common ? 'LUXARDO FLOW' : 'LUXARDO'}
+          </h1>
+          <p className="text-[10px] tracking-[0.4em] text-gray-500 mt-1">
+            {common ? 'STAFF SIGN-IN' : `${roleLabel} ACCESS`}
+          </p>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-xl relative overflow-hidden">
@@ -224,12 +300,19 @@ export default function RoleLoginPage({
                 Multiple failed login attempts detected. This portal is temporarily locked for
                 <span className="font-bold text-red-600"> {lockTimer} minutes</span>.
               </p>
-              <button
-                onClick={() => { setMode('reset'); setIsLocked(false); }}
-                className="w-full bg-black text-white py-3 text-xs tracking-[0.3em] uppercase hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 rounded-lg"
-              >
-                Reset Password
-              </button>
+              {common ? (
+                <p className="text-[11px] text-gray-500 leading-relaxed">
+                  Wait for the lock to clear, then try again. If you have forgotten your
+                  password, ask your administrator to reset it.
+                </p>
+              ) : (
+                <button
+                  onClick={() => { setMode('reset'); setIsLocked(false); }}
+                  className="w-full bg-black text-white py-3 text-xs tracking-[0.3em] uppercase hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 rounded-lg"
+                >
+                  Reset Password
+                </button>
+              )}
             </div>
           )}
 
@@ -308,7 +391,13 @@ export default function RoleLoginPage({
                   {loading ? 'Verifying...' : 'Sign In'} <ArrowRight size={14} />
                 </button>
                 <div className="text-center pt-1">
-                  <button type="button" onClick={() => setMode('reset')} className="text-xs text-gray-500 hover:text-black tracking-wider">Forgot password?</button>
+                  {common ? (
+                    <span className="text-[11px] text-gray-400 tracking-wider">
+                      Forgot your password? Ask your administrator to reset it.
+                    </span>
+                  ) : (
+                    <button type="button" onClick={() => setMode('reset')} className="text-xs text-gray-500 hover:text-black tracking-wider">Forgot password?</button>
+                  )}
                 </div>
               </form>
             </>

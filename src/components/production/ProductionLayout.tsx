@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../utils/rolePermissions';
+import { isLoomHost } from '../../utils/loomIdentity';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export default function ProductionLayout() {
@@ -16,6 +17,7 @@ export default function ProductionLayout() {
 
   const staffRole = user?.staffRole || '';
   const effectiveRole = staffRole || user?.role || '';
+  const loom = isLoomHost();
 
   const navGroups = [
     {
@@ -42,13 +44,15 @@ export default function ProductionLayout() {
         { path: '/production/qc', label: 'Guard QC', icon: ShieldCheck, roles: ['admin','super_admin','guard'], show: can(effectiveRole as any, 'production.qc.perform') },
       ],
     },
-    {
+    // "System" links point into the separate B2C storefront app — never shown
+    // on LUXARDO FLOW (Loom), which does not mount the B2C portal at all.
+    ...(loom ? [] : [{
       title: 'System',
       items: [
         { path: '/admin/dashboard', label: 'Admin Portal', icon: Shield, roles: ['admin','super_admin'] },
         { path: '/backend', label: 'E-Commerce Portal', icon: Settings, roles: ['admin','super_admin','owner','dispatch','accounts','analysis'] },
       ],
-    },
+    }]),
   ];
 
   const filteredGroups = navGroups.map(g => ({
@@ -58,7 +62,7 @@ export default function ProductionLayout() {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/admin/login');
+    navigate(loom ? '/login' : '/admin/login');
   };
 
   return (

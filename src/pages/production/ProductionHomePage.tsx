@@ -4,6 +4,7 @@ import { db } from '../../firebase';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { roleLabel, can, type Role } from '../../utils/rolePermissions';
+import { isLoomHost } from '../../utils/loomIdentity';
 import {
   Layers, Users, Package, FileText, TrendingUp, Palette, Scissors, Shirt, ClipboardList,
   Loader2, Clock, AlertCircle, ArrowRight
@@ -288,7 +289,7 @@ export default function ProductionHomePage() {
                   </div>
                 </a>
               )}
-              {can(effectiveRole, 'admin.dashboard') && (
+              {!isLoomHost() && can(effectiveRole, 'admin.dashboard') && (
                 <a
                   href="/admin/dashboard"
                   className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors"

@@ -2,8 +2,12 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { normalizeStaffRole, isLoomHost, privilegedRoleForEmail } from '../utils/loomIdentity';
 
 const MASTER_ADMIN_EMAIL = 'luxardodigiwork@gmail.com';
+// Loom-only localStorage key (no B2C branding; distinct from the B2C key so the
+// two apps never read each other's cached identity).
+const LOOM_USER_KEY = 'LUXARDO_FLOW_user';
 
 interface User {
   id: string;
@@ -52,6 +56,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
+          // ══════════════════════════════════════════════════════════════
+          // LUXARDO FLOW (Loom) identity resolution.
+          //
+          // On the Loom project (luxardo-flow) the client can ONLY read
+          // staff/{uid} — there is no readable customers/{uid} (the mirror is
+          // denied by firestore.loom.rules). Resolving identity here, from
+          // staff/{uid} + the two privileged identifiers only, avoids the
+          // permission-denied throw that previously aborted sign-in.
+          // ══════════════════════════════════════════════════════════════
+          if (isLoomHost()) {
+            let loomUser: User | null = null;
+
+            const privRole = privilegedRoleForEmail(firebaseUser.email);
+            if (privRole) {
+              // Super Admin / Admin: recognised by identifier (a real Gmail
+              // mailbox), never by a role doc — so Google Sign-In and
+              // email/password both resolve with no Firestore dependency.
+              loomUser = {
+                id: firebaseUser.uid,
+                name: firebaseUser.displayName || (privRole === 'super_admin' ? 'Super Admin' : 'Admin'),
+                email: firebaseUser.email || '',
+                role: privRole,
+                staffRole: privRole,
+                isPrimeMember: false,
+              };
+            } else {
+              try {
+                const staffDoc = await getDoc(doc(db, 'staff', firebaseUser.uid));
+                if (staffDoc.exists()) {
+                  const s = staffDoc.data();
+                  const role = normalizeStaffRole(s.role); // null → fail closed
+                  if (role && s.active !== false) {
+                    loomUser = {
+                      id: firebaseUser.uid,
+                      name: s.displayName || s.name || firebaseUser.displayName || 'Staff',
+                      email: s.email || firebaseUser.email || '',
+                      role,          // customers-style role mirrors the staff role
+                      staffRole: role,
+                      isPrimeMember: false,
+                    };
+                  }
+                }
+              } catch (e) {
+                console.error('[LUXARDO FLOW] staff/{uid} read failed:', e);
+              }
+            }
+
+            if (loomUser) {
+              setUser(loomUser);
+              try { localStorage.setItem(LOOM_USER_KEY, JSON.stringify(loomUser)); } catch {}
+            } else {
+              // Authenticated but no recognised staff identity → fail closed.
+              setUser(null);
+              try { localStorage.removeItem(LOOM_USER_KEY); } catch {}
+            }
+            return; // finally{} still runs setIsAuthReady(true)
+          }
+
           // 🔐 AUTO-PROVISION ADMIN: If master email logs in but no customer doc, create one with role:admin
           const isMasterAdmin = firebaseUser.email?.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
           const customerRef = doc(db, 'customers', firebaseUser.uid);
@@ -94,18 +156,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const data = customerDoc.data();
 
             // ── V1 production staff identity ──────────────────────────────
-            // Read staff/{uid} in parallel to get the production role (designer/pm/guard/tailor/store).
+            // Read staff/{uid} to get the production role (designer/pm/guard/tailor/store).
             // This is additive — does not modify the existing customer flow.
+            // A legacy / unknown role (e.g. "grade") normalises to null and
+            // therefore fails closed.
             let staffRole: string | null = null;
             try {
               const staffRef = doc(db, 'staff', firebaseUser.uid);
               const staffDoc = await getDoc(staffRef);
               if (staffDoc.exists()) {
                 const s = staffDoc.data();
-                staffRole = s.role || null;
+                if (s.active !== false) staffRole = normalizeStaffRole(s.role);
               }
             } catch (e) {
               // Non-fatal: staff doc may not exist for non-production users
+            }
+            // Admin / super_admin customers are implicit production staff
+            // (mirrors functions/src/staffAuth.ts requireStaff fallback) so the
+            // master admin can reach /production even without a staff/{uid} doc.
+            if (!staffRole) {
+              const custRole = String(data.role || '').toLowerCase();
+              if (custRole === 'admin' || custRole === 'super_admin') staffRole = custRole;
             }
 
             const userData: User = {
@@ -129,7 +200,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(userData));
             localStorage.removeItem('LUXARDO FASHION_logged_out');
           } else {
-            const fallback: User = {
+            // ── No customers/{uid} — resolve from staff/{uid} ───────────────
+            // On the Loom project (luxardo-flow) staff are provisioned with a
+            // staff/{uid} doc; a customers/{uid} mirror is written alongside by
+            // staffCreate, but older records / bootstrap accounts may only have
+            // the staff doc. Resolve the Loom identity directly from it.
+            let staffUser: User | null = null;
+            try {
+              const staffDoc = await getDoc(doc(db, 'staff', firebaseUser.uid));
+              if (staffDoc.exists()) {
+                const s = staffDoc.data();
+                const role = normalizeStaffRole(s.role); // null for legacy/unknown → fail closed
+                if (role && s.active !== false) {
+                  staffUser = {
+                    id: firebaseUser.uid,
+                    name: s.displayName || s.name || firebaseUser.displayName || 'Staff',
+                    email: s.email || firebaseUser.email || '',
+                    role,          // customers-style role mirrors the staff role
+                    staffRole: role,
+                    isPrimeMember: false,
+                    phone: firebaseUser.phoneNumber || '',
+                  };
+                }
+              }
+            } catch (e) {
+              // Non-fatal: fall through to the generic customer fallback
+            }
+
+            const resolved: User = staffUser ?? {
               id: firebaseUser.uid,
               name: firebaseUser.displayName || 'User',
               email: firebaseUser.email || '',
@@ -138,8 +236,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               isPrimeMember: false,
               phone: firebaseUser.phoneNumber || '',
             };
-            setUser(fallback);
-            localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(fallback));
+            setUser(resolved);
+            localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(resolved));
           }
         } else {
           setUser(null);
@@ -165,6 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch (err) {}
     setUser(null);
     localStorage.removeItem('LUXARDO FASHION_user');
+    try { localStorage.removeItem(LOOM_USER_KEY); } catch {}
     localStorage.setItem('LUXARDO FASHION_logged_out', 'true');
   };
 
