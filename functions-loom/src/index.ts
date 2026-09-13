@@ -3,7 +3,7 @@
  * LUXARDO FASHION — LOOM PRODUCTION SYSTEM (luxardo-flow)
  *
  * Dedicated Cloud Functions entry for the Loom production system.
- * Re-exports ONLY the 35 Loom callables from the SHARED domain modules
+ * Re-exports ONLY the 36 Loom callables from the SHARED domain modules
  * (functions/src/*) — zero duplication. No B2C / Razorpay functions are
  * referenced here, so deploying to luxardo-flow never binds B2C secrets
  * and never requires Secret Manager access.
