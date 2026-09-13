@@ -70,11 +70,16 @@ export async function requireStaff(uid: string): Promise<StaffIdentity> {
   const staffSnap = await db.doc(`staff/${uid}`).get();
   if (staffSnap.exists) {
     const d = staffSnap.data();
-    return {
-      uid,
-      role: String(d?.role || ""),
-      name: String(d?.displayName || ""),
-    };
+    // Fail closed: a deactivated staff member must not retain access via
+    // this path, mirroring the active !== false check requireAdmin()
+    // already applies to its own staff/{uid} branch.
+    if (d?.active !== false) {
+      return {
+        uid,
+        role: String(d?.role || ""),
+        name: String(d?.displayName || ""),
+      };
+    }
   }
   const custSnap = await db.doc(`customers/${uid}`).get();
   if (custSnap.exists) {
