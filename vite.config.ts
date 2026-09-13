@@ -47,8 +47,44 @@ export default defineConfig(({ mode }) => {
     }
   }
 
+  /* Loom-only build isolation: index.html is a single static file shared by
+   * both builds, and public/ is copied verbatim by Vite into both outDirs —
+   * neither is touched by the `define` substitution above (that only rewrites
+   * import.meta.env.* inside bundled JS). Without this plugin the Loom build
+   * would ship B2C branding (title/meta/preconnect) and a service worker
+   * hardcoded with the B2C Firebase config. Applied ONLY when isLoom, so the
+   * B2C build's index.html and public/firebase-messaging-sw.js are emitted
+   * completely unchanged, exactly as before. */
+  const loomIsolationPlugin = {
+    name: 'loom-isolation',
+    transformIndexHtml(html: string) {
+      return html
+        .replace(
+          '<title>LUXARDO FASHION | Modern Ethnic Menswear</title>',
+          '<title>LUXARDO LOOM | Production System</title>',
+        )
+        .replace(
+          /<meta name="description" content="[^"]*">/,
+          '<meta name="description" content="LUXARDO FLOW — internal production management system.">',
+        )
+        .replace(
+          'https://luxardo-fashion-website.firebaseapp.com',
+          'https://luxardo-flow.firebaseapp.com',
+        );
+    },
+    closeBundle() {
+      // Overwrite the B2C service worker that publicDir already copied into
+      // dist-loom/ with the Loom-safe (Firebase-SDK-free) variant, at the
+      // same public path fcm.ts registers ("/firebase-messaging-sw.js").
+      fs.copyFileSync(
+        path.resolve(__dirname, 'firebase-messaging-sw.loom.js'),
+        path.resolve(__dirname, outDir, 'firebase-messaging-sw.js'),
+      );
+    },
+  };
+
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), ...(isLoom ? [loomIsolationPlugin] : [])],
 
     define,
 
