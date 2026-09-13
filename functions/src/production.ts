@@ -5,7 +5,8 @@
  *
  * All functions:
  *  - require Firebase Auth (request.auth.uid)
- *  - verify admin role from customers/{uid} doc
+ *  - verify admin role from staff/{uid} (Loom identity), with a
+ *    customers/{uid} fallback for the legacy B2C admin identity
  *  - run inside Firestore transactions for atomicity
  *  - append audit logs (never delete)
  */
