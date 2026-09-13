@@ -13,12 +13,35 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
+import {
+  CANONICAL_STAFF_ROLES,
+  LEGACY_STAFF_ROLE_MAP,
+  normalizeStaffRole,
+} from "./staffAuth";
 
 const db = admin.firestore();
 
 /* ───────────────────── HELPER: verify admin ─────────────────────── */
 
+const ADMIN_STAFF_ROLES = ["owner", "admin", "super_admin"];
+
 async function requireAdmin(uid: string): Promise<{ name: string; role: string }> {
+  // Prefer staff/{uid} (Loom identity doc) with an owner/admin/super_admin role.
+  // This enables bootstrap on a fresh Loom project (luxardo-flow) where the B2C
+  // customers/{uid} doc does not exist. staff/{uid} is itself admin-managed, so no
+  // unauthorized escalation is introduced.
+  const staffSnap = await db.doc(`staff/${uid}`).get();
+  if (staffSnap.exists) {
+    const s = staffSnap.data()!;
+    // Fail closed: a non-canonical / legacy role string (e.g. "grade") is
+    // never treated as admin. Legacy roles are repaired only by the
+    // sanctioned staffBackfillCustomerDocs job.
+    const srole = String(s.role || "").toLowerCase().trim();
+    if (ADMIN_STAFF_ROLES.includes(srole) && s.active !== false) {
+      return { name: String(s.displayName || "Admin"), role: srole };
+    }
+  }
+  // Fallback: B2C customers/{uid} admin identity (compat with existing master admin).
   const snap = await db.doc(`customers/${uid}`).get();
   if (!snap.exists) throw new HttpsError("permission-denied", "User doc not found.");
   const d = snap.data()!;
@@ -136,20 +159,56 @@ export const nextId = onCall(async (request) => {
 });
 
 /* ═══════════════════════════════════════════════════════════════════
+ * STAFF IDENTITY MODEL
+ *
+ * staff/{uid} is the AUTHORITATIVE Loom production identity (role, name,
+ * active flag). It is the only doc that gates Firestore rules and every
+ * server-side role check (see staffAuth.ts).
+ *
+ * customers/{uid} is maintained as a COMPATIBILITY MIRROR because the
+ * shared B2C AuthContext + the role login pages resolve a user's role
+ * from customers/{uid} first. Keeping a mirror doc means an
+ * app-provisioned staff member can actually sign in. The mirror never
+ * grants B2C privilege: B2C isAdmin() only accepts role ∈
+ * {admin, super_admin}, which are also legitimate Loom roles.
+ * ═══════════════════════════════════════════════════════════════════ */
+
+const VALID_STAFF_ROLES = new Set<string>(CANONICAL_STAFF_ROLES as readonly string[]);
+
+/** Shape of the customers/{uid} compatibility mirror for a staff member. */
+function staffCustomerMirror(
+  uid: string,
+  displayName: string,
+  email: string,
+  role: string,
+  now: string,
+): Record<string, unknown> {
+  return {
+    id: uid,
+    name: displayName,
+    email,
+    role,               // same canonical staff role — single source of truth
+    isPrimeMember: false,
+    staffLinked: true,  // marker: this customer doc mirrors staff/{uid}
+    updatedAt: now,
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════
  * staffCreate — create a production staff member.
  *
  * Input : { displayName: string, email: string, role: StaffRole, password?: string }
  * Output: { ok: true, uid: string }
  *
- * Creates BOTH:
+ * Creates:
  *  - a Firebase Auth user (so the staff member can log in)
- *  - a staff/{uid} Firestore doc (so Firestore rules / role checks work)
+ *  - staff/{uid}      — authoritative Loom identity
+ *  - customers/{uid}  — compatibility mirror (see STAFF IDENTITY MODEL)
+ * The two Firestore docs are written in one atomic batch.
  *
  * If `password` is omitted, a random temporary password is generated and
  * returned in the response (delivered to the admin to pass on).
  * ═══════════════════════════════════════════════════════════════════ */
-
-const VALID_STAFF_ROLES = new Set(["owner","admin","designer","pm","dispatch","guard","tailor","store","accounts","analysis"]);
 
 export const staffCreate = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
@@ -162,7 +221,8 @@ export const staffCreate = onCall(async (request) => {
   if (!displayName || !email || !role) {
     throw new HttpsError("invalid-argument", "displayName, email, role are required.");
   }
-  if (!VALID_STAFF_ROLES.has(role)) {
+  const canonicalRole = normalizeStaffRole(role);
+  if (!canonicalRole || !VALID_STAFF_ROLES.has(canonicalRole)) {
     throw new HttpsError("invalid-argument", `Invalid role: ${role}`);
   }
 
@@ -186,15 +246,23 @@ export const staffCreate = onCall(async (request) => {
     uid: authUid,
     displayName,
     email,
-    role,
+    role: canonicalRole,
     active: true,
     createdAt: now,
     updatedAt: now,
     createdBy: request.auth.uid,
   };
+  const customerMirror = {
+    ...staffCustomerMirror(authUid, displayName, email, canonicalRole, now),
+    createdAt: now,
+    createdBy: request.auth.uid,
+  };
 
   try {
-    await db.doc(`staff/${authUid}`).set(staffDoc);
+    const batch = db.batch();
+    batch.set(db.doc(`staff/${authUid}`), staffDoc);
+    batch.set(db.doc(`customers/${authUid}`), customerMirror, { merge: true });
+    await batch.commit();
   } catch (err) {
     // Clean up the Auth user if the doc write fails, to avoid orphan accounts
     await admin.auth().deleteUser(authUid).catch(() => {});
@@ -239,12 +307,30 @@ export const staffUpdate = onCall(async (request) => {
   if (Object.keys(patch).length === 0) {
     throw new HttpsError("invalid-argument", "No valid fields to update.");
   }
-  if (patch.role && !VALID_STAFF_ROLES.has(patch.role as string)) {
-    throw new HttpsError("invalid-argument", `Invalid role: ${patch.role}`);
+  if (patch.role !== undefined) {
+    const canonicalRole = normalizeStaffRole(patch.role);
+    if (!canonicalRole || !VALID_STAFF_ROLES.has(canonicalRole)) {
+      throw new HttpsError("invalid-argument", `Invalid role: ${patch.role}`);
+    }
+    patch.role = canonicalRole;
   }
 
-  patch.updatedAt = new Date().toISOString();
-  await ref.update(patch);
+  const now = new Date().toISOString();
+  patch.updatedAt = now;
+
+  // Keep the customers/{uid} compatibility mirror in step with the
+  // authoritative staff/{uid} doc (name / email / role). Written atomically.
+  const mirror: Record<string, unknown> = { updatedAt: now, staffLinked: true };
+  if (patch.displayName !== undefined) mirror.name = patch.displayName;
+  if (patch.email !== undefined) mirror.email = patch.email;
+  if (patch.role !== undefined) mirror.role = patch.role;
+
+  // ref existence already asserted above, so set/merge == update here and
+  // keeps both writes in one atomic batch.
+  const batch = db.batch();
+  batch.set(ref, patch, { merge: true });
+  batch.set(db.doc(`customers/${uid}`), mirror, { merge: true });
+  await batch.commit();
 
   // Audit: role change gets its own action
   if (patch.role && patch.role !== before.role) {
@@ -257,6 +343,122 @@ export const staffUpdate = onCall(async (request) => {
   }
 
   return { ok: true };
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+ * staffBackfillCustomerDocs — one-shot repair for pre-existing Loom
+ * staff identities created before the customers/{uid} mirror existed.
+ *
+ * Input : {
+ *   dryRun?: boolean        // default TRUE — report only, write nothing
+ *   fixLegacyRoles?: boolean // default FALSE — also rewrite known legacy
+ *                            //   role typos (LEGACY_STAFF_ROLE_MAP,
+ *                            //   e.g. "grade" -> "guard") on staff/{uid}
+ * }
+ * Output: { ok: true, report: {...} }
+ *
+ * Idempotent: re-running against an already-repaired collection is a
+ * no-op (every entry reports as "skipped"). Admin-only. Never deletes.
+ * ═══════════════════════════════════════════════════════════════════ */
+
+export const staffBackfillCustomerDocs = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const actor = await requireAdmin(request.auth.uid);
+
+  const { dryRun = true, fixLegacyRoles = false } = (request.data ?? {}) as {
+    dryRun?: boolean; fixLegacyRoles?: boolean;
+  };
+
+  const staffSnap = await db.collection("staff").get();
+  if (staffSnap.size > 450) {
+    // One atomic batch caps at 500 writes (≤2 per staff doc). The staff
+    // collection is tiny by design; refuse rather than partially apply.
+    throw new HttpsError("failed-precondition", `staff collection too large for a single batch (${staffSnap.size}). Paginate this job before running.`);
+  }
+
+  const now = new Date().toISOString();
+  const report = {
+    dryRun: !!dryRun,
+    fixLegacyRoles: !!fixLegacyRoles,
+    scanned: 0,
+    customerDocsCreated: 0,
+    customerDocsUpdated: 0,
+    legacyRolesNormalized: 0,
+    skipped: 0,
+    unknownRoles: [] as Array<{ uid: string; role: string }>,
+  };
+
+  const batch = db.batch();
+  let writes = 0;
+
+  for (const doc of staffSnap.docs) {
+    report.scanned++;
+    const s = doc.data();
+    const uid = doc.id;
+    const rawRole = String(s.role || "").toLowerCase().trim();
+
+    let effectiveRole = normalizeStaffRole(rawRole);
+
+    // Optionally repair a known legacy/typo role on the authoritative doc.
+    if (!effectiveRole && fixLegacyRoles && LEGACY_STAFF_ROLE_MAP[rawRole]) {
+      effectiveRole = LEGACY_STAFF_ROLE_MAP[rawRole];
+      report.legacyRolesNormalized++;
+      if (!dryRun) {
+        batch.update(doc.ref, {
+          role: effectiveRole,
+          roleLegacyBackfilledFrom: rawRole,
+          updatedAt: now,
+        });
+        writes++;
+      }
+    }
+
+    if (!effectiveRole) {
+      // Unknown / unrepairable role — leave the data untouched, just report.
+      report.unknownRoles.push({ uid, role: rawRole });
+      report.skipped++;
+      continue;
+    }
+
+    const custRef = db.doc(`customers/${uid}`);
+    const cust = await custRef.get();
+    const desiredName = String(s.displayName || s.name || "Staff");
+    const desiredEmail = String(s.email || "");
+
+    if (!cust.exists) {
+      report.customerDocsCreated++;
+      if (!dryRun) {
+        batch.set(custRef, {
+          ...staffCustomerMirror(uid, desiredName, desiredEmail, effectiveRole, now),
+          createdAt: now,
+          createdBy: request.auth.uid,
+        }, { merge: true });
+        writes++;
+      }
+    } else {
+      const c = cust.data() || {};
+      const drift =
+        String(c.role || "").toLowerCase() !== effectiveRole ||
+        String(c.name || "") !== desiredName ||
+        String(c.email || "") !== desiredEmail;
+      if (drift) {
+        report.customerDocsUpdated++;
+        if (!dryRun) {
+          batch.set(custRef, staffCustomerMirror(uid, desiredName, desiredEmail, effectiveRole, now), { merge: true });
+          writes++;
+        }
+      } else {
+        report.skipped++;
+      }
+    }
+  }
+
+  if (!dryRun && writes > 0) {
+    await batch.commit();
+    await writeAudit("STAFF_BACKFILL", "staff", "ALL", request.auth.uid, actor.name, actor.role, null, report);
+  }
+
+  return { ok: true, report };
 });
 
 /* ═══════════════════════════════════════════════════════════════════

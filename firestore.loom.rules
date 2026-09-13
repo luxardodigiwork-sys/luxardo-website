@@ -1,58 +1,16 @@
 rules_version = '2';
+/*
+ * LUXARDO FASHION — LOOM PRODUCTION SYSTEM (luxardo-flow)
+ * Dedicated Firestore rules for the Loom internal production system.
+ * This project (luxardo-flow) is 100% separate from the B2C website
+ * (luxardo-fashion-website). No B2C collections live here.
+ *
+ * All operational writes go through Cloud Functions (Admin SDK bypasses
+ * rules). Clients are READ-ONLY on production collections; audit/history
+ * are append-only.
+ */
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAdmin() {
-      return request.auth != null && (
-        request.auth.uid == '0Frc6Dy2MqN0zc0UFkmqvpELFnr1' ||
-        request.auth.token.admin == true ||
-        (exists(/databases/$(database)/documents/customers/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/customers/$(request.auth.uid)).data.role in ['admin', 'super_admin'])
-      );
-    }
-    match /products/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /siteContent/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /collections/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /categories/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /policies/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /primeContent/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /media/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /partners/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /customers/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isAdmin();
-    }
-    match /orders/{id} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isAdmin();
-    }
-    match /carts/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isAdmin();
-    }
-    match /wishlists/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isAdmin();
-    }
-    match /userPreferences/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isAdmin();
-    }
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isAdmin();
-    }
-    match /sessions/{id} { allow create, read, update: if true; allow delete: if isAdmin(); }
-    match /favorites/{id} { allow read: if request.auth != null; allow write: if isAdmin(); }
-    match /lowStockNotifications/{id} { allow read, write: if isAdmin(); }
-    match /bespokeRequests/{id} {
-      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if request.auth != null;
-      allow update, delete: if isAdmin();
-    }
-    match /contactMessages/{id} { allow create: if true; allow read, update, delete: if isAdmin(); }
-    match /newsletterSubscribers/{id} { allow create: if true; allow read, update, delete: if isAdmin(); }
-    /* ── V1 Production System — helpers ─────────────────────────────── */
 
     function isSignedIn() {
       return request.auth != null;
@@ -73,19 +31,25 @@ service cloud.firestore {
       return getStaffRole() in roles;
     }
 
+    /* Admin = staff/{uid} role owner/admin/super_admin (Loom identity only).
+     * luxardo-flow has no B2C customers collection, so admin checks are
+     * staff-doc based. Kept explicit & separate from B2C rules. */
+    function isAdmin() {
+      return isSignedIn() && isStaffInRoles(['owner', 'admin', 'super_admin']);
+    }
+
     /* Staff identity doc — admin-only CRUD; a signed-in user may read their
-     * OWN staff/{uid} doc (shared AuthContext / role login pages resolve the
-     * production identity from it when customers/{uid} is absent). */
+     * OWN staff/{uid} doc (needed by the client to resolve its Loom identity
+     * when no customers/{uid} mirror exists). */
     match /staff/{uid} {
-      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow write: if isAdmin();
     }
 
     /* ── Catalogue Designs ───────────────────────────────────────────
-     * All writes go through Cloud Functions (designCreate / Update /
-     * Submit / Approve / SetCatalogueMeta / NewVersion) so that Owner
-     * approval, freeze and version archiving stay server-enforced and a
-     * client can never self-approve or silently rewrite a frozen version.
+     * All writes via Cloud Functions (designCreate / Update / Submit /
+     * Approve / SetCatalogueMeta / NewVersion). Owner approval, freeze
+     * and version archiving stay server-enforced.
      */
     match /catalogueDesigns/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','designer','pm','dispatch','tailor','store']);
@@ -111,10 +75,7 @@ service cloud.firestore {
     }
 
     /* ── Production Requests ──────────────────────────────────────────
-     * All writes via Cloud Functions (prCreate / Update / Submit /
-     * Approve / Reject / EditApproved). PM sees ONLY Owner-approved PRs.
-     * Approved PR quantity + design version can never be changed by rules
-     * itself — the CF freeze guards are the strong gate.
+     * All writes via Cloud Functions. PM sees ONLY Owner-approved PRs.
      */
     match /productionRequests/{id} {
       allow read: if isSignedIn() && (
@@ -133,35 +94,26 @@ service cloud.firestore {
     }
 
     /* ── Physical Pieces (atomic tracking unit) ────────────────────────
-     * All writes via Cloud Functions (pieceAssignKarigar / RemoveKarigar,
-     * recordRework, completeRejectPiece, createManualReplacementPiece,
-     * recordPieceMovement, prGeneratePieces). A client can never mutate a
-     * piece or its frozen fields directly.
+     * All writes via Cloud Functions. A client can never mutate a piece.
      */
     match /pieces/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','guard','tailor','store']);
       allow create, update, delete: if false;
     }
 
-    /* ── Karigars (registry, not login users) ────────────────────────
-     * All writes via Cloud Functions (karigarCreate / karigarUpdate).
-     */
+    /* ── Karigars (registry, not login users) ──────────────────────── */
     match /karigars/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch']);
       allow create, update, delete: if false;
     }
 
-    /* ── Work Sessions (pieceWorkSessions) ────────────────────────────
-     * All writes via Cloud Functions (labourStart / labourStop).
-     */
+    /* ── Work Sessions (pieceWorkSessions) ──────────────────────────── */
     match /pieceWorkSessions/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch']);
       allow create, update, delete: if false;
     }
 
-    /* ── Guard QC Records ─────────────────────────────────────────────
-     * All writes via Cloud Functions (guardQcPerform) — client read-only.
-     */
+    /* ── Guard QC Records ───────────────────────────────────────────── */
     match /guardQCRecords/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','guard']);
       allow create, update, delete: if false;
@@ -188,18 +140,13 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    /* ── Replacement Links ────────────────────────────────────────────
-     * Written only by createManualReplacementPiece (Cloud Function).
-     */
+    /* ── Replacement Links ──────────────────────────────────────────── */
     match /replacementLinks/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm']);
       allow create, update, delete: if false;
     }
 
-    /* ── Piece Movement History (append-only audit) ───────────────────
-     * Written only by recordMovement (Cloud Function). NEVER mutated or
-     * deleted by a client — reverse movements are new records.
-     */
+    /* ── Piece Movement History (append-only audit) ─────────────────── */
     match /pieceMovementHistory/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','guard','tailor']);
       allow create, update, delete: if false;

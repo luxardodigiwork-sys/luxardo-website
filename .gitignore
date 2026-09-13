@@ -23,3 +23,9 @@ LUXARDO FASHION.db
 src/pages/admin/*.old
 luxardo fashion-production-setup.sh
 .aider*
+
+# Loom (luxardo-flow) split-build generated artifacts — configs/src are committed,
+# build output is not.
+dist-loom/
+functions-loom/lib/
+functions-loom/node_modules/
