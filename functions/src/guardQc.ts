@@ -24,6 +24,7 @@ import { generateId } from "./production";
 import { requireStaff, hasAnyRole } from "./staffAuth";
 import { writeAudit } from "./audit";
 import { recordMovement } from "./movement";
+import { applyPrQuantityDelta } from "./productionRequests";
 
 const db = admin.firestore();
 
@@ -127,6 +128,7 @@ export const guardQcPerform = onCall(async (request) => {
       lastGuardQcId: qcId,
       updatedAt: now,
     });
+    applyPrQuantityDelta(tx, cur.prId || null, "QC_PENDING", toStage);
 
     tx.set(db.doc(`guardQCRecords/${qcId}`), {
       id: qcId,

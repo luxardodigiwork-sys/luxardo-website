@@ -27,6 +27,7 @@ import { generateId } from "./production";
 import { requireStaff, hasAnyRole } from "./staffAuth";
 import { writeAudit } from "./audit";
 import { recordMovement } from "./movement";
+import { applyPrQuantityDelta } from "./productionRequests";
 
 const db = admin.firestore();
 
@@ -189,6 +190,7 @@ export const recordRework = onCall(async (request) => {
       throw new HttpsError("failed-precondition", `Piece ${pieceId} is ${cur.status} and cannot be reworked.`);
     }
     const now = new Date().toISOString();
+    const fromStage = String(cur.stage || "OPEN");
     tx.update(ref, {
       stage: "REWORK",
       status: "in_rework",
@@ -201,6 +203,7 @@ export const recordRework = onCall(async (request) => {
       rejectedByName: actor.name,
       updatedAt: now,
     });
+    applyPrQuantityDelta(tx, cur.prId || null, fromStage, "REWORK");
   });
 
   await recordMovement({
@@ -240,6 +243,7 @@ export const completeRejectPiece = onCall(async (request) => {
       throw new HttpsError("failed-precondition", `Piece ${pieceId} is ${cur.status} and cannot be rejected.`);
     }
     const now = new Date().toISOString();
+    const fromStage = String(cur.stage || "OPEN");
     tx.update(ref, {
       stage: "REJECTED",
       status: "closed",
@@ -251,6 +255,7 @@ export const completeRejectPiece = onCall(async (request) => {
       rejectedByName: actor.name,
       updatedAt: now,
     });
+    applyPrQuantityDelta(tx, cur.prId || null, fromStage, "REJECTED");
   });
 
   await recordMovement({
@@ -350,6 +355,19 @@ export const createManualReplacementPiece = onCall(async (request) => {
       createdByName: actor.name,
       createdAt: now,
     });
+
+    // The rejected piece stays REJECTED (rejectedQty unaffected) and
+    // originalOrderedQty is never touched. The new replacement piece is a
+    // real additional OPEN piece the shop must still produce, so pendingQty
+    // gains exactly the one slot it occupies; its later transitions flow
+    // through the same recordPieceMovement/labourStart/guardQcPerform paths
+    // and are counted by applyPrQuantityDelta like any other piece.
+    if (r.prId) {
+      tx.update(db.doc(`productionRequests/${r.prId}`), {
+        pendingQty: admin.firestore.FieldValue.increment(1),
+        updatedAt: now,
+      });
+    }
   });
 
   // Movement: new piece creation (replacing) for the replacement piece + the rejected piece link.
@@ -428,6 +446,7 @@ export const recordPieceMovement = onCall(async (request) => {
         status: requestedToStage === "REJECTED" ? "closed" : (requestedToStage === "REWORK" ? "in_rework" : cur.status),
         updatedAt: now,
       });
+      applyPrQuantityDelta(tx, prId, fromStage, requestedToStage);
     }
   });
 

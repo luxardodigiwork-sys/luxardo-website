@@ -83,6 +83,70 @@ function qtyMap(ordered: number) {
   };
 }
 
+/**
+ * PR quantity-counter bucket for a piece stage, per the locked definitions:
+ *   pendingQty       = OPEN
+ *   currentActiveQty = IN_WORK, QC_PENDING, REWORK, QC_PASS, DISPATCH_READY,
+ *                       TAILOR_ASSIGNED, STITCHING, STITCH_COMPLETE, STORE
+ *   completedQty     = STORE_OUT
+ *   rejectedQty      = REJECTED
+ * reworkQty is NOT one of these buckets — see applyPrQuantityDelta.
+ */
+function prQtyBucket(stage: string): "pending" | "active" | "completed" | "rejected" | null {
+  if (stage === "OPEN") return "pending";
+  if (stage === "STORE_OUT") return "completed";
+  if (stage === "REJECTED") return "rejected";
+  if (
+    stage === "IN_WORK" || stage === "QC_PENDING" || stage === "REWORK" ||
+    stage === "QC_PASS" || stage === "DISPATCH_READY" || stage === "TAILOR_ASSIGNED" ||
+    stage === "STITCHING" || stage === "STITCH_COMPLETE" || stage === "STORE"
+  ) return "active";
+  return null;
+}
+
+/**
+ * Apply the PR-level quantity-counter delta for one piece's stage change.
+ * MUST be called inside the same transaction as the piece's own stage
+ * mutation, with fromStage/toStage taken from that transaction's own fresh
+ * read (never a pre-transaction read) — so a concurrent move cannot
+ * double-update. Uses FieldValue.increment (no read of the PR doc needed),
+ * which also keeps this safe to call after the piece write within the same
+ * transaction without violating Firestore's reads-before-writes ordering.
+ *
+ * pendingQty/currentActiveQty/completedQty/rejectedQty come from the
+ * mutually-exclusive bucket above. reworkQty is a separate, current-state
+ * tag: a piece AT stage REWORK is counted in BOTH currentActiveQty AND
+ * reworkQty (REWORK is an "active" bucket per the locked definitions);
+ * reworkQty is decremented the moment the piece leaves REWORK (e.g. back to
+ * IN_WORK), so repeated rework cycles never double-count.
+ *
+ * No-ops when there is no real stage change, or the piece has no prId.
+ */
+export function applyPrQuantityDelta(
+  tx: admin.firestore.Transaction,
+  prId: string | null | undefined,
+  fromStage: string,
+  toStage: string
+): void {
+  if (!prId || fromStage === toStage) return;
+  const from = prQtyBucket(fromStage);
+  const to = prQtyBucket(toStage);
+
+  const inc: Record<string, admin.firestore.FieldValue> = {};
+  const bump = (field: string, n: number) => { inc[field] = admin.firestore.FieldValue.increment(n); };
+
+  if (from === "pending" && to !== "pending") bump("pendingQty", -1);
+  if (from === "active" && to !== "active") bump("currentActiveQty", -1);
+  if (to === "active" && from !== "active") bump("currentActiveQty", 1);
+  if (to === "completed" && from !== "completed") bump("completedQty", 1);
+  if (to === "rejected" && from !== "rejected") bump("rejectedQty", 1);
+  if (toStage === "REWORK" && fromStage !== "REWORK") bump("reworkQty", 1);
+  if (fromStage === "REWORK" && toStage !== "REWORK") bump("reworkQty", -1);
+
+  if (Object.keys(inc).length === 0) return;
+  tx.update(db.doc(`productionRequests/${prId}`), { ...inc, updatedAt: new Date().toISOString() });
+}
+
 /* ═══════════════════════════════════════════════════════════════════
  * prCreate — Dispatch/admin/owner creates a production request (DRAFT).
  * Input : { designId, designVersionId, quantity?, urgency?, requiredDate?, garmentType? }

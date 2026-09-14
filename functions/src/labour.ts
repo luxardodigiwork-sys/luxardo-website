@@ -23,6 +23,7 @@ import { generateId } from "./production";
 import { requireStaff, hasAnyRole } from "./staffAuth";
 import { writeAudit } from "./audit";
 import { recordMovement } from "./movement";
+import { applyPrQuantityDelta } from "./productionRequests";
 
 const db = admin.firestore();
 
@@ -95,6 +96,7 @@ export const labourStart = onCall(async (request) => {
     const snap = await tx.get(ref);
     const cur = snap.data()!;
     const nowIso = new Date().toISOString();
+    const fromStage = String(cur.stage || "OPEN");
     tx.update(ref, {
       stage: "IN_WORK",
       status: "active",
@@ -103,6 +105,10 @@ export const labourStart = onCall(async (request) => {
       lastKarigarIds: [...(Array.isArray(cur.lastKarigarIds) ? cur.lastKarigarIds : []).filter((x: string) => x !== karigarId).slice(-9), karigarId],
       updatedAt: nowIso,
     });
+    // A second Karigar starting on an already-IN_WORK piece is a no-op
+    // transition (fromStage === "IN_WORK") — applyPrQuantityDelta no-ops in
+    // that case, so concurrent/multi-karigar sessions never double-count.
+    applyPrQuantityDelta(tx, cur.prId || null, fromStage, "IN_WORK");
 
     tx.set(db.doc(`pieceWorkSessions/${sessionId}`), {
       id: sessionId,
