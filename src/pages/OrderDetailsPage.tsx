@@ -6,11 +6,13 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currency';
 import { storage } from '../utils/localStorage';
 import { Order } from '../types';
+import { useProducts } from '../context/ProductsContext';
 
 export default function OrderDetailsPage() {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { products: allProducts } = useProducts();
   const [order, setOrder] = useState<any>(null);
   const [isInvoiceSent, setIsInvoiceSent] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -63,7 +65,7 @@ export default function OrderDetailsPage() {
         items: foundOrder.items.map(item => ({
           ...item,
           price: formatCurrency(item.price),
-          image: storage.getProducts().find(p => p.id === item.productId)?.image,
+          image: allProducts.find(p => p.id === item.productId)?.image,
           format: 'Ready-to-Stitch Box'
         })),
         contactInfo: {

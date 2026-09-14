@@ -1,0 +1,175 @@
+rules_version = '2';
+/*
+ * LUXARDO FASHION — LOOM PRODUCTION SYSTEM (luxardo-flow)
+ * Dedicated Firestore rules for the Loom internal production system.
+ * This project (luxardo-flow) is 100% separate from the B2C website
+ * (luxardo-fashion-website). No B2C collections live here.
+ *
+ * All operational writes go through Cloud Functions (Admin SDK bypasses
+ * rules). Clients are READ-ONLY on production collections; audit/history
+ * are append-only.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getStaffRole() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/staff/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role
+        : '';
+    }
+
+    function isStaffWithRole(role) {
+      return getStaffRole() == role;
+    }
+
+    function isStaffInRoles(roles) {
+      return getStaffRole() in roles;
+    }
+
+    /* Admin = staff/{uid} role owner/admin/super_admin (Loom identity only).
+     * luxardo-flow has no B2C customers collection, so admin checks are
+     * staff-doc based. Kept explicit & separate from B2C rules. */
+    function isAdmin() {
+      return isSignedIn() && isStaffInRoles(['owner', 'admin', 'super_admin']);
+    }
+
+    /* Staff identity doc — admin-only CRUD; a signed-in user may read their
+     * OWN staff/{uid} doc (needed by the client to resolve its Loom identity
+     * when no customers/{uid} mirror exists). */
+    match /staff/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    /* ── Catalogue Designs ───────────────────────────────────────────
+     * All writes via Cloud Functions (designCreate / Update / Submit /
+     * Approve / SetCatalogueMeta / NewVersion). Owner approval, freeze
+     * and version archiving stay server-enforced.
+     */
+    match /catalogueDesigns/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','designer','pm','dispatch','tailor','store']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Design Versions (append-only archives) ─────────────────────── */
+    match /designVersions/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','designer','pm','dispatch','tailor','store']);
+      allow write: if false; // Cloud Functions only (Admin SDK)
+    }
+
+    /* ── Sample Designs (fabric swatch) ─────────────────────────────── */
+    match /sampleDesigns/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','designer','pm','dispatch']);
+      allow create, update, delete: if false; // all writes via Cloud Functions
+    }
+
+    /* ── Sample Pieces (complete garment) ───────────────────────────── */
+    match /samplePieces/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','designer','pm','dispatch']);
+      allow create, update, delete: if false; // all writes via Cloud Functions
+    }
+
+    /* ── Production Requests ──────────────────────────────────────────
+     * All writes via Cloud Functions. PM sees ONLY Owner-approved PRs.
+     */
+    match /productionRequests/{id} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isStaffWithRole('owner') ||
+        isStaffWithRole('dispatch') ||
+        (isStaffWithRole('pm') && (resource.data.status in ['APPROVED','IN_PRODUCTION','COMPLETED']))
+      );
+      allow create, update, delete: if false;
+
+      /* ── PR post-approval edit trail (urgency / requiredDate only) ── */
+      match /audit/{auditId} {
+        allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch']);
+        allow write: if false;
+      }
+    }
+
+    /* ── Physical Pieces (atomic tracking unit) ────────────────────────
+     * All writes via Cloud Functions. A client can never mutate a piece.
+     */
+    match /pieces/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','guard','tailor','store']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Karigars (registry, not login users) ──────────────────────── */
+    match /karigars/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Work Sessions (pieceWorkSessions) ──────────────────────────── */
+    match /pieceWorkSessions/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Guard QC Records ───────────────────────────────────────────── */
+    match /guardQCRecords/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','guard']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Tailor Sessions ────────────────────────────────────────────── */
+    match /tailorSessions/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','tailor']);
+      allow write: if false; // Cloud Functions only (tailorStartStitching / tailorCompleteStitching)
+    }
+
+    /* ── Store Outs ─────────────────────────────────────────────────── */
+    match /storeOuts/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','store']);
+      allow write: if false; // Cloud Functions only (storeOutCreate)
+    }
+
+    /* ── Store Out Issues ───────────────────────────────────────────── */
+    match /storeOutIssues/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','store']);
+      allow write: if false; // Cloud Functions only (storeOutReportIssue)
+    }
+
+    /* ── New Tailor Requests ─────────────────────────────────────────
+     * Dispatch raises; Admin/Owner review. All writes via Cloud Functions
+     * (raiseNewTailorRequest / approveTailorRequest / rejectTailorRequest).
+     */
+    match /tailorRequests/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','dispatch']);
+      allow write: if false;
+    }
+
+    /* ── Replacement Links ──────────────────────────────────────────── */
+    match /replacementLinks/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Piece Movement History (append-only audit) ─────────────────── */
+    match /pieceMovementHistory/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','guard','tailor']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Audit Logs (append-only, admin/owner read) ─────────────────── */
+    match /auditLogs/{id} {
+      allow read: if isAdmin() || isStaffWithRole('owner');
+      allow create, update, delete: if false; // Cloud Functions only (Admin SDK)
+    }
+
+    /* ── ID Counters (atomic, server-managed) ────────────────────────── */
+    match /idCounters/{domain} {
+      allow read, write: if false; // Cloud Functions only (Admin SDK bypasses rules)
+    }
+
+    /* ── Deny-all (catch-all) ───────────────────────────────────────── */
+    match /{document=**} { allow read, write: if false; }
+  }
+}

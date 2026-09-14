@@ -1,67 +1,222 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
     function isAdmin() {
       return request.auth != null && (
-        request.auth.uid == 'jOnrDrh2EYghgU3ebCkWr694aDt1' ||
-        request.auth.uid == 'PqH3UUjP1acXGxyBNu2kOMTr0Xw1'
+        request.auth.uid == '0Frc6Dy2MqN0zc0UFkmqvpELFnr1' ||
+        request.auth.token.admin == true ||
+        (exists(/databases/$(database)/documents/customers/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/customers/$(request.auth.uid)).data.role in ['admin', 'super_admin'])
       );
     }
-
-    match /products/{productId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
+    match /products/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /siteContent/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /collections/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /categories/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /policies/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /primeContent/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /media/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /partners/{id} { allow read: if true; allow write: if isAdmin(); }
     match /customers/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       allow read, write: if isAdmin();
     }
-
-    match /orders/{orderId} {
+    match /orders/{id} {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow read, update, delete: if isAdmin();
     }
-
     match /carts/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       allow read, write: if isAdmin();
     }
-
     match /wishlists/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       allow read, write: if isAdmin();
     }
-
     match /userPreferences/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       allow read, write: if isAdmin();
     }
-
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       allow read, write: if isAdmin();
     }
+    match /sessions/{id} { allow create, read, update: if true; allow delete: if isAdmin(); }
+    match /favorites/{id} { allow read: if request.auth != null; allow write: if isAdmin(); }
+    match /lowStockNotifications/{id} { allow read, write: if isAdmin(); }
+    match /bespokeRequests/{id} {
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
+    }
+    match /contactMessages/{id} { allow create: if true; allow read, update, delete: if isAdmin(); }
+    match /newsletterSubscribers/{id} { allow create: if true; allow read, update, delete: if isAdmin(); }
+    /* ── V1 Production System — helpers ─────────────────────────────── */
 
-    match /sessions/{sessionId} {
-      allow create: if true;
-      allow read, update: if true;
-      allow delete: if isAdmin();
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    match /favorites/{docId} {
-      allow read: if request.auth != null;
+    function getStaffRole() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/staff/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role
+        : '';
+    }
+
+    function isStaffWithRole(role) {
+      return getStaffRole() == role;
+    }
+
+    function isStaffInRoles(roles) {
+      return getStaffRole() in roles;
+    }
+
+    /* Staff identity doc — admin-only CRUD; a signed-in user may read their
+     * OWN staff/{uid} doc (shared AuthContext / role login pages resolve the
+     * production identity from it when customers/{uid} is absent). */
+    match /staff/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow write: if isAdmin();
     }
 
-    match /lowStockNotifications/{docId} {
-      allow read, write: if isAdmin();
+    /* ── Catalogue Designs ───────────────────────────────────────────
+     * All writes go through Cloud Functions (designCreate / Update /
+     * Submit / Approve / SetCatalogueMeta / NewVersion) so that Owner
+     * approval, freeze and version archiving stay server-enforced and a
+     * client can never self-approve or silently rewrite a frozen version.
+     */
+    match /catalogueDesigns/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','designer','pm','dispatch','tailor','store']);
+      allow create, update, delete: if false;
     }
 
-    match /{document=**} {
-      allow read, write: if false;
+    /* ── Design Versions (append-only archives) ─────────────────────── */
+    match /designVersions/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','designer','pm','dispatch','tailor','store']);
+      allow write: if false; // Cloud Functions only (Admin SDK)
     }
+
+    /* ── Sample Designs (fabric swatch) ─────────────────────────────── */
+    match /sampleDesigns/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','designer','pm','dispatch']);
+      allow create, update, delete: if false; // all writes via Cloud Functions
+    }
+
+    /* ── Sample Pieces (complete garment) ───────────────────────────── */
+    match /samplePieces/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','designer','pm','dispatch']);
+      allow create, update, delete: if false; // all writes via Cloud Functions
+    }
+
+    /* ── Production Requests ──────────────────────────────────────────
+     * All writes via Cloud Functions (prCreate / Update / Submit /
+     * Approve / Reject / EditApproved). PM sees ONLY Owner-approved PRs.
+     * Approved PR quantity + design version can never be changed by rules
+     * itself — the CF freeze guards are the strong gate.
+     */
+    match /productionRequests/{id} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isStaffWithRole('owner') ||
+        isStaffWithRole('dispatch') ||
+        (isStaffWithRole('pm') && (resource.data.status in ['APPROVED','IN_PRODUCTION','COMPLETED']))
+      );
+      allow create, update, delete: if false;
+
+      /* ── PR post-approval edit trail (urgency / requiredDate only) ── */
+      match /audit/{auditId} {
+        allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch']);
+        allow write: if false;
+      }
+    }
+
+    /* ── Physical Pieces (atomic tracking unit) ────────────────────────
+     * All writes via Cloud Functions (pieceAssignKarigar / RemoveKarigar,
+     * recordRework, completeRejectPiece, createManualReplacementPiece,
+     * recordPieceMovement, prGeneratePieces). A client can never mutate a
+     * piece or its frozen fields directly.
+     */
+    match /pieces/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','guard','tailor','store']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Karigars (registry, not login users) ────────────────────────
+     * All writes via Cloud Functions (karigarCreate / karigarUpdate).
+     */
+    match /karigars/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Work Sessions (pieceWorkSessions) ────────────────────────────
+     * All writes via Cloud Functions (labourStart / labourStop).
+     */
+    match /pieceWorkSessions/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Guard QC Records ─────────────────────────────────────────────
+     * All writes via Cloud Functions (guardQcPerform) — client read-only.
+     */
+    match /guardQCRecords/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','guard']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Tailor Sessions ────────────────────────────────────────────── */
+    match /tailorSessions/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','tailor']);
+      allow create, update: if isStaffWithRole('tailor');
+      allow delete: if false;
+    }
+
+    /* ── Store Outs ─────────────────────────────────────────────────── */
+    match /storeOuts/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','store']);
+      allow create: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','store']);
+      allow update, delete: if false;
+    }
+
+    /* ── Store Out Issues ───────────────────────────────────────────── */
+    match /storeOutIssues/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','store']);
+      allow create: if isStaffWithRole('store');
+      allow update, delete: if false;
+    }
+
+    /* ── Replacement Links ────────────────────────────────────────────
+     * Written only by createManualReplacementPiece (Cloud Function).
+     */
+    match /replacementLinks/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Piece Movement History (append-only audit) ───────────────────
+     * Written only by recordMovement (Cloud Function). NEVER mutated or
+     * deleted by a client — reverse movements are new records.
+     */
+    match /pieceMovementHistory/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','guard','tailor']);
+      allow create, update, delete: if false;
+    }
+
+    /* ── Audit Logs (append-only, admin/owner read) ─────────────────── */
+    match /auditLogs/{id} {
+      allow read: if isAdmin() || isStaffWithRole('owner');
+      allow create, update, delete: if false; // Cloud Functions only (Admin SDK)
+    }
+
+    /* ── ID Counters (atomic, server-managed) ────────────────────────── */
+    match /idCounters/{domain} {
+      allow read, write: if false; // Cloud Functions only (Admin SDK bypasses rules)
+    }
+
+    /* ── Deny-all (catch-all) ───────────────────────────────────────── */
+    match /{document=**} { allow read, write: if false; }
   }
 }

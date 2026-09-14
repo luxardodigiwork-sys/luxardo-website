@@ -64,7 +64,7 @@ export default function FAQPage() {
     <div className="min-h-screen bg-brand-bg text-brand-black">
       {/* Hero Section */}
       <section className="section-padding bg-brand-black text-brand-white text-center relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center " />
+        <div className="absolute inset-0 opacity-20 bg-[url('/placeholder.svg')] bg-cover bg-center " />
         <div className="absolute inset-0 bg-brand-black/80" />
         
         <div className="relative z-10 max-w-4xl mx-auto space-y-12 py-20">

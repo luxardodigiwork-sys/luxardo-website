@@ -1,0 +1,43 @@
+rules_version = '2';
+/*
+ * LUXARDO FASHION — LOOM PRODUCTION SYSTEM (luxardo-flow)
+ * Dedicated Storage rules for the Loom internal production system.
+ * This project is 100% separate from the B2C website (luxardo-fashion-website).
+ * Only Loom production paths exist here; deny-all fallback.
+ */
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() { return request.auth != null; }
+
+    /* Loom staff identity is the staff/{uid} doc in the (default) Firestore
+     * database of this same project. No custom claims are provisioned, so
+     * authorization is resolved from that doc (fail closed when absent). */
+    function staffRole() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/staff/$(request.auth.uid))
+        ? firestore.get(/databases/(default)/documents/staff/$(request.auth.uid)).data.role
+        : '';
+    }
+    function isStaffInRoles(roles) { return isSignedIn() && (staffRole() in roles); }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        staffRole() in ['owner', 'admin', 'super_admin']
+      );
+    }
+    function isImage() { return request.resource.contentType.matches('image/.*'); }
+    function maxSize(mb) { return request.resource.size < mb * 1024 * 1024; }
+
+    /* ── V1 Production Storage (Loom) ───────────────────────────────── */
+    match /production/designs/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin() || isStaffInRoles(['designer', 'pm']); }
+    match /production/sampleDesigns/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin() || isStaffInRoles(['designer', 'pm']); }
+    match /production/samplePieces/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin() || isStaffInRoles(['designer', 'pm']); }
+    match /production/guardQC/{p=**} { allow read: if isSignedIn(); allow write: if (isAdmin() || isStaffInRoles(['guard'])) && isImage() && maxSize(10); }
+    match /production/tailor/{p=**} { allow read: if isSignedIn(); allow write: if (isAdmin() || isStaffInRoles(['tailor'])) && isImage() && maxSize(10); }
+    match /production/store/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin() || isStaffInRoles(['store', 'dispatch']); }
+
+    /* ── Deny-all ─────────────────────────────────────────────────────── */
+    match /{p=**} { allow read, write: if false; }
+  }
+}

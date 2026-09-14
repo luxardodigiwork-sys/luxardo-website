@@ -576,7 +576,7 @@ export default function AdminMediaPage() {
                         setUploadForm({ ...uploadForm, url: e.target.value });
                         setPreviewUrl(e.target.value);
                       }}
-                      placeholder="https://images.unsplash.com/..."
+                      placeholder="/placeholder.svg"
                       className="w-full px-4 py-3 bg-brand-bg/30 border border-brand-divider focus:border-brand-black outline-none transition-all text-sm font-sans"
                     />
                   </div>
