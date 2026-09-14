@@ -47,7 +47,7 @@ const PIECE_MANAGERS = ["admin", "owner", "pm"];
  * reason, checked actions/photos) — so that exit is intentionally absent
  * from this table, forcing it through the dedicated QC path instead.
  */
-const NEXT_STAGES: Record<string, string[]> = {
+export const NEXT_STAGES: Record<string, string[]> = {
   OPEN: ["IN_WORK"],
   IN_WORK: ["QC_PENDING"],
   QC_PENDING: [],
@@ -62,8 +62,27 @@ const NEXT_STAGES: Record<string, string[]> = {
   REJECTED: [],
 };
 
+/**
+ * Transitions that now have a dedicated specialist Cloud Function
+ * (dispatchAssignTailor, dispatchSendToStore, tailorStartStitching,
+ * tailorCompleteStitching, storeOutCreate). When PM/Admin/Owner drives one of
+ * these SAME transitions via the generic recordPieceMovement below, that is
+ * an emergency override of the specialist path, not routine PM usage — so it
+ * gets flagged isOverride: true on the movement/audit record. Transitions
+ * with no specialist owner (e.g. QC_PASS -> DISPATCH_READY) are unaffected;
+ * recordPieceMovement remains their only, ordinary mechanism.
+ */
+const SPECIALIST_OWNED_TRANSITIONS = new Set<string>([
+  "DISPATCH_READY->TAILOR_ASSIGNED",
+  "DISPATCH_READY->STORE",
+  "TAILOR_ASSIGNED->STITCHING",
+  "STITCHING->STITCH_COMPLETE",
+  "STITCH_COMPLETE->STORE",
+  "STORE->STORE_OUT",
+]);
+
 /** Piece must exist and not be permanently closed. */
-async function assertOpenPiece(pieceId: string): Promise<{ ref: admin.firestore.DocumentReference; data: admin.firestore.DocumentData }> {
+export async function assertOpenPiece(pieceId: string): Promise<{ ref: admin.firestore.DocumentReference; data: admin.firestore.DocumentData }> {
   const ref = db.doc(`pieces/${pieceId}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError("not-found", `Piece ${pieceId} not found.`);
@@ -330,6 +349,8 @@ export const createManualReplacementPiece = onCall(async (request) => {
       rejectedByName: null,
       reworkCount: 0,
       lastGuardQcId: null,
+      assignedTailorUid: null,
+      assignedTailorName: null,
       tailorSessionId: null,
       tailorStartAt: null,
       tailorEndAt: null,
@@ -444,22 +465,27 @@ export const recordPieceMovement = onCall(async (request) => {
       }
       tx.update(ref, {
         stage: requestedToStage,
-        status: requestedToStage === "REJECTED" ? "closed" : (requestedToStage === "REWORK" ? "in_rework" : cur.status),
+        status: requestedToStage === "REJECTED" || requestedToStage === "STORE_OUT"
+          ? "closed"
+          : (requestedToStage === "REWORK" ? "in_rework" : cur.status),
         updatedAt: now,
       });
       applyPrQuantityDelta(tx, prId, fromStage, requestedToStage);
     }
   });
 
+  const isOverride = SPECIALIST_OWNED_TRANSITIONS.has(`${fromStage}->${requestedToStage}`);
+
   const recId = await recordMovement({
     pieceId, fromStage, toStage: String(toStage),
     direction: dir, action: String(action), actor,
     reason: reason || null, relatedRequestId: relatedRequestId || prId || null, relatedPieceId: relatedPieceId || null,
     snapshot: { pieceStage: String(toStage), totalLabourMinutes, totalLabourCost },
+    isOverride,
   });
 
   await writeAudit(dir === "REVERSE" ? "PIECE_REVERSE_MOVE" : "PIECE_STAGE_MOVE", "pieces", pieceId, actor,
-    { fromStage, toStage: String(toStage), action, movementId: recId }, { direction: dir });
+    { fromStage, toStage: String(toStage), action, movementId: recId }, { direction: dir, isOverride });
 
   return { ok: true, pieceId, movementId: recId };
 });

@@ -122,22 +122,28 @@ service cloud.firestore {
     /* ── Tailor Sessions ────────────────────────────────────────────── */
     match /tailorSessions/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','tailor']);
-      allow create, update: if isStaffWithRole('tailor');
-      allow delete: if false;
+      allow write: if false; // Cloud Functions only (tailorStartStitching / tailorCompleteStitching)
     }
 
     /* ── Store Outs ─────────────────────────────────────────────────── */
     match /storeOuts/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','store']);
-      allow create: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','store']);
-      allow update, delete: if false;
+      allow write: if false; // Cloud Functions only (storeOutCreate)
     }
 
     /* ── Store Out Issues ───────────────────────────────────────────── */
     match /storeOutIssues/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','store']);
-      allow create: if isStaffWithRole('store');
-      allow update, delete: if false;
+      allow write: if false; // Cloud Functions only (storeOutReportIssue)
+    }
+
+    /* ── New Tailor Requests ─────────────────────────────────────────
+     * Dispatch raises; Admin/Owner review. All writes via Cloud Functions
+     * (raiseNewTailorRequest / approveTailorRequest / rejectTailorRequest).
+     */
+    match /tailorRequests/{id} {
+      allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','dispatch']);
+      allow write: if false;
     }
 
     /* ── Replacement Links ──────────────────────────────────────────── */

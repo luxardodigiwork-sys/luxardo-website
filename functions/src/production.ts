@@ -18,6 +18,7 @@ import {
   CANONICAL_STAFF_ROLES,
   LEGACY_STAFF_ROLE_MAP,
   normalizeStaffRole,
+  CanonicalStaffRole,
 } from "./staffAuth";
 
 const db = admin.firestore();
@@ -120,6 +121,7 @@ const ID_PREFIXES: Record<string, string> = {
   guardQc:          "QC-",
   tailorSession:    "TS-",
   labourSession:    "LS-",
+  tailorRequest:    "TR-",
 };
 
 /**
@@ -195,6 +197,76 @@ function staffCustomerMirror(
   };
 }
 
+/**
+ * provisionStaffAccount — shared staff-account provisioning used by both
+ * staffCreate (direct Admin creation) and approveTailorRequest (New Tailor
+ * Request auto-provisioning on approval). Creates the Firebase Auth user,
+ * then staff/{uid} + customers/{uid} in one atomic batch. Never generates a
+ * mechanism-specific duplicate of this logic elsewhere — this IS the single
+ * staff-creation code path.
+ *
+ * The generated temporary password is NEVER returned or persisted anywhere
+ * (not in Firestore, not in the function's response) — only the resulting
+ * uid is handed back. Password delivery/reset is a separate, existing
+ * concern (see the admin password-reset tooling), out of scope here.
+ *
+ * On any failure after the Auth user is created, the Auth user is rolled
+ * back so no orphan account is left behind.
+ */
+export async function provisionStaffAccount(params: {
+  displayName: string;
+  email: string;
+  role: CanonicalStaffRole;
+  createdByUid: string;
+  password?: string;
+}): Promise<{ uid: string; staffDoc: Record<string, unknown> }> {
+  const { displayName, email, role, createdByUid, password } = params;
+
+  let authUid: string;
+  try {
+    const created = await admin.auth().createUser({
+      email,
+      displayName,
+      password: password || crypto.randomBytes(10).toString("hex"),
+      emailVerified: false,
+    });
+    authUid = created.uid;
+  } catch (err: any) {
+    console.error("provisionStaffAccount: Auth user creation failed", err);
+    throw new HttpsError("already-exists", err?.message || "Could not create Auth user (email may already be registered).");
+  }
+
+  const now = new Date().toISOString();
+  const staffDoc = {
+    uid: authUid,
+    displayName,
+    email,
+    role,
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+    createdBy: createdByUid,
+  };
+  const customerMirror = {
+    ...staffCustomerMirror(authUid, displayName, email, role, now),
+    createdAt: now,
+    createdBy: createdByUid,
+  };
+
+  try {
+    const batch = db.batch();
+    batch.set(db.doc(`staff/${authUid}`), staffDoc);
+    batch.set(db.doc(`customers/${authUid}`), customerMirror, { merge: true });
+    await batch.commit();
+  } catch (err) {
+    // Clean up the Auth user if the doc write fails, to avoid orphan accounts
+    await admin.auth().deleteUser(authUid).catch(() => {});
+    throw err;
+  }
+
+  return { uid: authUid, staffDoc };
+}
+
 /* ═══════════════════════════════════════════════════════════════════
  * staffCreate — create a production staff member.
  *
@@ -205,10 +277,8 @@ function staffCustomerMirror(
  *  - a Firebase Auth user (so the staff member can log in)
  *  - staff/{uid}      — authoritative Loom identity
  *  - customers/{uid}  — compatibility mirror (see STAFF IDENTITY MODEL)
- * The two Firestore docs are written in one atomic batch.
- *
- * If `password` is omitted, a random temporary password is generated and
- * returned in the response (delivered to the admin to pass on).
+ * The two Firestore docs are written in one atomic batch, via the shared
+ * provisionStaffAccount() helper (also used by approveTailorRequest).
  * ═══════════════════════════════════════════════════════════════════ */
 
 export const staffCreate = onCall(async (request) => {
@@ -227,48 +297,9 @@ export const staffCreate = onCall(async (request) => {
     throw new HttpsError("invalid-argument", `Invalid role: ${role}`);
   }
 
-  // Create the Firebase Auth user first (email is the unique key)
-  let authUid: string;
-  try {
-    const created = await admin.auth().createUser({
-      email,
-      displayName,
-      password: password || crypto.randomBytes(10).toString("hex"),
-      emailVerified: false,
-    });
-    authUid = created.uid;
-  } catch (err: any) {
-    console.error("staffCreate: Auth user creation failed", err);
-    throw new HttpsError("already-exists", err?.message || "Could not create Auth user (email may already be registered).");
-  }
-
-  const now = new Date().toISOString();
-  const staffDoc = {
-    uid: authUid,
-    displayName,
-    email,
-    role: canonicalRole,
-    active: true,
-    createdAt: now,
-    updatedAt: now,
-    createdBy: request.auth.uid,
-  };
-  const customerMirror = {
-    ...staffCustomerMirror(authUid, displayName, email, canonicalRole, now),
-    createdAt: now,
-    createdBy: request.auth.uid,
-  };
-
-  try {
-    const batch = db.batch();
-    batch.set(db.doc(`staff/${authUid}`), staffDoc);
-    batch.set(db.doc(`customers/${authUid}`), customerMirror, { merge: true });
-    await batch.commit();
-  } catch (err) {
-    // Clean up the Auth user if the doc write fails, to avoid orphan accounts
-    await admin.auth().deleteUser(authUid).catch(() => {});
-    throw err;
-  }
+  const { uid: authUid, staffDoc } = await provisionStaffAccount({
+    displayName, email, role: canonicalRole, createdByUid: request.auth.uid, password,
+  });
 
   await writeAudit("STAFF_CREATE", "staff", authUid, request.auth.uid, actor.name, actor.role, null, staffDoc);
 

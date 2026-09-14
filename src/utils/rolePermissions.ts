@@ -68,6 +68,11 @@ type Module =
   | 'production.labour.startStop'
   | 'production.qc'
   | 'production.qc.perform'
+  | 'production.dispatch.assignTailor'
+  | 'production.dispatch.sendToStore'
+  | 'production.tailorRequests'
+  | 'production.tailorRequests.raise'
+  | 'production.tailorRequests.review'
   | 'production.tailor'
   | 'production.tailor.startComplete'
   | 'production.store'
@@ -136,11 +141,25 @@ const MATRIX: Record<Module, Role[]> = {
   'production.labour.startStop':     ['super_admin','admin','owner','pm'],
   'production.qc':                   ['super_admin','admin','owner','pm','dispatch','guard'],
   'production.qc.perform':           ['guard'],
+  // Dispatch owns Tailor assignment + all "send to Store" routing (locked
+  // workflow). Emergency override by PM/Admin/Owner goes through the
+  // separate 'production.pieces.move' panel, not these direct actions.
+  'production.dispatch.assignTailor':['dispatch'],
+  'production.dispatch.sendToStore': ['dispatch'],
+  // New Tailor Request: Dispatch raises + views; Admin/Owner review. Tailor
+  // has no request-approval permissions (locked rule) — deliberately absent.
+  'production.tailorRequests':       ['dispatch','owner'],
+  'production.tailorRequests.raise': ['dispatch'],
+  'production.tailorRequests.review':['owner'],
   'production.tailor':               ['super_admin','admin','owner','pm','dispatch','tailor'],
-  'production.tailor.startComplete': ['super_admin','admin','owner','dispatch','tailor'],
+  // Strict, matching tailorStartStitching/tailorCompleteStitching's backend
+  // gate exactly (Tailor-only, ownership-checked server-side too) — mirrors
+  // the qc.perform precedent above.
+  'production.tailor.startComplete': ['tailor'],
   'production.store':                ['super_admin','admin','owner','designer','pm','dispatch'],
-  'production.store.out':            ['super_admin','admin','owner','dispatch'],
-  'production.store.out.issue':      ['super_admin','admin','owner','pm','dispatch'],
+  // Strict, matching storeOutCreate/storeOutReportIssue's backend gate.
+  'production.store.out':            ['store'],
+  'production.store.out.issue':      ['store'],
   'production.reports':              ['super_admin','owner'],
   'production.reports.export':       ['super_admin','owner'],
   'production.audit':                ['super_admin','admin','owner'],

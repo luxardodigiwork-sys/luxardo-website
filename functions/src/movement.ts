@@ -34,6 +34,10 @@ export type MovementInput = {
   relatedPieceId?: string | null;
   source?: "MANUAL" | "SYSTEM";
   snapshot?: Partial<{ pieceStage: string; totalLabourMinutes: number; totalLabourCost: number }>;
+  /** True when this movement was an emergency PM/Admin/Owner override of a
+   *  transition that now has a dedicated specialist function (Dispatch/
+   *  Tailor/Store). See pieces.ts SPECIALIST_OWNED_TRANSITIONS. */
+  isOverride?: boolean;
 };
 
 /**
@@ -59,6 +63,7 @@ export async function recordMovement(input: MovementInput, tx?: admin.firestore.
     relatedPieceId: input.relatedPieceId ?? null,
     revertsMvId: null,
     snapshot: input.snapshot ?? null,
+    isOverride: input.isOverride ?? false,
   };
 
   const id = crypto.randomUUID();

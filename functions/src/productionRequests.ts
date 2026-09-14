@@ -601,6 +601,8 @@ export const prGeneratePieces = onCall(async (request) => {
         rejectedByName: null,
         reworkCount: 0,
         lastGuardQcId: null,
+        assignedTailorUid: null,
+        assignedTailorName: null,
         tailorSessionId: null,
         tailorStartAt: null,
         tailorEndAt: null,

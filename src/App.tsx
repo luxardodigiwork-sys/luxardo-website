@@ -113,6 +113,10 @@ import ProductionRequestDetailPage from "./pages/production/ProductionRequestDet
 import PieceListPage from "./pages/production/PieceListPage";
 import PieceDetailPage from "./pages/production/PieceDetailPage";
 import GuardQcWorkspacePage from "./pages/production/GuardQcWorkspacePage";
+import DispatchWorkspacePage from "./pages/production/DispatchWorkspacePage";
+import TailorWorkspacePage from "./pages/production/TailorWorkspacePage";
+import StoreWorkspacePage from "./pages/production/StoreWorkspacePage";
+import TailorRequestReviewPage from "./pages/production/TailorRequestReviewPage";
 
 const ProtectedBackendRoute = ({
   role,
@@ -180,6 +184,11 @@ function ProductionRoutes() {
         <Route path="pieces" element={<PieceListPage />} />
         <Route path="pieces/:id" element={<PieceDetailPage />} />
         <Route path="qc" element={<GuardQcWorkspacePage />} />
+        {/* Phase 4 — Dispatch / Tailor / Store */}
+        <Route path="dispatch" element={<DispatchWorkspacePage />} />
+        <Route path="tailor" element={<TailorWorkspacePage />} />
+        <Route path="store" element={<StoreWorkspacePage />} />
+        <Route path="tailor-requests" element={<TailorRequestReviewPage />} />
       </Route>
     </>
   );

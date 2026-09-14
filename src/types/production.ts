@@ -333,6 +333,8 @@ export interface PieceDoc {
   lastGuardQcId: string | null;
 
   // Tailor tracking
+  assignedTailorUid: string | null;
+  assignedTailorName: string | null;
   tailorSessionId: string | null;
   tailorStartAt: string | null;
   tailorEndAt: string | null;
@@ -384,6 +386,10 @@ export interface MovementDoc {
     totalLabourMinutes: number;
     totalLabourCost: number;
   };
+  // True when this movement was a PM/Admin/Owner emergency override of a
+  // transition that now has a dedicated specialist function (Dispatch/
+  // Tailor/Store), performed via the generic recordPieceMovement instead.
+  isOverride: boolean;
 }
 
 /* ──────────────────────────── KARIGAR ──────────────────────────── */
@@ -523,6 +529,35 @@ export interface StoreOutIssueDoc {
   reportedBy: string;
   reportedByName: string;
   at: string;
+}
+
+/* ──────────────────────── NEW TAILOR REQUEST ───────────────────── */
+
+export type TailorRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+/**
+ * Collection: tailorRequests
+ * ID: TR-XXXX
+ * Dispatch raises a request (name, email, reason); Admin/Owner approve or
+ * reject. Approval automatically provisions the Tailor's Firebase Auth
+ * account + staff/{uid} (role "tailor") via the same path staffCreate uses.
+ * APPROVED and REJECTED are both terminal — never reopened, never deleted.
+ */
+export interface TailorRequestDoc {
+  id: string; // "TR-0001"
+  name: string;
+  email: string;
+  reason: string;
+  status: TailorRequestStatus;
+  requestedByUid: string;
+  requestedByName: string;
+  requestedAt: string;
+  reviewedByUid: string | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  createdTailorUid: string | null; // set on APPROVED
+  createdTailorName: string | null;
+  rejectionReason: string | null; // set on REJECTED
 }
 
 /* ─────────────────────── REPLACEMENT LINK ──────────────────────── */

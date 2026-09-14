@@ -81,3 +81,29 @@ export {
 export {
   guardQcPerform,
 } from "../../functions/src/guardQc";
+
+/* Phase 4 — Dispatch domain (Tailor assignment + Store routing) */
+export {
+  listActiveTailors,
+  dispatchAssignTailor,
+  dispatchSendToStore,
+} from "../../functions/src/dispatch";
+
+/* Phase 4 — Tailor domain (stitching sessions) */
+export {
+  tailorStartStitching,
+  tailorCompleteStitching,
+} from "../../functions/src/tailor";
+
+/* Phase 4 — Store domain (Store-Out + issue log) */
+export {
+  storeOutCreate,
+  storeOutReportIssue,
+} from "../../functions/src/store";
+
+/* Phase 4 — New Tailor Request domain (Dispatch raises, Admin/Owner review) */
+export {
+  raiseNewTailorRequest,
+  approveTailorRequest,
+  rejectTailorRequest,
+} from "../../functions/src/tailorRequests";
