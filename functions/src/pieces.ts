@@ -365,6 +365,7 @@ export const createManualReplacementPiece = onCall(async (request) => {
     if (r.prId) {
       tx.update(db.doc(`productionRequests/${r.prId}`), {
         pendingQty: admin.firestore.FieldValue.increment(1),
+        rejectedQty: admin.firestore.FieldValue.increment(-1),
         updatedAt: now,
       });
     }
