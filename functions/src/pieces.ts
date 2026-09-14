@@ -32,6 +32,35 @@ const db = admin.firestore();
 
 const PIECE_MANAGERS = ["admin", "owner", "pm"];
 
+/**
+ * Canonical forward piece-stage graph, exactly as already specified in
+ * src/pages/production/PieceDetailPage.tsx's NEXT_STAGES map — this is the
+ * server-side source of truth recordPieceMovement() validates against.
+ *
+ * QC_PENDING deliberately has NO outbound entries here: PASS/REWORK/REJECTED
+ * verdicts out of QC_PENDING are exclusively guardQcPerform()'s domain (its
+ * own role check requires the literal "guard" role — no admin/owner/pm/
+ * super_admin can call it). Letting recordPieceMovement also move a piece
+ * out of QC_PENDING would let an admin/owner/pm fake a QC pass with none of
+ * guardQcPerform's verdict record-keeping (guardQCRecords doc, mandatory
+ * reason, checked actions/photos) — so that exit is intentionally absent
+ * from this table, forcing it through the dedicated QC path instead.
+ */
+const NEXT_STAGES: Record<string, string[]> = {
+  OPEN: ["IN_WORK"],
+  IN_WORK: ["QC_PENDING"],
+  QC_PENDING: [],
+  REWORK: ["IN_WORK"],
+  QC_PASS: ["DISPATCH_READY"],
+  DISPATCH_READY: ["TAILOR_ASSIGNED", "STORE"],
+  TAILOR_ASSIGNED: ["STITCHING"],
+  STITCHING: ["STITCH_COMPLETE"],
+  STITCH_COMPLETE: ["STORE"],
+  STORE: ["STORE_OUT"],
+  STORE_OUT: [],
+  REJECTED: [],
+};
+
 /** Piece must exist and not be permanently closed. */
 async function assertOpenPiece(pieceId: string): Promise<{ ref: admin.firestore.DocumentReference; data: admin.firestore.DocumentData }> {
   const ref = db.doc(`pieces/${pieceId}`);
@@ -366,30 +395,47 @@ export const recordPieceMovement = onCall(async (request) => {
     "TAILOR_ASSIGNED", "STITCHING", "STITCH_COMPLETE", "STORE", "STORE_OUT", "REJECTED"];
   if (!validStages.includes(String(toStage))) throw new HttpsError("invalid-argument", `Invalid stage: ${toStage}`);
 
-  const { ref, data } = await assertOpenPiece(pieceId);
+  const { ref } = await assertOpenPiece(pieceId);
   const dir = String(direction ?? "FORWARD").toUpperCase() === "REVERSE" ? "REVERSE" : "FORWARD";
-
-  const fromStage = String(data.stage || "OPEN");
+  const requestedToStage = String(toStage);
   const now = new Date().toISOString();
 
-  if (fromStage !== String(toStage)) {
-    // Validate the transition is a real forward stage change (reverse handled by caller intent).
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const cur = snap.data()!;
+  // fromStage (and the snapshot fields below) are populated inside the
+  // transaction from a freshly re-read piece doc, never from a pre-
+  // transaction read — so a concurrent move cannot race past the
+  // adjacency check with stale data.
+  let fromStage = "OPEN";
+  let prId: string | null = null;
+  let totalLabourMinutes = 0;
+  let totalLabourCost = 0;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const cur = snap.data()!;
+    fromStage = String(cur.stage || "OPEN");
+    prId = cur.prId || null;
+    totalLabourMinutes = cur.totalLabourMinutes || 0;
+    totalLabourCost = cur.totalLabourCost || 0;
+    if (fromStage !== requestedToStage) {
+      const allowed = NEXT_STAGES[fromStage] || [];
+      if (!allowed.includes(requestedToStage)) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Invalid transition: ${fromStage} -> ${requestedToStage} is not allowed.`
+        );
+      }
       tx.update(ref, {
-        stage: String(toStage),
-        status: String(toStage) === "REJECTED" ? "closed" : (String(toStage) === "REWORK" ? "in_rework" : cur.status),
+        stage: requestedToStage,
+        status: requestedToStage === "REJECTED" ? "closed" : (requestedToStage === "REWORK" ? "in_rework" : cur.status),
         updatedAt: now,
       });
-    });
-  }
+    }
+  });
 
   const recId = await recordMovement({
     pieceId, fromStage, toStage: String(toStage),
     direction: dir, action: String(action), actor,
-    reason: reason || null, relatedRequestId: relatedRequestId || data.prId || null, relatedPieceId: relatedPieceId || null,
-    snapshot: { pieceStage: String(toStage), totalLabourMinutes: data.totalLabourMinutes || 0, totalLabourCost: data.totalLabourCost || 0 },
+    reason: reason || null, relatedRequestId: relatedRequestId || prId || null, relatedPieceId: relatedPieceId || null,
+    snapshot: { pieceStage: String(toStage), totalLabourMinutes, totalLabourCost },
   });
 
   await writeAudit(dir === "REVERSE" ? "PIECE_REVERSE_MOVE" : "PIECE_STAGE_MOVE", "pieces", pieceId, actor,
