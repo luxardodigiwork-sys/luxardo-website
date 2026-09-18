@@ -681,3 +681,48 @@ export interface IdCounterDoc {
   next: number;
   updatedAt: string;
 }
+
+/* ────────────────────────── FABRIC TYPES ───────────────────────── */
+
+/**
+ * Collection: fabricMasters
+ * ID: FM-XXXX (to be determined)
+ * Master data for fabric types used in production.
+ */
+export interface FabricMasterDoc {
+  id: string;
+  name: string;
+  gsm: number;
+  colour: string;
+  colourCode: string;
+  notes: string;
+  active: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Collection: designVersionFabricGuides
+ * ID: {designVersionId}-fabric-guide
+ * Link between a design version and its fabric requirements.
+ */
+export interface DesignVersionFabricGuideDoc {
+  fabricId: string;
+  metersPerDesign: number;
+}
+
+/**
+ * Collection: fabricIssues
+ * ID: FI-XXXX (to be determined)
+ * Tracks fabric consumption for each production request.
+ * ONE Fabric Issue = EXACTLY ONE Production Request + EXACTLY ONE Design.
+ */
+export interface FabricIssueDoc {
+  id: string;
+  prId: string;
+  designId: string;
+  designVersionId: string;
+  fabricId: string;
+  requiredQtyMeters: number;
+}
