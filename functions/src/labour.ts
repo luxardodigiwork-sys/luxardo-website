@@ -179,13 +179,27 @@ export const labourStop = onCall(async (request) => {
   const pieceSnap = await pieceRef.get();
   if (!pieceSnap.exists) throw new HttpsError("not-found", `Piece ${pieceId} not found.`);
   const piece = pieceSnap.data()!;
-  const prevMinutes = Number(piece.totalLabourMinutes) || 0;
-  const prevCost = Number(piece.totalLabourCost) || 0;
+
+  // totalLabourMinutes/totalLabourCost are computed from a fresh in-transaction
+  // read of pieceRef (never the pre-transaction snapshot above) so concurrent
+  // labourStop calls on different sessions of the same piece can never blind-
+  // write stale totals over one another (each retries against the other's
+  // committed result instead of clobbering it).
+  let newMinutes = 0;
+  let newCost = 0;
 
   await db.runTransaction(async (tx) => {
     const sSnap = await tx.get(sessionRef);
     const s = sSnap.data()!;
     if (s.endedAt) throw new HttpsError("failed-precondition", `Session ${sessionId} is already closed.`);
+
+    const pSnap = await tx.get(pieceRef);
+    const p = pSnap.data()!;
+    const prevMinutes = Number(p.totalLabourMinutes) || 0;
+    const prevCost = Number(p.totalLabourCost) || 0;
+    newMinutes = prevMinutes + minutes;
+    newCost = Math.round((prevCost + labourCost) * 100) / 100;
+
     const nowIso = new Date().toISOString();
     tx.update(sessionRef, {
       endedAt,
@@ -196,8 +210,8 @@ export const labourStop = onCall(async (request) => {
       updatedAt: nowIso,
     });
     tx.update(pieceRef, {
-      totalLabourMinutes: prevMinutes + minutes,
-      totalLabourCost: Math.round((prevCost + labourCost) * 100) / 100,
+      totalLabourMinutes: newMinutes,
+      totalLabourCost: newCost,
       lastWorkAt: nowIso,
       updatedAt: nowIso,
     });
@@ -207,7 +221,7 @@ export const labourStop = onCall(async (request) => {
     pieceId, fromStage: String(piece.stage || "IN_WORK"), toStage: String(piece.stage || "IN_WORK"),
     direction: "FORWARD", action: "WORK_STOP", actor,
     reason: `Session ${sessionId} stopped (${minutes} min)`, relatedRequestId: piece.prId || null,
-    snapshot: { pieceStage: String(piece.stage || "IN_WORK"), totalLabourMinutes: prevMinutes + minutes, totalLabourCost: prevCost + labourCost },
+    snapshot: { pieceStage: String(piece.stage || "IN_WORK"), totalLabourMinutes: newMinutes, totalLabourCost: newCost },
   });
   await writeAudit("LABOUR_STOP", "pieceWorkSessions", sessionId, actor,
     { pieceId, karigarId: session.karigarId, startedAt: session.startedAt },
