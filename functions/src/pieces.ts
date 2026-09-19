@@ -208,8 +208,38 @@ export const recordRework = onCall(async (request) => {
     if (cur.status === "closed" || cur.status === "replaced") {
       throw new HttpsError("failed-precondition", `Piece ${pieceId} is ${cur.status} and cannot be reworked.`);
     }
-    const now = new Date().toISOString();
     const fromStage = String(cur.stage || "OPEN");
+    // MED-1 — two preconditions established from the existing, already-shipped
+    // design rather than a newly-invented rule:
+    //  1. QC_PENDING is guard-exclusive (NEXT_STAGES["QC_PENDING"] = [] and its
+    //     own comment above states PASS/REWORK/REJECTED verdicts out of
+    //     QC_PENDING are exclusively guardQcPerform()'s domain, precisely so a
+    //     PM/Admin/Owner can never record a REWORK verdict — this function
+    //     also sets qcVerdict:"REWORK" — without guardQcPerform's mandatory
+    //     reason/checkedActions/guardQCRecords record-keeping). recordRework
+    //     was the one path that could still do this; it's now blocked here
+    //     the same way recordPieceMovement already is via NEXT_STAGES.
+    //  2. A piece already at REWORK cannot be reworked again — this mirrors
+    //     PieceDetailPage.tsx's own existing `!isReworked` UI gate
+    //     (isReworked = status==='in_rework' || stage==='REWORK'), which
+    //     already hides the "Mark Rework" action in this state; the server
+    //     simply didn't enforce what the UI already assumed.
+    // Every OTHER active stage (OPEN, IN_WORK, QC_PASS, DISPATCH_READY,
+    // TAILOR_ASSIGNED, STITCHING, STITCH_COMPLETE, STORE) remains reworkable,
+    // matching the UI's deliberately broad `!isClosed && !isReworked` gate —
+    // recordRework is a PM/Admin/Owner correction mechanism usable at any
+    // point in a piece's active lifecycle, not a single-predecessor
+    // transition like labourStart, so no additional stage is restricted here.
+    if (fromStage === "QC_PENDING") {
+      throw new HttpsError(
+        "failed-precondition",
+        `Piece ${pieceId} is QC_PENDING — REWORK can only be recorded via Guard QC.`
+      );
+    }
+    if (fromStage === "REWORK") {
+      throw new HttpsError("failed-precondition", `Piece ${pieceId} is already in REWORK.`);
+    }
+    const now = new Date().toISOString();
     tx.update(ref, {
       stage: "REWORK",
       status: "in_rework",
