@@ -136,6 +136,34 @@ export const approveTailorRequest = onCall(async (request) => {
   const data: admin.firestore.DocumentData = reqData;
 
   if (alreadyApproved) {
+    // HIGH-2 — self-heal a request that is APPROVED (its Tailor account was
+    // genuinely provisioned) but never got createdTailorUid recorded, e.g.
+    // because the bookkeeping write below failed on a prior attempt. Look
+    // the account up by email instead of ever re-provisioning it — the
+    // request's claim is never released back to PENDING once provisioning
+    // has actually succeeded, so this is the only way a retry can complete.
+    if (!data.createdTailorUid) {
+      let existingUid: string;
+      try {
+        const existing = await admin.auth().getUserByEmail(String(data.email));
+        existingUid = existing.uid;
+      } catch (err) {
+        // No account found for this email either — provisioning must have
+        // failed before an Auth user was ever created, which the PENDING
+        // rollback below already handles for every OTHER caller; reaching
+        // APPROVED with no account at all is not expected. Surface it
+        // rather than silently returning tailorUid: null.
+        throw new HttpsError(
+          "internal",
+          `Tailor request ${requestId} is APPROVED but no account could be found for ${data.email}. Manual review required.`
+        );
+      }
+      await ref.update({ createdTailorUid: existingUid, createdTailorName: data.name });
+      await writeAudit("TAILOR_REQUEST_APPROVE", "tailorRequests", requestId, actor,
+        { status: "APPROVED", createdTailorUid: null },
+        { status: "APPROVED", createdTailorUid: existingUid, createdTailorName: data.name, reconciled: true });
+      return { ok: true, requestId, alreadyApproved: true, tailorUid: existingUid, tailorName: data.name };
+    }
     return {
       ok: true, requestId, alreadyApproved: true,
       tailorUid: data.createdTailorUid || null,
@@ -146,22 +174,31 @@ export const approveTailorRequest = onCall(async (request) => {
   // Step 2: only the transaction's winner reaches here. Provision the
   // account via the SAME code path staffCreate uses — no duplicate
   // staff-creation mechanism.
+  let tailorUid: string;
   try {
-    const { uid: tailorUid } = await provisionStaffAccount({
+    const provisioned = await provisionStaffAccount({
       displayName: data.name, email: data.email, role: "tailor", createdByUid: actor.uid,
     });
-    await ref.update({ createdTailorUid: tailorUid, createdTailorName: data.name });
-
-    await writeAudit("TAILOR_REQUEST_APPROVE", "tailorRequests", requestId, actor,
-      { status: "PENDING" }, { status: "APPROVED", createdTailorUid: tailorUid, createdTailorName: data.name });
-
-    return { ok: true, requestId, tailorUid, tailorName: data.name };
+    tailorUid = provisioned.uid;
   } catch (err) {
-    // Roll back the claim so the request can be retried (e.g. the email was
-    // already registered) instead of being stuck APPROVED with no Tailor.
+    // provisionStaffAccount itself failed — no account was created by THIS
+    // call, so it is safe to release the claim back to PENDING for a retry.
     await ref.update({ status: "PENDING", reviewedByUid: null, reviewedByName: null, reviewedAt: null }).catch(() => {});
     throw err;
   }
+
+  // HIGH-2 — the Tailor account now genuinely exists. From this point the
+  // request must NEVER be rolled back to PENDING: doing so would make a
+  // retry re-call provisionStaffAccount with the same email, which fails
+  // with "already-exists" and rolls back again, forever (the original bug).
+  // Any failure below is surfaced to the caller as an error, but the request
+  // stays APPROVED — a retry then takes the alreadyApproved self-heal branch
+  // above instead of re-provisioning.
+  await ref.update({ createdTailorUid: tailorUid, createdTailorName: data.name });
+  await writeAudit("TAILOR_REQUEST_APPROVE", "tailorRequests", requestId, actor,
+    { status: "PENDING" }, { status: "APPROVED", createdTailorUid: tailorUid, createdTailorName: data.name });
+
+  return { ok: true, requestId, tailorUid, tailorName: data.name };
 });
 
 /* ═══════════════════════════════════════════════════════════════════
