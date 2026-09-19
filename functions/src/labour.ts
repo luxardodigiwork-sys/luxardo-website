@@ -95,6 +95,27 @@ export const labourStart = onCall(async (request) => {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const cur = snap.data()!;
+
+    // F2 — reject if this Karigar already has an open (unstopped) session on
+    // this Piece. Running the query INSIDE the transaction (not only before
+    // it) makes this race-safe: Firestore includes the query's result set in
+    // the transaction's read set, so a concurrent labourStart that would
+    // create a conflicting open session forces this transaction to retry and
+    // see it, instead of both racing past a pre-transaction-only check.
+    const openSessionSnap = await tx.get(
+      db.collection("pieceWorkSessions")
+        .where("pieceId", "==", pieceId)
+        .where("karigarId", "==", karigarId)
+        .where("endedAt", "==", null)
+        .limit(1)
+    );
+    if (!openSessionSnap.empty) {
+      throw new HttpsError(
+        "already-exists",
+        `Karigar ${karigarId} already has an open work session on piece ${pieceId}.`
+      );
+    }
+
     const nowIso = new Date().toISOString();
     const fromStage = String(cur.stage || "OPEN");
     tx.update(ref, {
