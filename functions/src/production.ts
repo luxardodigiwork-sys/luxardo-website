@@ -19,6 +19,7 @@ import {
   LEGACY_STAFF_ROLE_MAP,
   normalizeStaffRole,
   CanonicalStaffRole,
+  requireStaff,
 } from "./staffAuth";
 
 const db = admin.firestore();
@@ -151,6 +152,11 @@ export async function generateId(domain: string): Promise<string> {
 
 export const nextId = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  // CRIT-1 — a generic multi-domain ID utility, not an admin-exclusive
+  // management action (unlike staffCreate/karigarCreate below), so any
+  // canonical production staff identity may call it — never an unauthorized
+  // B2C customer or anonymous session.
+  await requireStaff(request.auth.uid);
   const { domain } = request.data as { domain?: string };
   if (!domain || !ID_PREFIXES[domain]) {
     throw new HttpsError("invalid-argument", `Invalid domain. Allowed: ${Object.keys(ID_PREFIXES).join(", ")}`);
