@@ -651,6 +651,7 @@ export type AuditAction =
   | "STAFF_CREATE"
   | "STAFF_UPDATE"
   | "STAFF_ROLE_CHANGE"
+  | "STAFF_PROVISION_ORPHAN" // Auth user created but its staff/customers write AND the compensating delete both failed — needs manual review.
   | "REPORT_EXPORT";
 
 export interface AuditLogDoc {

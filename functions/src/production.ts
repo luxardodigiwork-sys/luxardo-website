@@ -265,8 +265,23 @@ export async function provisionStaffAccount(params: {
     batch.set(db.doc(`customers/${authUid}`), customerMirror, { merge: true });
     await batch.commit();
   } catch (err) {
-    // Clean up the Auth user if the doc write fails, to avoid orphan accounts
-    await admin.auth().deleteUser(authUid).catch(() => {});
+    // Clean up the Auth user if the doc write fails, to avoid orphan accounts.
+    try {
+      await admin.auth().deleteUser(authUid);
+    } catch (cleanupErr: any) {
+      // MED-3 — the compensating delete ALSO failed: without a record here,
+      // the orphaned Auth account (no staff/customers doc) is invisible to
+      // every dashboard and audit trail, and the only future symptom is an
+      // unrelated-looking "already-exists" error the next time this email
+      // is provisioned. Best-effort: a failure writing this record must
+      // never mask the original batch-commit error thrown below.
+      console.error("provisionStaffAccount: orphan cleanup failed", { authUid, email, cleanupErr });
+      await writeAudit(
+        "STAFF_PROVISION_ORPHAN", "staff", authUid, createdByUid, "system", "system",
+        null, { uid: authUid, email, role },
+        `Auth user created but staff/customers write failed, and the compensating Auth user delete also failed: ${String(cleanupErr?.message || cleanupErr)}`
+      ).catch(() => {});
+    }
     throw err;
   }
 
