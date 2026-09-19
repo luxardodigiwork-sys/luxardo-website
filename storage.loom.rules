@@ -29,13 +29,23 @@ service firebase.storage {
     function isImage() { return request.resource.contentType.matches('image/.*'); }
     function maxSize(mb) { return request.resource.size < mb * 1024 * 1024; }
 
-    /* ── V1 Production Storage (Loom) ───────────────────────────────── */
-    match /production/designs/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin() || isStaffInRoles(['designer', 'pm']); }
-    match /production/sampleDesigns/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin() || isStaffInRoles(['designer', 'pm']); }
-    match /production/samplePieces/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin() || isStaffInRoles(['designer', 'pm']); }
+    /* ── V1 Production Storage (Loom) ───────────────────────────────── *
+     * MED-4: designs/sampleDesigns/samplePieces hold documented image
+     * fields (DesignDoc.image/images, SampleDesignDoc.image/images,
+     * SamplePieceDoc.image — "Photo of completed garment") — gated the
+     * same isImage()+maxSize(10) way as the already-constrained
+     * guardQC/tailor paths below, closing the unbounded-upload gap a
+     * prior audit flagged. `store` has no documented image field on
+     * StoreOutDoc/StoreOutIssueDoc and no upload UI exists for it yet, so
+     * only maxSize(10) is added there — isImage() would be a speculative
+     * restriction this evidence doesn't support.
+     */
+    match /production/designs/{p=**} { allow read: if isSignedIn(); allow write: if (isAdmin() || isStaffInRoles(['designer', 'pm'])) && isImage() && maxSize(10); }
+    match /production/sampleDesigns/{p=**} { allow read: if isSignedIn(); allow write: if (isAdmin() || isStaffInRoles(['designer', 'pm'])) && isImage() && maxSize(10); }
+    match /production/samplePieces/{p=**} { allow read: if isSignedIn(); allow write: if (isAdmin() || isStaffInRoles(['designer', 'pm'])) && isImage() && maxSize(10); }
     match /production/guardQC/{p=**} { allow read: if isSignedIn(); allow write: if (isAdmin() || isStaffInRoles(['guard'])) && isImage() && maxSize(10); }
     match /production/tailor/{p=**} { allow read: if isSignedIn(); allow write: if (isAdmin() || isStaffInRoles(['tailor'])) && isImage() && maxSize(10); }
-    match /production/store/{p=**} { allow read: if isSignedIn(); allow write: if isAdmin() || isStaffInRoles(['store', 'dispatch']); }
+    match /production/store/{p=**} { allow read: if isSignedIn(); allow write: if (isAdmin() || isStaffInRoles(['store', 'dispatch'])) && maxSize(10); }
 
     /* ── Deny-all ─────────────────────────────────────────────────────── */
     match /{p=**} { allow read, write: if false; }
