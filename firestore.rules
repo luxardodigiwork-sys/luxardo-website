@@ -167,25 +167,32 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    /* ── Tailor Sessions ────────────────────────────────────────────── */
+    /* ── Tailor Sessions ────────────────────────────────────────────── *
+     * HIGH-3: this project (luxardo-fashion-website) never deploys
+     * tailorStartStitching/tailorCompleteStitching (see functions/src/
+     * index.ts) and no client code writes here — matches
+     * firestore.loom.rules' Cloud-Functions-only lockdown exactly, closing
+     * the direct-client-write divergence a prior audit flagged.
+     */
     match /tailorSessions/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','tailor']);
-      allow create, update: if isStaffWithRole('tailor');
-      allow delete: if false;
+      allow write: if false; // Cloud Functions only (tailorStartStitching / tailorCompleteStitching — not deployed to this project)
     }
 
-    /* ── Store Outs ─────────────────────────────────────────────────── */
+    /* ── Store Outs ─────────────────────────────────────────────────── *
+     * HIGH-3: this project never deploys storeOutCreate — see above.
+     */
     match /storeOuts/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','store']);
-      allow create: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','dispatch','store']);
-      allow update, delete: if false;
+      allow write: if false; // Cloud Functions only (storeOutCreate — not deployed to this project)
     }
 
-    /* ── Store Out Issues ───────────────────────────────────────────── */
+    /* ── Store Out Issues ───────────────────────────────────────────── *
+     * HIGH-3: this project never deploys storeOutReportIssue — see above.
+     */
     match /storeOutIssues/{id} {
       allow read: if isSignedIn() && isStaffInRoles(['super_admin','admin','owner','pm','store']);
-      allow create: if isStaffWithRole('store');
-      allow update, delete: if false;
+      allow write: if false; // Cloud Functions only (storeOutReportIssue — not deployed to this project)
     }
 
     /* ── Replacement Links ────────────────────────────────────────────
