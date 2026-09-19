@@ -63,24 +63,31 @@ export const dispatchAssignTailor = onCall(async (request) => {
   const { pieceId, tailorUid, reason } = (request.data || {}) as { pieceId?: string; tailorUid?: string; reason?: string };
   if (!pieceId || !tailorUid) throw new HttpsError("invalid-argument", "pieceId and tailorUid are required.");
 
-  const tailorSnap = await db.doc(`staff/${tailorUid}`).get();
-  if (!tailorSnap.exists) throw new HttpsError("not-found", `Staff ${tailorUid} not found.`);
-  const tailorDoc = tailorSnap.data()!;
-  if (String(tailorDoc.role || "") !== "tailor") {
+  // Fast-fail only — NOT authoritative. staff/{tailorUid} can change (e.g. an
+  // Admin deactivates or re-roles the Tailor via staffUpdate) between this
+  // read and the transaction's commit below; the transaction's own fresh
+  // read of the same doc is the real gate (MED-2), mirroring the existing
+  // pre-check-then-reverify pattern assertOpenPiece/tx.get(ref) already uses
+  // for the piece in this same function.
+  const tailorPreSnap = await db.doc(`staff/${tailorUid}`).get();
+  if (!tailorPreSnap.exists) throw new HttpsError("not-found", `Staff ${tailorUid} not found.`);
+  const tailorPreDoc = tailorPreSnap.data()!;
+  if (String(tailorPreDoc.role || "") !== "tailor") {
     throw new HttpsError("failed-precondition", `Staff ${tailorUid} is not a Tailor.`);
   }
-  if (tailorDoc.active === false) {
+  if (tailorPreDoc.active === false) {
     throw new HttpsError("failed-precondition", `Tailor ${tailorUid} is not active.`);
   }
-  const tailorName = String(tailorDoc.displayName || "");
 
   const { ref } = await assertOpenPiece(pieceId);
+  const staffRef = db.doc(`staff/${tailorUid}`);
   const now = new Date().toISOString();
   let fromStage = "OPEN";
   let prId: string | null = null;
+  let tailorName = "";
 
   await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
+    const [snap, tailorSnap] = await Promise.all([tx.get(ref), tx.get(staffRef)]);
     const cur = snap.data()!;
     fromStage = String(cur.stage || "OPEN");
     prId = cur.prId || null;
@@ -91,6 +98,20 @@ export const dispatchAssignTailor = onCall(async (request) => {
     if (!allowed.includes("TAILOR_ASSIGNED")) {
       throw new HttpsError("failed-precondition", `Invalid transition: ${fromStage} -> TAILOR_ASSIGNED is not allowed.`);
     }
+
+    // MED-2 — authoritative re-check from THIS transaction's fresh read.
+    if (!tailorSnap.exists) {
+      throw new HttpsError("not-found", `Staff ${tailorUid} not found.`);
+    }
+    const tailorDoc = tailorSnap.data()!;
+    if (String(tailorDoc.role || "") !== "tailor") {
+      throw new HttpsError("failed-precondition", `Staff ${tailorUid} is not a Tailor.`);
+    }
+    if (tailorDoc.active === false) {
+      throw new HttpsError("failed-precondition", `Tailor ${tailorUid} is not active.`);
+    }
+    tailorName = String(tailorDoc.displayName || "");
+
     tx.update(ref, {
       stage: "TAILOR_ASSIGNED",
       assignedTailorUid: tailorUid,
