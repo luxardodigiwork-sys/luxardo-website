@@ -24,6 +24,7 @@ import { requireStaff, hasAnyRole } from "./staffAuth";
 import { writeAudit } from "./audit";
 import { recordMovement } from "./movement";
 import { applyPrQuantityDelta } from "./productionRequests";
+import { NEXT_STAGES } from "./pieces";
 
 const db = admin.firestore();
 
@@ -95,6 +96,24 @@ export const labourStart = onCall(async (request) => {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const cur = snap.data()!;
+    const fromStage = String(cur.stage || "OPEN");
+
+    // F3 — a piece may only start labour from OPEN or REWORK, per the same
+    // canonical NEXT_STAGES graph recordPieceMovement() enforces (pieces.ts).
+    // fromStage === "IN_WORK" is also allowed as a no-op: a second/additional
+    // Karigar starting on an already-IN_WORK piece doesn't change its stage
+    // (see the applyPrQuantityDelta comment below) — NEXT_STAGES doesn't list
+    // a stage as its own successor, so that case is checked separately here,
+    // matching the same fromStage !== toStage short-circuit
+    // recordPieceMovement() uses for identical treatment. Every other stage
+    // (QC_PENDING, DISPATCH_READY, STORE, etc.) is rejected, so labourStart
+    // can never silently force a piece backward out of a later stage.
+    if (fromStage !== "IN_WORK" && !(NEXT_STAGES[fromStage] || []).includes("IN_WORK")) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Piece ${pieceId} cannot start work from stage ${fromStage}.`
+      );
+    }
 
     // F2 — reject if this Karigar already has an open (unstopped) session on
     // this Piece. Running the query INSIDE the transaction (not only before
@@ -117,7 +136,6 @@ export const labourStart = onCall(async (request) => {
     }
 
     const nowIso = new Date().toISOString();
-    const fromStage = String(cur.stage || "OPEN");
     tx.update(ref, {
       stage: "IN_WORK",
       status: "active",
