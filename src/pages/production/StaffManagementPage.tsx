@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { db, functions } from '../../firebase';
 import { collection, getDocs, doc, updateDoc, query, orderBy } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { Users, Plus, Search, ShieldCheck, XCircle, Loader2, CheckCircle, X } from 'lucide-react';
+import { Users, Plus, Search, ShieldCheck, XCircle, Loader2, CheckCircle, X, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { StaffDoc } from '../../types/production';
 import { PRODUCTION_CONFIG } from '../../constants/businessConfig';
@@ -23,6 +23,7 @@ export default function StaffManagementPage() {
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<StaffRole>('designer');
   const [newPassword, setNewPassword] = useState('');
+  const [newPhoneNumber, setNewPhoneNumber] = useState('');
 
   const loadStaff = useCallback(async () => {
     try {
@@ -51,6 +52,7 @@ export default function StaffManagementPage() {
         email: newEmail.trim(),
         role: newRole,
         password: newPassword.trim() || undefined,
+        phoneNumber: newPhoneNumber.trim() || undefined,
       });
       const uid = (result.data as any)?.uid || '';
 
@@ -59,7 +61,7 @@ export default function StaffManagementPage() {
         message: `Staff "${newName.trim()}" created (${roleLabel(newRole)}). They can now sign in at /production with the password you set.`,
       });
       setShowCreateModal(false);
-      setNewName(''); setNewEmail(''); setNewRole('designer'); setNewPassword('');
+      setNewName(''); setNewEmail(''); setNewRole('designer'); setNewPassword(''); setNewPhoneNumber('');
       await loadStaff();
     } catch (err: any) {
       setToast({ type: 'error', message: err.message || 'Failed to create staff.' });
@@ -76,6 +78,22 @@ export default function StaffManagementPage() {
       await loadStaff();
     } catch (err: any) {
       setToast({ type: 'error', message: err.message || 'Update failed.' });
+    }
+  };
+
+  const setMobileNumber = async (s: StaffDoc) => {
+    const input = window.prompt(
+      `Mobile number for ${s.displayName} (E.164 format, e.g. +919876543210). Leave blank to remove.`,
+      s.phoneNumber || ''
+    );
+    if (input === null) return; // cancelled
+    try {
+      const staffUpdateFn = httpsCallable(functions, 'staffUpdate');
+      await staffUpdateFn({ uid: s.uid, updates: { phoneNumber: input.trim() } });
+      setToast({ type: 'success', message: `Mobile number ${input.trim() ? 'updated' : 'removed'} for ${s.displayName}.` });
+      await loadStaff();
+    } catch (err: any) {
+      setToast({ type: 'error', message: err.message || 'Failed to update mobile number.' });
     }
   };
 
@@ -131,6 +149,7 @@ export default function StaffManagementPage() {
                 <tr className="border-b border-gray-100">
                   <th className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-400 px-6 py-4">Name</th>
                   <th className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-400 px-6 py-4">Email</th>
+                  <th className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-400 px-6 py-4">Mobile</th>
                   <th className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-400 px-6 py-4">Role</th>
                   <th className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-400 px-6 py-4">Status</th>
                   <th className="text-right text-[10px] font-bold uppercase tracking-widest text-gray-400 px-6 py-4">Actions</th>
@@ -148,6 +167,7 @@ export default function StaffManagementPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">{s.email}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{s.phoneNumber || '—'}</td>
                     <td className="px-6 py-4">
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-[10px] font-bold uppercase tracking-widest rounded-md text-gray-600">
                         <ShieldCheck size={12} />
@@ -161,7 +181,13 @@ export default function StaffManagementPage() {
                         {s.active ? <><CheckCircle size={12} /> Active</> : <><XCircle size={12} /> Inactive</>}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => setMobileNumber(s)}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors inline-flex items-center gap-1"
+                      >
+                        <Phone size={12} /> {s.phoneNumber ? 'Edit Mobile' : 'Set Mobile'}
+                      </button>
                       <button
                         onClick={() => toggleActive(s)}
                         className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
@@ -223,6 +249,13 @@ export default function StaffManagementPage() {
                       <option key={r} value={r}>{roleLabel(r)}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Mobile Number (optional)</label>
+                  <input type="tel" value={newPhoneNumber} onChange={e => setNewPhoneNumber(e.target.value)}
+                    placeholder="+919876543210"
+                    className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all" />
+                  <p className="text-[10px] text-gray-400 mt-1">E.164 format with country code. Enables mobile sign-in and OTP password recovery.</p>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Temporary Password</label>

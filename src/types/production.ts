@@ -590,6 +590,10 @@ export interface StaffDoc {
   email: string;
   role: StaffRole;
   active: boolean;
+  /** Display mirror of the Firebase Auth record's phone number (E.164). The
+   *  Auth record is the actual phone-sign-in credential; this field is only
+   *  for admin-UI display/lookup. */
+  phoneNumber?: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy: string;

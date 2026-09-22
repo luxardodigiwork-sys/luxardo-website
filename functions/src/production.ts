@@ -184,6 +184,9 @@ export const nextId = onCall(async (request) => {
 
 const VALID_STAFF_ROLES = new Set<string>(CANONICAL_STAFF_ROLES as readonly string[]);
 
+/** E.164 phone format (+ followed by 8-15 digits) — required for Firebase Auth phone sign-in. */
+const E164_RE = /^\+[1-9]\d{7,14}$/;
+
 /** Shape of the customers/{uid} compatibility mirror for a staff member. */
 function staffCustomerMirror(
   uid: string,
@@ -225,8 +228,9 @@ export async function provisionStaffAccount(params: {
   role: CanonicalStaffRole;
   createdByUid: string;
   password?: string;
+  phoneNumber?: string;
 }): Promise<{ uid: string; staffDoc: Record<string, unknown> }> {
-  const { displayName, email, role, createdByUid, password } = params;
+  const { displayName, email, role, createdByUid, password, phoneNumber } = params;
 
   let authUid: string;
   try {
@@ -235,6 +239,7 @@ export async function provisionStaffAccount(params: {
       displayName,
       password: password || crypto.randomBytes(10).toString("hex"),
       emailVerified: false,
+      ...(phoneNumber ? { phoneNumber } : {}),
     });
     authUid = created.uid;
   } catch (err: any) {
@@ -249,6 +254,7 @@ export async function provisionStaffAccount(params: {
     email,
     role,
     active: true,
+    phoneNumber: phoneNumber || null,
     createdAt: now,
     updatedAt: now,
     createdBy: createdByUid,
@@ -306,8 +312,8 @@ export const staffCreate = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const actor = await requireAdmin(request.auth.uid);
 
-  const { displayName, email, role, password } = request.data as {
-    displayName?: string; email?: string; role?: string; password?: string;
+  const { displayName, email, role, password, phoneNumber } = request.data as {
+    displayName?: string; email?: string; role?: string; password?: string; phoneNumber?: string;
   };
 
   if (!displayName || !email || !role) {
@@ -317,9 +323,14 @@ export const staffCreate = onCall(async (request) => {
   if (!canonicalRole || !VALID_STAFF_ROLES.has(canonicalRole)) {
     throw new HttpsError("invalid-argument", `Invalid role: ${role}`);
   }
+  const trimmedPhone = phoneNumber ? String(phoneNumber).trim() : undefined;
+  if (trimmedPhone && !E164_RE.test(trimmedPhone)) {
+    throw new HttpsError("invalid-argument", "phoneNumber must be E.164 format, e.g. +919876543210.");
+  }
 
   const { uid: authUid, staffDoc } = await provisionStaffAccount({
     displayName, email, role: canonicalRole, createdByUid: request.auth.uid, password,
+    phoneNumber: trimmedPhone,
   });
 
   await writeAudit("STAFF_CREATE", "staff", authUid, request.auth.uid, actor.name, actor.role, null, staffDoc);
@@ -352,7 +363,7 @@ export const staffUpdate = onCall(async (request) => {
   const before = snap.data()!;
 
   // Whitelist allowed fields
-  const allowed = ["displayName", "email", "role", "active"];
+  const allowed = ["displayName", "email", "role", "active", "phoneNumber"];
   const patch: Record<string, unknown> = {};
   for (const k of allowed) {
     if (k in updates) patch[k] = updates[k];
@@ -366,6 +377,24 @@ export const staffUpdate = onCall(async (request) => {
       throw new HttpsError("invalid-argument", `Invalid role: ${patch.role}`);
     }
     patch.role = canonicalRole;
+  }
+
+  // phoneNumber lives on the Firebase Auth record (native phone-sign-in
+  // credential) — staff/{uid}.phoneNumber below is only a display mirror.
+  // An empty string clears the number on both. Applied via the Admin SDK
+  // BEFORE the Firestore batch, so the mirror is never written unless the
+  // Auth record actually accepted the change.
+  if (patch.phoneNumber !== undefined) {
+    const raw = String(patch.phoneNumber ?? "").trim();
+    if (raw && !E164_RE.test(raw)) {
+      throw new HttpsError("invalid-argument", "phoneNumber must be E.164 format, e.g. +919876543210.");
+    }
+    try {
+      await admin.auth().updateUser(uid, { phoneNumber: raw || null });
+    } catch (err: any) {
+      throw new HttpsError("invalid-argument", err?.message || "Could not update phone number on the Auth account.");
+    }
+    patch.phoneNumber = raw || null;
   }
 
   const now = new Date().toISOString();
@@ -385,10 +414,13 @@ export const staffUpdate = onCall(async (request) => {
   batch.set(db.doc(`customers/${uid}`), mirror, { merge: true });
   await batch.commit();
 
-  // Audit: role change gets its own action
+  // Audit: role change and phone change each get their own action
   if (patch.role && patch.role !== before.role) {
     await writeAudit("STAFF_ROLE_CHANGE", "staff", uid, request.auth.uid, actor.name, actor.role,
       { role: before.role }, { role: patch.role });
+  } else if (patch.phoneNumber !== undefined && patch.phoneNumber !== (before.phoneNumber ?? null)) {
+    await writeAudit("STAFF_PHONE_CHANGE", "staff", uid, request.auth.uid, actor.name, actor.role,
+      { phoneNumber: before.phoneNumber ?? null }, { phoneNumber: patch.phoneNumber });
   } else {
     await writeAudit("STAFF_UPDATE", "staff", uid, request.auth.uid, actor.name, actor.role,
       { displayName: before.displayName, email: before.email, active: before.active },
