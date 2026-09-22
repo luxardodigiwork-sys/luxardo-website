@@ -1,292 +1,264 @@
-import React, { useState, useEffect } from 'react';
-import { SectionHeader } from '../components/SectionHeader';
-import { Link, useLocation } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { useAuth } from '../context/AuthContext';
-import { formatCurrency } from '../utils/currency';
-import { storage } from '../utils/localStorage';
-import { Check, X, Shield, Star, Clock, Crown, ChevronRight } from 'lucide-react';
-import { AnimatePresence } from 'motion/react';
+import React from "react";
+import { Link } from "react-router-dom";
+import { motion } from "motion/react";
+import { Crown, Sparkles, Scissors, BookOpen, Headphones, Truck, ShieldCheck, ArrowRight, Check } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+
+const BENEFITS = [
+  { icon: Scissors,    title: "Bespoke Tailoring",         desc: "Made-to-measure construction with master tailors. Your exact silhouette, on every garment." },
+  { icon: BookOpen,    title: "Private Fabric Library",    desc: "Access reserve fabrics imported from Italian and British mills, never offered to public." },
+  { icon: Sparkles,    title: "Limited Editions First",    desc: "Exclusive drops and never-repeated pieces available to Prime members 7 days before launch." },
+  { icon: Headphones,  title: "Dedicated Style Concierge", desc: "WhatsApp + video consultations with your personal style advisor. 7 days a week, 9 AM – 9 PM IST." },
+  { icon: Truck,       title: "Priority Production",       desc: "Bespoke pieces ready in 14 days (vs 21 standard). Complimentary express delivery worldwide." },
+  { icon: ShieldCheck, title: "Lifetime Alterations",      desc: "Free alterations and re-tailoring for every Prime piece, for as long as you own it." },
+];
+
+const COMPARISON = [
+  { feature: "Ready-to-Stitch collections", direct: true, prime: true },
+  { feature: "Standard sizing", direct: true, prime: true },
+  { feature: "Free shipping (₹7,500+)", direct: true, prime: true },
+  { feature: "7-day returns", direct: true, prime: true },
+  { feature: "Bespoke measurements", direct: false, prime: true },
+  { feature: "Private fabric library", direct: false, prime: true },
+  { feature: "Early access to limited drops", direct: false, prime: true },
+  { feature: "Dedicated style concierge", direct: false, prime: true },
+  { feature: "Priority production (14 days)", direct: false, prime: true },
+  { feature: "Lifetime alterations", direct: false, prime: true },
+  { feature: "Complimentary worldwide express", direct: false, prime: true },
+];
+
+const FAQ = [
+  { q: "How is Prime different from the standard collection?",
+    a: "Standard offers ready-to-stitch luxury in stock sizing. Prime unlocks fully bespoke tailoring, private fabric reserves, and a dedicated concierge for every garment." },
+  { q: "Is the membership annual?",
+    a: "Yes. Prime is an annual membership renewable each year. We'll remind you 30 days before renewal — no surprise charges." },
+  { q: "Can I cancel?",
+    a: "Cancel any time. Benefits continue until the end of your billing year. No refunds on partial periods." },
+  { q: "Do alterations include garments I bought before Prime?",
+    a: "Lifetime alteration benefit applies to garments purchased while you are an active Prime member." },
+  { q: "Where is the consultation conducted?",
+    a: "WhatsApp video, in-person at our Bhilwara atelier (by appointment), or at private fittings in Mumbai/Delhi (curated dates)." },
+];
 
 export default function PrimePage() {
   const { user } = useAuth();
-  const location = useLocation();
-  const [content, setContent] = useState(storage.getPrimeContent());
-  const [globalSettings, setGlobalSettings] = useState(storage.getPrimeGlobalSettings());
-  const [selectedBenefit, setSelectedBenefit] = useState<any>(null);
-
-  useEffect(() => {
-    setContent(storage.getPrimeContent());
-    setGlobalSettings(storage.getPrimeGlobalSettings());
-  }, []);
-
-  if (!globalSettings.isLive) {
-    return (
-      <div className="min-h-screen bg-brand-bg flex items-center justify-center">
-        <h1 className="text-3xl md:text-5xl font-display tracking-[0.2em] uppercase text-brand-black">
-          Coming Soon
-        </h1>
-      </div>
-    );
-  }
+  const isPrime = !!user?.isPrimeMember;
 
   return (
-    <div className="min-h-screen bg-brand-bg">
-      {/* 1. Hero Section */}
-      <section className="section-padding bg-brand-black text-brand-white text-center relative overflow-hidden">
-        <div 
-          className="absolute inset-0 opacity-30 bg-cover bg-center" 
-          style={{ backgroundImage: `url('${content.hero.imageUrl}')` }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-brand-black via-brand-black/80 to-transparent" />
-        
-        <div className="relative z-10 max-w-4xl mx-auto space-y-12 py-20">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-          >
-            <h1 className="text-5xl md:text-7xl font-display tracking-wide mb-6">{content.hero.heading}</h1>
-            <p className="text-xl md:text-2xl font-sans text-brand-white/80 max-w-2xl mx-auto leading-relaxed">
-              {content.hero.subheading}
-            </p>
-          </motion.div>
-          
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-          >
-            <div className="text-3xl font-display mb-8">
-              {formatCurrency(content.hero.price)} <span className="text-lg font-sans text-brand-white/60">/ year</span>
-            </div>
-            
-            {user?.isPrimeMember ? (
-              <Link to="/prime-dashboard" className="inline-block px-12 py-5 bg-brand-white text-brand-black text-[11px] uppercase tracking-[0.25em] font-bold hover:bg-brand-bg transition-colors">
-                GO TO PRIME DASHBOARD
-              </Link>
-            ) : content.settings?.salesEnabled ? (
-              user ? (
-                <Link to="/prime-membership/checkout" className="btn-secondary inline-block px-12 py-5">
-                  {content.hero.ctaLabel}
-                </Link>
-              ) : (
-                <Link to="/login" state={{ from: location }} className="btn-secondary inline-block px-12 py-5">
-                  LOGIN TO JOIN PRIME
-                </Link>
-              )
-            ) : (
-              <div className="inline-block px-12 py-5 bg-brand-white/10 border border-brand-white/20 text-brand-white text-[11px] uppercase tracking-[0.25em] font-bold">
-                Prime Member access is currently unavailable.
-              </div>
-            )}
-          </motion.div>
+    <div className="bg-brand-bg text-brand-black">
+      {/* ─── Hero ─────────────────────────────────── */}
+      <section className="relative min-h-[85vh] md:min-h-[100vh] bg-brand-black overflow-hidden flex items-center justify-center px-6">
+        <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
+          backgroundSize: '80px 80px',
+        }} />
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <Crown size={500} className="text-white/[0.03]" strokeWidth={0.5} />
         </div>
-      </section>
-
-      {/* 2. ClarityStrip */}
-      <section className="bg-brand-white border-b border-brand-divider py-8">
-        <div className="max-w-[1400px] mx-auto px-4 md:px-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center divide-x divide-brand-divider">
-            <div className="space-y-2">
-              <Crown className="w-6 h-6 mx-auto text-brand-black" />
-              <h4 className="text-[10px] uppercase tracking-widest font-bold text-brand-black">Annual Membership</h4>
-            </div>
-            <div className="space-y-2">
-              <Shield className="w-6 h-6 mx-auto text-brand-black" />
-              <h4 className="text-[10px] uppercase tracking-widest font-bold text-brand-black">Exclusive Access</h4>
-            </div>
-            <div className="space-y-2">
-              <Star className="w-6 h-6 mx-auto text-brand-black" />
-              <h4 className="text-[10px] uppercase tracking-widest font-bold text-brand-black">Bespoke Tailoring</h4>
-            </div>
-            <div className="space-y-2">
-              <Clock className="w-6 h-6 mx-auto text-brand-black" />
-              <h4 className="text-[10px] uppercase tracking-widest font-bold text-brand-black">Priority Support</h4>
-            </div>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+          className="relative z-10 max-w-3xl text-center text-white"
+        >
+          <div className="flex items-center gap-4 mb-8 justify-center">
+            <span className="w-12 h-[1px] bg-white/60"></span>
+            <span className="text-[11px] tracking-[0.5em] uppercase font-bold text-white/70">Members Only</span>
+            <span className="w-12 h-[1px] bg-white/60"></span>
           </div>
-        </div>
-      </section>
-
-      {/* 3. BenefitsGrid */}
-      <section className="section-padding max-w-[1400px] mx-auto">
-        <SectionHeader title="Membership Benefits" subtitle="Exclusive Privileges" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
-          {content.benefits.map((benefit: any, i: number) => (
-            <motion.div 
-              key={benefit.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8, delay: i * 0.1 }}
-              onClick={() => setSelectedBenefit(benefit)}
-              className="bg-brand-white p-8 md:p-10 border border-brand-divider space-y-6 hover:border-brand-black transition-colors cursor-pointer group relative"
-            >
-              <div className="w-12 h-12 rounded-full bg-brand-black flex items-center justify-center text-brand-white font-display text-xl">
-                0{i + 1}
-              </div>
-              <h3 className="text-xl md:text-2xl font-display pr-8">{benefit.title}</h3>
-              <p className="font-sans text-brand-secondary leading-relaxed">{benefit.desc}</p>
-              
-              <div className="absolute top-10 right-8 opacity-0 group-hover:opacity-100 transition-opacity text-brand-black">
-                <ChevronRight size={24} />
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* Benefit Details Modal */}
-      <AnimatePresence>
-        {selectedBenefit && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedBenefit(null)}
-              className="fixed inset-0 bg-brand-black/60 z-50 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-brand-white z-50 p-8 md:p-12 border border-brand-divider shadow-2xl"
-            >
-              <button 
-                onClick={() => setSelectedBenefit(null)}
-                className="absolute top-6 right-6 text-brand-secondary hover:text-brand-black transition-colors"
-              >
-                <X size={24} />
-              </button>
-              
-              <div className="space-y-6">
-                <div className="w-12 h-12 rounded-full bg-brand-black flex items-center justify-center text-brand-white font-display text-xl mb-8">
-                  <Star size={20} />
-                </div>
-                <h3 className="text-3xl md:text-4xl font-display">{selectedBenefit.title}</h3>
-                <p className="text-xl font-sans text-brand-secondary leading-relaxed border-b border-brand-divider pb-6">
-                  {selectedBenefit.desc}
-                </p>
-                <div className="pt-2">
-                  <p className="font-sans text-brand-black leading-loose">
-                    {selectedBenefit.details || 'More details about this benefit will be available soon.'}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* 4. Comparison */}
-      <section className="section-padding bg-brand-white border-y border-brand-divider">
-        <div className="max-w-4xl mx-auto">
-          <SectionHeader title="The LUXARDO FASHION Standard" subtitle="Compare Membership Tiers" />
-          
-          <div className="mt-12 overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr>
-                  <th className="p-6 border-b border-brand-divider w-1/2"></th>
-                  <th className="p-6 border-b border-brand-divider text-center">
-                    <span className="text-[11px] uppercase tracking-widest font-bold text-brand-secondary">Standard</span>
-                  </th>
-                  <th className="p-6 border-b border-brand-divider text-center bg-brand-bg">
-                    <span className="text-[11px] uppercase tracking-widest font-bold text-brand-black">Prime Member</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="font-sans text-sm">
-                {[
-                  { feature: 'Access to Ready-to-Stitch Collections', standard: true, prime: true },
-                  { feature: 'Standard Customer Support', standard: true, prime: true },
-                  { feature: 'Personal Style Consultation', standard: false, prime: true },
-                  { feature: 'Bespoke Tailoring Requests', standard: false, prime: true },
-                  { feature: 'Exclusive Fabric Library Access', standard: false, prime: true },
-                  { feature: 'Priority Production Queue', standard: false, prime: true },
-                  { feature: 'Dedicated Concierge', standard: false, prime: true },
-                ].map((row, i) => (
-                  <tr key={i} className="border-b border-brand-divider last:border-0">
-                    <td className="p-6 text-brand-black font-medium">{row.feature}</td>
-                    <td className="p-6 text-center text-brand-secondary">
-                      {row.standard ? <Check className="w-5 h-5 mx-auto" /> : <X className="w-5 h-5 mx-auto opacity-30" />}
-                    </td>
-                    <td className="p-6 text-center bg-brand-bg text-brand-black">
-                      {row.prime ? <Check className="w-5 h-5 mx-auto" /> : <X className="w-5 h-5 mx-auto opacity-30" />}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      {/* 5. HowItWorks */}
-      <section className="section-padding max-w-[1400px] mx-auto">
-        <SectionHeader title="How It Works" subtitle="Your Journey to Bespoke Elegance" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mt-16">
-          {[
-            { step: '01', title: 'Join Prime', desc: 'Secure your annual membership to unlock exclusive privileges.' },
-            { step: '02', title: 'Consultation', desc: 'Meet with our master stylists to define your unique aesthetic.' },
-            { step: '03', title: 'Commission', desc: 'Select from our private fabric library and request bespoke tailoring.' },
-            { step: '04', title: 'Creation', desc: 'Our artisans craft your masterpiece with priority production.' }
-          ].map((item, i) => (
-            <div key={i} className="relative space-y-6 text-center md:text-left">
-              <div className="text-6xl font-display text-brand-divider">{item.step}</div>
-              <h3 className="text-xl font-display">{item.title}</h3>
-              <p className="font-sans text-brand-secondary text-sm leading-relaxed">{item.desc}</p>
-              {i < 3 && (
-                <div className="hidden md:block absolute top-8 right-0 w-full h-[1px] bg-brand-divider -z-10 translate-x-1/2" />
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 6. Trust */}
-      <section className="py-24 bg-brand-black text-brand-white text-center">
-        <div className="max-w-3xl mx-auto px-6 space-y-8">
-          <Star className="w-12 h-12 mx-auto text-brand-white/50" />
-          <blockquote className="text-2xl md:text-4xl font-display leading-snug">
-            "LUXARDO FASHION Prime is not just a membership; it is an initiation into a world where craftsmanship and personal expression converge flawlessly."
-          </blockquote>
-          <div className="text-[11px] uppercase tracking-[0.25em] font-bold text-brand-white/60">
-            — The LUXARDO FASHION Standard
-          </div>
-        </div>
-      </section>
-
-      {/* 7. CTA */}
-      <section className="section-padding text-center bg-brand-bg">
-        <div className="max-w-2xl mx-auto space-y-12 px-6">
-          <h2 className="text-4xl font-display">Begin Your Journey</h2>
-          <p className="font-sans text-brand-secondary leading-relaxed">
-            Step into the inner circle of LUXARDO FASHION. Experience the pinnacle of modern ethnic luxury through our Prime Member Services.
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-light tracking-tight leading-[1.05] mb-8">
+            LUXARDO Prime
+          </h1>
+          <p className="text-base md:text-xl text-white/75 font-light max-w-xl mx-auto leading-relaxed mb-12">
+            The most exclusive tier of LUXARDO FASHION. Bespoke tailoring, private fabrics, and dedicated concierge — reserved for a limited number of members each year.
           </p>
-          <div className="pt-8">
-            {user?.isPrimeMember ? (
-              <Link to="/prime-dashboard" className="btn-outline inline-block px-16 py-5">
-                GO TO PRIME DASHBOARD
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            {isPrime ? (
+              <Link to="/prime-dashboard" className="inline-flex items-center gap-3 bg-white text-brand-black px-10 py-4 text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-white/90 transition-colors">
+                <Crown size={16} />
+                Member Dashboard
               </Link>
-            ) : content.settings?.salesEnabled ? (
-              user ? (
-                <Link to="/prime-membership/checkout" className="btn-primary inline-block px-16 py-5">
-                  {content.hero.ctaLabel}
-                </Link>
-              ) : (
-                <Link to="/login" state={{ from: location }} className="btn-primary inline-block px-16 py-5">
-                  LOGIN TO JOIN PRIME
-                </Link>
-              )
             ) : (
-              <div className="inline-block px-16 py-5 bg-brand-white border border-brand-divider text-brand-secondary text-[11px] uppercase tracking-[0.25em] font-bold">
-                Currently Unavailable
-              </div>
+              <>
+                <Link to="/prime-membership/checkout" className="inline-flex items-center gap-3 bg-white text-brand-black px-10 py-4 text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-white/90 transition-colors">
+                  Become a Member
+                  <ArrowRight size={14} />
+                </Link>
+                <a href="#benefits" className="inline-flex items-center gap-3 border border-white/40 text-white px-10 py-4 text-[11px] uppercase tracking-[0.3em] font-bold hover:border-white transition-colors">
+                  Explore Benefits
+                </a>
+              </>
             )}
           </div>
+        </motion.div>
+      </section>
+
+      {/* ─── Benefits Grid ────────────────────────── */}
+      <section id="benefits" className="py-20 md:py-32 bg-brand-white px-6 md:px-16 lg:px-24">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16 md:mb-20">
+            <div className="inline-flex items-center gap-4 mb-6">
+              <span className="w-8 h-[1px] bg-brand-black"></span>
+              <span className="text-[10px] tracking-[0.4em] uppercase font-bold text-brand-secondary">The Privileges</span>
+              <span className="w-8 h-[1px] bg-brand-black"></span>
+            </div>
+            <h2 className="text-3xl md:text-5xl font-display tracking-tight text-brand-black leading-tight">
+              Six unique privileges,<br />reserved for Prime members.
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-brand-divider">
+            {BENEFITS.map((b, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.5, delay: i * 0.08 }}
+                className="bg-white p-8 md:p-10 flex flex-col"
+              >
+                <div className="w-12 h-12 rounded-full bg-brand-black text-white flex items-center justify-center mb-6">
+                  <b.icon size={20} />
+                </div>
+                <h3 className="font-display text-xl text-brand-black mb-3">{b.title}</h3>
+                <p className="text-sm text-brand-secondary/80 font-light leading-relaxed">{b.desc}</p>
+              </motion.div>
+            ))}
+          </div>
         </div>
+      </section>
+
+      {/* ─── Comparison Table ─────────────────────── */}
+      <section className="py-20 md:py-32 bg-brand-bg px-6 md:px-16 lg:px-24">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12 md:mb-16">
+            <div className="inline-flex items-center gap-4 mb-6">
+              <span className="w-8 h-[1px] bg-brand-black"></span>
+              <span className="text-[10px] tracking-[0.4em] uppercase font-bold text-brand-secondary">Direct vs Prime</span>
+              <span className="w-8 h-[1px] bg-brand-black"></span>
+            </div>
+            <h2 className="text-3xl md:text-5xl font-display tracking-tight text-brand-black leading-tight">
+              Choose your journey.
+            </h2>
+          </div>
+          <div className="bg-white border border-brand-divider overflow-hidden">
+            <div className="grid grid-cols-[1.5fr_1fr_1fr] border-b border-brand-divider bg-brand-bg/50">
+              <div className="p-4 md:p-6 text-[10px] md:text-xs uppercase tracking-widest font-bold text-brand-secondary">Feature</div>
+              <div className="p-4 md:p-6 text-[10px] md:text-xs uppercase tracking-widest font-bold text-brand-secondary text-center border-l border-brand-divider">Direct</div>
+              <div className="p-4 md:p-6 text-[10px] md:text-xs uppercase tracking-widest font-bold text-white text-center bg-brand-black flex items-center justify-center gap-2">
+                <Crown size={12} />Prime
+              </div>
+            </div>
+            {COMPARISON.map((row, i) => (
+              <div key={i} className={`grid grid-cols-[1.5fr_1fr_1fr] border-b border-brand-divider last:border-b-0 ${i % 2 === 0 ? 'bg-white' : 'bg-brand-bg/30'}`}>
+                <div className="p-4 md:p-6 text-sm md:text-base text-brand-black font-light">{row.feature}</div>
+                <div className="p-4 md:p-6 flex items-center justify-center border-l border-brand-divider">
+                  {row.direct ? <Check size={18} className="text-brand-black/70" /> : <span className="text-brand-secondary/40">—</span>}
+                </div>
+                <div className="p-4 md:p-6 flex items-center justify-center bg-brand-black/[0.02]">
+                  {row.prime ? <Check size={18} className="text-brand-black" /> : <span className="text-brand-secondary/40">—</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Pricing ──────────────────────────────── */}
+      <section className="py-20 md:py-32 bg-brand-white px-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-4 mb-6">
+              <span className="w-8 h-[1px] bg-brand-black"></span>
+              <span className="text-[10px] tracking-[0.4em] uppercase font-bold text-brand-secondary">Membership</span>
+              <span className="w-8 h-[1px] bg-brand-black"></span>
+            </div>
+            <h2 className="text-3xl md:text-5xl font-display tracking-tight text-brand-black leading-tight">The Annual Investment.</h2>
+          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="bg-brand-black text-white p-10 md:p-14 relative overflow-hidden"
+          >
+            <div className="absolute -top-12 -right-12 opacity-[0.05] pointer-events-none">
+              <Crown size={200} strokeWidth={0.5} />
+            </div>
+            <div className="relative">
+              <div className="flex items-center gap-3 mb-6">
+                <Crown size={18} />
+                <span className="text-[10px] tracking-[0.4em] uppercase font-bold text-white/70">Annual Membership</span>
+              </div>
+              <div className="flex items-baseline gap-3 mb-8">
+                <span className="text-5xl md:text-7xl font-display font-light">₹ 49,999</span>
+                <span className="text-sm text-white/60">/ year</span>
+              </div>
+              <p className="text-sm md:text-base text-white/75 font-light leading-relaxed mb-10 max-w-md">
+                Inclusive of all six privileges. Renewable annually. Cancellable anytime. No hidden fees.
+              </p>
+              <Link to="/prime-membership/checkout" className="inline-flex items-center gap-3 bg-white text-brand-black px-10 py-4 text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-white/90 transition-colors">
+                Become a Member
+                <ArrowRight size={14} />
+              </Link>
+              <p className="text-[10px] tracking-widest uppercase text-white/40 mt-6">
+                Limited memberships per year • Application reviewed
+              </p>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ─── FAQ ──────────────────────────────────── */}
+      <section className="py-20 md:py-32 bg-brand-bg px-6 md:px-16 lg:px-24">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center gap-4 mb-6">
+              <span className="w-8 h-[1px] bg-brand-black"></span>
+              <span className="text-[10px] tracking-[0.4em] uppercase font-bold text-brand-secondary">Questions</span>
+              <span className="w-8 h-[1px] bg-brand-black"></span>
+            </div>
+            <h2 className="text-3xl md:text-5xl font-display tracking-tight text-brand-black leading-tight">Frequently asked.</h2>
+          </div>
+          <div className="space-y-px bg-brand-divider">
+            {FAQ.map((item, i) => (
+              <details key={i} className="bg-white p-6 md:p-8 group cursor-pointer">
+                <summary className="flex items-center justify-between list-none">
+                  <span className="font-display text-base md:text-lg text-brand-black flex-1 pr-4">{item.q}</span>
+                  <span className="w-8 h-8 rounded-full border border-brand-divider flex items-center justify-center text-brand-black transition-transform group-open:rotate-45">+</span>
+                </summary>
+                <p className="text-sm md:text-base text-brand-secondary/80 font-light leading-relaxed mt-4 pr-12">{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Final CTA ────────────────────────────── */}
+      <section className="py-24 md:py-40 bg-brand-black text-white text-center px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8 }}
+          className="max-w-3xl mx-auto"
+        >
+          <Crown size={40} className="mx-auto mb-8 opacity-60" />
+          <h2 className="text-3xl md:text-5xl lg:text-6xl font-display tracking-tight leading-[1.1] mb-8">
+            "True luxury is not what you buy.<br />It is what is built for you."
+          </h2>
+          <div className="w-12 h-[1px] bg-white/40 mx-auto mb-8"></div>
+          <p className="text-sm md:text-base text-white/70 mb-12 max-w-xl mx-auto leading-relaxed">
+            Join LUXARDO Prime — the most personal expression of our craft.
+          </p>
+          <Link
+            to={isPrime ? "/prime-dashboard" : "/prime-membership/checkout"}
+            className="inline-flex items-center gap-3 bg-white text-brand-black px-12 py-4 text-[11px] uppercase tracking-[0.3em] font-bold hover:bg-white/90 transition-colors"
+          >
+            {isPrime ? "Member Dashboard" : "Begin Application"}
+            <ArrowRight size={14} />
+          </Link>
+        </motion.div>
       </section>
     </div>
   );

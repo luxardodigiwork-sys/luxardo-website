@@ -121,7 +121,7 @@ export const FirstVisitModal: React.FC<FirstVisitModalProps> = ({ onSelect }) =>
                 <button
                   key={country.code}
                   ref={(el) => { itemRefs.current[index] = el; }}
-                  onClick={() => setSelectedCountryCode(country.code)}
+                  onClick={() => { setSelectedCountryCode(country.code); onSelect(country); }}
                   onKeyDown={(e) => handleItemKeyDown(e, index, country)}
                   role="option"
                   aria-selected={selectedCountryCode === country.code}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { storage } from '../../utils/localStorage';
+import { saveProductToFirestore, deleteProductFromFirestore, getProductFromFirestore } from '../../utils/productsFirestore';
 import { Product } from '../../types';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 
@@ -23,13 +23,12 @@ export default function AdminEditProductPage() {
   ];
 
   useEffect(() => {
-    const fetchProduct = () => {
+    const fetchProduct = async () => {
       if (!id) return;
       try {
-        const products = storage.getProducts();
-        const product = products.find(p => p.id === id);
+        // Firestore source-of-truth
+        const product = await getProductFromFirestore(id);
         if (product) {
-          // Ensure all new fields exist
           setFormData({
             ...product,
             slug: product.slug || '',
@@ -48,6 +47,7 @@ export default function AdminEditProductPage() {
         }
       } catch (error) {
         console.error('Error fetching product:', error);
+        navigate('/admin/products');
       } finally {
         setIsLoading(false);
       }
@@ -82,26 +82,21 @@ export default function AdminEditProductPage() {
     if (!id || !formData) return;
     setIsSaving(true);
 
+    const updatedProduct: Product = {
+      ...formData,
+      id,
+      price: Number(formData.price),
+      stock: Number(formData.stock),
+      visibility: visibilityOverride || formData.visibility,
+      updatedAt: new Date().toISOString(),
+    };
+
     try {
-      const products = storage.getProducts();
-      const updatedProducts = products.map(p => 
-        p.id === id ? { 
-          ...formData, 
-          price: Number(formData.price), 
-          stock: Number(formData.stock),
-          visibility: visibilityOverride || formData.visibility,
-          updatedAt: new Date().toISOString()
-        } : p
-      );
-      storage.saveProducts(updatedProducts);
+      await saveProductToFirestore(updatedProduct);
       navigate('/admin/products');
     } catch (error: any) {
       console.error('Error updating product:', error);
-      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
-        alert('Storage limit exceeded. The uploaded images are too large. Please use smaller images or image URLs.');
-      } else {
-        alert('Failed to update product.');
-      }
+      alert('Failed to update product: ' + (error?.code || '') + ' ' + (error?.message || 'Unknown'));
     } finally {
       setIsSaving(false);
     }
@@ -339,9 +334,12 @@ export default function AdminEditProductPage() {
                     value={formData.image}
                     onChange={(val) => setFormData({ ...formData, image: val })}
                     placeholder="https://images.unsplash.com/..."
+                    purpose="Product primary image"
+                    recommendedSize="1200 × 1600"
+                    aspectRatio="3:4"
                   />
                   <p className="text-xs text-brand-secondary font-sans mt-2">
-                    This image will be used as the main thumbnail across the site. Use a 3:4 aspect ratio for best results.
+                    This image will be used as the main thumbnail across the site.
                   </p>
                 </div>
               </div>
@@ -354,6 +352,9 @@ export default function AdminEditProductPage() {
                       value={newImageUrl}
                       onChange={(val) => setNewImageUrl(val)}
                       placeholder="Add additional image URL..."
+                      purpose="Product gallery image"
+                      recommendedSize="1200 × 1600"
+                      aspectRatio="3:4"
                     />
                   </div>
                   <button 

@@ -20,12 +20,17 @@ export function CountryProvider({ children }: { children: React.ReactNode }) {
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const found = ALL_COUNTRIES.find(c => c.code === saved);
-      if (found) { setSelectedCountry(found); setShowModal(false); return; }
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const found = ALL_COUNTRIES.find(c => c.code === saved);
+        if (found) { setSelectedCountry(found); setShowModal(false); return; }
+      }
+      setShowModal(true);
+    } catch (e) {
+      console.error('CountryContext init error:', e);
+      setShowModal(true);
     }
-    setShowModal(true);
   }, []);
 
   const setCountry = async (country: Country) => {

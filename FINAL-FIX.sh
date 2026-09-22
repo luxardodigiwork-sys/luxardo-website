@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# LUXARDO FASHION Fashion World — FINAL FIX SCRIPT
+# LUXARDO FASHION  World — FINAL FIX SCRIPT
 # Fixes: CheckoutPage, OrderConfirmation, Firestore rules
 # Run in Codespace terminal:  bash FINAL-FIX.sh
 # ============================================================

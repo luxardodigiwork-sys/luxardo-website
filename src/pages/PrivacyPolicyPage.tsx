@@ -15,7 +15,7 @@ export default function PrivacyPolicy() {
     <div className="min-h-screen bg-[#FAFAFA] text-neutral-900 font-sans selection:bg-neutral-900 selection:text-white">
       {/* Hero Section */}
       <div className="relative pt-32 pb-20 px-6 md:px-12 lg:px-24 bg-neutral-900 text-white flex flex-col items-center text-center">
-        <p className="text-xs tracking-[0.3em] text-neutral-400 font-medium uppercase mb-6">Laxardo — Legal</p>
+        <p className="text-xs tracking-[0.3em] text-neutral-400 font-medium uppercase mb-6">Luxardo — Legal</p>
         <h1 className="text-4xl md:text-5xl lg:text-7xl font-serif font-light tracking-tight mb-6">Privacy Policy</h1>
         <p className="text-sm text-neutral-400 font-sans mb-8">Effective Date: May 2, 2026</p>
       </div>
@@ -50,7 +50,7 @@ export default function PrivacyPolicy() {
             </div>
             <div className="prose prose-neutral prose-lg max-w-none text-neutral-600 leading-relaxed font-light">
               <p>
-                At <strong>Laxardo</strong>, maintaining the trust of our B2B partners, distributors, and exclusive clientele is our highest priority. We understand the sensitive nature of the fashion retail industry, particularly regarding unreleased designs and proprietary distribution networks. This Privacy Policy outlines our uncompromising approach to safeguarding your business and personal data.
+                At <strong>Luxardo</strong>, maintaining the trust of our B2B partners, distributors, and exclusive clientele is our highest priority. We understand the sensitive nature of the fashion retail industry, particularly regarding unreleased designs and proprietary distribution networks. This Privacy Policy outlines our uncompromising approach to safeguarding your business and personal data.
               </p>
             </div>
           </section>
@@ -58,11 +58,11 @@ export default function PrivacyPolicy() {
           <section>
             <div className="mb-8 flex items-center space-x-4">
               <EyeOff className="w-6 h-6 text-neutral-400" strokeWidth={1.5} />
-              <h2 className="text-2xl md:text-3xl font-serif">Laxardo Secure App Protocols</h2>
+              <h2 className="text-2xl md:text-3xl font-serif">Luxardo Secure App Protocols</h2>
             </div>
             <div className="prose prose-neutral prose-lg max-w-none text-neutral-600 leading-relaxed font-light">
               <p>
-                To protect our upcoming catalogue designs from piracy and unauthorized replication, access to unreleased collections is strictly governed through the <strong>Laxardo Secure App</strong> environment. We employ stringent digital rights management protocols:
+                To protect our upcoming catalogue designs from piracy and unauthorized replication, access to unreleased collections is strictly governed through the <strong>Luxardo Secure App</strong> environment. We employ stringent digital rights management protocols:
               </p>
               <ul className="mt-6 space-y-4 list-none pl-0">
                 <li className="flex items-start">
@@ -88,7 +88,7 @@ export default function PrivacyPolicy() {
             </div>
             <div className="prose prose-neutral prose-lg max-w-none text-neutral-600 leading-relaxed font-light">
               <p>
-                As a B2B operator handling high-value orders and wholesale accounts, financial security is vital. We utilize <strong>256-bit encryption</strong> for all transaction and ledger data flowing through our internal payment infrastructure. Payment gateways are PCI-DSS compliant, and Laxardo does not store raw credit card details on our local servers.
+                As a B2B operator handling high-value orders and wholesale accounts, financial security is vital. We utilize <strong>256-bit encryption</strong> for all transaction and ledger data flowing through our internal payment infrastructure. Payment gateways are PCI-DSS compliant, and Luxardo does not store raw credit card details on our local servers.
               </p>
             </div>
           </section>
@@ -100,7 +100,7 @@ export default function PrivacyPolicy() {
             </div>
             <div className="prose prose-neutral prose-lg max-w-none text-neutral-600 leading-relaxed font-light">
               <p>
-                We operate on a philosophy of absolute confidentiality regarding our distribution network. <strong>Laxardo never sells, rents, or leases our B2B network data to third-party marketers or data brokers.</strong> Your distributor profile, purchase volumes, and retail locations are treated as confidential trade secrets. Information is only shared with logistics partners explicitly required to fulfill your consignments.
+                We operate on a philosophy of absolute confidentiality regarding our distribution network. <strong>Luxardo never sells, rents, or leases our B2B network data to third-party marketers or data brokers.</strong> Your distributor profile, purchase volumes, and retail locations are treated as confidential trade secrets. Information is only shared with logistics partners explicitly required to fulfill your consignments.
               </p>
             </div>
           </section>
@@ -120,12 +120,12 @@ export default function PrivacyPolicy() {
               <div className="p-8 border border-neutral-200 bg-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between group">
                 <div>
                   <p className="text-sm font-semibold tracking-widest uppercase text-neutral-900 mb-1">Data Protection Officer</p>
-                  <a href="mailto:legal@laxardo.com" className="text-xl md:text-2xl font-serif text-neutral-500 group-hover:text-neutral-900 transition-colors">
-                    legal@laxardo.com
+                  <a href="mailto:legal@Luxardo.com" className="text-xl md:text-2xl font-serif text-neutral-500 group-hover:text-neutral-900 transition-colors">
+                    legal@Luxardo.com
                   </a>
                 </div>
                 <div className="mt-6 sm:mt-0">
-                  <a href="mailto:legal@laxardo.com" className="inline-flex items-center justify-center w-12 h-12 rounded-full border border-neutral-200 hover:bg-neutral-900 hover:text-white transition-all text-neutral-400">
+                  <a href="mailto:legal@Luxardo.com" className="inline-flex items-center justify-center w-12 h-12 rounded-full border border-neutral-200 hover:bg-neutral-900 hover:text-white transition-all text-neutral-400">
                     <ChevronRight className="w-5 h-5" strokeWidth={1} />
                   </a>
                 </div>

@@ -1,0 +1,166 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { db, functions } from '../../firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { Scissors, Loader2, Camera } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { can } from '../../utils/rolePermissions';
+
+export default function TailorWorkspacePage() {
+  const { user } = useAuth();
+  const effectiveRole = (user?.staffRole || '') as any;
+  const canWork = can(effectiveRole, 'production.tailor.startComplete');
+
+  const [pieces, setPieces] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<Record<string, string>>({});
+  const [note, setNote] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [assignedSnap, stitchingSnap] = await Promise.all([
+        getDocs(query(collection(db, 'pieces'), where('assignedTailorUid', '==', user.id), where('stage', '==', 'TAILOR_ASSIGNED'))),
+        getDocs(query(collection(db, 'pieces'), where('assignedTailorUid', '==', user.id), where('stage', '==', 'STITCHING'))),
+      ]);
+      const data = [...assignedSnap.docs, ...stitchingSnap.docs].map((d) => d.data());
+      data.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+      setPieces(data);
+    } catch (err: any) {
+      console.error('Failed to load Tailor workspace:', err);
+      setError(err?.message || 'Failed to load.');
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const startStitching = async (pieceId: string) => {
+    setBusyId(pieceId);
+    setError(null);
+    try {
+      await httpsCallable(functions, 'tailorStartStitching')({ pieceId });
+      await load();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to start stitching.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const completeStitching = async (pieceId: string) => {
+    const url = (imageUrl[pieceId] || '').trim();
+    if (!url) {
+      setError('A garment image URL is mandatory to complete stitching.');
+      return;
+    }
+    setBusyId(pieceId);
+    setError(null);
+    try {
+      await httpsCallable(functions, 'tailorCompleteStitching')({
+        pieceId, garmentImageUrl: url, note: note[pieceId] || '',
+      });
+      await load();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to complete stitching.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (!canWork) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-sm text-gray-500">You do not have permission to access the Tailor workspace.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen p-6 md:p-8">
+      <div className="mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center">
+            <Scissors size={18} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-display text-black tracking-wide">Tailor Workspace</h1>
+            <p className="text-xs text-gray-500 font-sans mt-1">
+              {pieces.length} piece{pieces.length === 1 ? '' : 's'} assigned to you{loading && ' · loading…'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-600 text-xs">{error}</div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        </div>
+      ) : pieces.length === 0 ? (
+        <div className="text-center py-24">
+          <Scissors size={32} className="mx-auto text-gray-300 mb-3" />
+          <p className="text-sm text-gray-500">No pieces are currently assigned to you.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {pieces.map((piece) => (
+            <div key={piece.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-mono text-xs font-medium text-black">{piece.id}</span>
+                <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded-md bg-indigo-50 text-indigo-600">
+                  {piece.stage}
+                </span>
+              </div>
+              {piece.stage === 'TAILOR_ASSIGNED' && (
+                <button
+                  disabled={busyId === piece.id}
+                  onClick={() => startStitching(piece.id)}
+                  className="px-4 py-2 bg-black text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity disabled:opacity-30"
+                >
+                  Start Stitching
+                </button>
+              )}
+              {piece.stage === 'STITCHING' && (
+                <div className="space-y-2">
+                  <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                    <Camera size={12} /> Garment Image URL (mandatory)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://…"
+                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2"
+                    value={imageUrl[piece.id] || ''}
+                    onChange={(e) => setImageUrl((s) => ({ ...s, [piece.id]: e.target.value }))}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Note (optional)"
+                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2"
+                    value={note[piece.id] || ''}
+                    onChange={(e) => setNote((s) => ({ ...s, [piece.id]: e.target.value }))}
+                  />
+                  <button
+                    disabled={busyId === piece.id}
+                    onClick={() => completeStitching(piece.id)}
+                    className="px-4 py-2 bg-black text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:opacity-80 transition-opacity disabled:opacity-30"
+                  >
+                    Complete Stitching
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
