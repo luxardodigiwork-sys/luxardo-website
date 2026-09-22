@@ -168,13 +168,38 @@ const MATRIX: Record<Module, Role[]> = {
 };
 
 /**
+ * MED-5 — modules whose server-side gate is a single non-elevated role (the
+ * same "Strict, matching ...'s backend gate exactly" modules already called
+ * out in MATRIX's own comments above). Neither 'admin' NOR 'super_admin' is
+ * server-side elevated for these: hasAnyRole() only elevates super_admin to
+ * admin's access when 'admin' itself is in the allowed-role list, and none
+ * of these lists include it (QC_ROLES/DISPATCH_ROLES/RAISE_ROLES/
+ * TAILOR_ROLES/STORE_ROLES are each a single non-admin role). can() must
+ * consult MATRIX literally for these instead of applying the blanket
+ * admin/super_admin bypass below — otherwise the UI shows an action the
+ * server always rejects with permission-denied. production.tailorRequests
+ * .review is deliberately NOT in this set: its server gate (REVIEW_ROLES)
+ * genuinely includes 'admin', so the blanket bypass is correct there.
+ */
+const STRICT_MODULES = new Set<Module>([
+  'production.qc.perform',
+  'production.dispatch.assignTailor',
+  'production.dispatch.sendToStore',
+  'production.tailorRequests.raise',
+  'production.tailor.startComplete',
+  'production.store.out',
+  'production.store.out.issue',
+]);
+
+/**
  * Check if a role can access a module.
- * Returns true for super_admin / admin always.
+ * Returns true for super_admin / admin always, except for STRICT_MODULES
+ * (see above), whose server-side gate has no such elevation.
  */
 export function can(role: Role | undefined | null, mod: Module): boolean {
   if (!role) return false;
   const r = String(role).toLowerCase();
-  if (r === 'super_admin' || r === 'admin') return true;
+  if (!STRICT_MODULES.has(mod) && (r === 'super_admin' || r === 'admin')) return true;
   const allowed = MATRIX[mod];
   return !!allowed && allowed.includes(r);
 }
