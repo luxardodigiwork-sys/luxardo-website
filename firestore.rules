@@ -17,8 +17,26 @@ service cloud.firestore {
     match /primeContent/{id} { allow read: if true; allow write: if isAdmin(); }
     match /media/{id} { allow read: if true; allow write: if isAdmin(); }
     match /partners/{id} { allow read: if true; allow write: if isAdmin(); }
+    /* CRIT-2: a self-write must never be able to set/change `role` — that
+     * field is trusted as an authority source both by isAdmin() (above) and
+     * by the Cloud Functions requireAdmin()/requireStaff() fallback
+     * (functions/src/production.ts, staffAuth.ts) whenever no staff/{uid}
+     * doc exists. Without this, any signed-in customer could self-grant
+     * role:'super_admin' via a plain client write and gain full admin +
+     * production access. Create is allowed only with the fixed signup value
+     * role=='customer' (matches src/pages/LoginPage.tsx createCustomerDoc);
+     * update must leave role unchanged (matches the preference-sync merge
+     * in src/context/AuthContext.tsx, which never touches role). The
+     * hardcoded master-admin bootstrap UID in isAdmin() above is unaffected
+     * — it already satisfies the separate `isAdmin()` write clause below
+     * regardless of this self-write branch.
+     */
     match /customers/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow create: if request.auth != null && request.auth.uid == userId &&
+                       request.resource.data.role == 'customer';
+      allow update: if request.auth != null && request.auth.uid == userId &&
+                       request.resource.data.role == resource.data.role;
       allow read, write: if isAdmin();
     }
     match /orders/{id} {
