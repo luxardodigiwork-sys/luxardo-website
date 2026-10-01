@@ -1,0 +1,23 @@
+{
+  "name": "functions-loom",
+  "description": "LUXARDO FASHION — Loom production system Cloud Functions (project luxardo-flow only). Re-exports the 36 Loom callables from the shared domain modules (functions/src/*). Contains NO B2C / Razorpay functions, so deploying to luxardo-flow never binds B2C secrets.",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "24"
+  },
+  "scripts": {
+    "build": "node build.js",
+    "lint": "tsc --noEmit",
+    "clean": "node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "firebase-admin": "13.8.0",
+    "firebase-functions": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^6.0.0"
+  }
+}

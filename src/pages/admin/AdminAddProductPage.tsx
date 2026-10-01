@@ -1,19 +1,24 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
+import { ArrowLeft, Save, Image as ImageIcon, Plus, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { storage } from '../../utils/localStorage';
+import { saveProductToFirestore, getProductFromFirestore } from '../../utils/productsFirestore';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
+import { auth } from '../../firebase';
+import { useAuth } from '../../context/AuthContext';
 
 export default function AdminAddProductPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
   const [formData, setFormData] = useState({
     id: '',
     name: '',
     slug: '',
     price: 0,
-    category: 'Kurta Editions',
+    category: 'Premium Kurta Pajama',
     collection: '',
     image: '',
     images: [] as string[],
@@ -63,13 +68,36 @@ export default function AdminAddProductPage() {
   const handleSubmit = async (e: React.FormEvent, visibilityOverride?: 'public' | 'hidden') => {
     e.preventDefault();
     setIsLoading(true);
+    setSaveStatus(null);
+
+    // 1. Pre-flight auth check (visible feedback)
+    if (!auth.currentUser) {
+      setSaveStatus({ type: 'err', msg: 'You are not signed in to Firebase Auth. Sign out and sign back in via /admin/login.' });
+      setIsLoading(false);
+      return;
+    }
+    if (!user || !['admin', 'super_admin'].includes(user.role)) {
+      setSaveStatus({ type: 'err', msg: `Your customer doc role is "${user?.role || 'unknown'}", not "admin". Cannot write to Firestore products.` });
+      setIsLoading(false);
+      return;
+    }
+    if (!formData.id?.trim()) {
+      setSaveStatus({ type: 'err', msg: 'Product ID is required.' });
+      setIsLoading(false);
+      return;
+    }
+    if (!formData.name?.trim()) {
+      setSaveStatus({ type: 'err', msg: 'Product Name is required.' });
+      setIsLoading(false);
+      return;
+    }
 
     try {
-      const products = storage.getProducts();
-      
-      // Check if ID already exists
-      if (products.some(p => p.id === formData.id)) {
-        alert('A product with this ID already exists. Please use a unique ID.');
+      // 2. Firestore-first duplicate check
+      console.log('[AdminAddProductPage] checking for existing product with id:', formData.id);
+      const existing = await getProductFromFirestore(formData.id);
+      if (existing) {
+        setSaveStatus({ type: 'err', msg: `A product with ID "${formData.id}" already exists in Firestore. Use a unique ID.` });
         setIsLoading(false);
         return;
       }
@@ -83,15 +111,36 @@ export default function AdminAddProductPage() {
         updatedAt: new Date().toISOString()
       };
 
-      storage.saveProducts([...products, newProduct]);
-      navigate('/admin/products');
-    } catch (error: any) {
-      console.error('Error saving product:', error);
-      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
-        alert('Storage limit exceeded. The uploaded images are too large. Please use smaller images or image URLs.');
-      } else {
-        alert('Failed to save product. Please try again.');
+      // 3. Save to Firestore (source of truth)
+      console.log('[AdminAddProductPage] Saving to Firestore:', newProduct.id, 'as user', auth.currentUser.uid);
+      try {
+        await saveProductToFirestore(newProduct);
+        console.log('[AdminAddProductPage] Firestore save OK');
+      } catch (firestoreErr: any) {
+        console.error('[AdminAddProductPage] Firestore save FAILED:', firestoreErr);
+        const code = firestoreErr?.code || 'unknown';
+        const msg = firestoreErr?.message || 'Unknown';
+        setSaveStatus({
+          type: 'err',
+          msg: `Firestore save failed [${code}]: ${msg}. Auth UID: ${auth.currentUser.uid}. Role: ${user.role}. Check Firestore rules + redeploy if rules changed.`,
+        });
+        setIsLoading(false);
+        return;
       }
+
+      // 4. Local cache (best-effort)
+      try {
+        const cached = storage.getProducts();
+        storage.saveProducts([newProduct, ...cached.filter(p => p.id !== newProduct.id)]);
+      } catch (cacheErr) {
+        console.warn('[AdminAddProductPage] Local cache update skipped:', cacheErr);
+      }
+
+      setSaveStatus({ type: 'ok', msg: `Product "${newProduct.id}" saved to Firestore. Redirecting…` });
+      setTimeout(() => navigate('/admin/products'), 900);
+    } catch (error: any) {
+      console.error('[AdminAddProductPage] Unexpected error:', error);
+      setSaveStatus({ type: 'err', msg: 'Unexpected error: ' + (error?.message || 'Unknown') });
     } finally {
       setIsLoading(false);
     }
@@ -109,6 +158,33 @@ export default function AdminAddProductPage() {
         </div>
       </div>
 
+      {/* Auth + Save status banner (always visible) */}
+      <div className="flex flex-col gap-2">
+        <div className={`text-xs px-4 py-2 border ${auth.currentUser && user && ['admin','super_admin'].includes(user.role)
+          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          : 'bg-red-50 border-red-200 text-red-700'}`}>
+          {auth.currentUser ? (
+            <>
+              <strong>Signed in:</strong> {auth.currentUser.email} · <strong>UID:</strong> {auth.currentUser.uid.substring(0, 8)}… · <strong>Role:</strong> {user?.role || 'unknown'}
+              {user?.role !== 'admin' && user?.role !== 'super_admin' && <span> ⚠ NOT ADMIN — Firestore writes will fail</span>}
+            </>
+          ) : (
+            <>⚠ Not signed in to Firebase Auth. Go to /admin/login first.</>
+          )}
+        </div>
+
+        {saveStatus && (
+          <div className={`text-sm px-4 py-3 border flex items-start gap-2 ${
+            saveStatus.type === 'ok'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
+            {saveStatus.type === 'ok' ? <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" /> : <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />}
+            <span className="break-all">{saveStatus.msg}</span>
+          </div>
+        )}
+      </div>
+
       <form onSubmit={(e) => handleSubmit(e)} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           {/* Basic Details */}
@@ -118,7 +194,7 @@ export default function AdminAddProductPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Product ID (Unique)</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="text"
                   required
                   value={formData.id}
@@ -129,7 +205,7 @@ export default function AdminAddProductPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Product Name</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="text"
                   required
                   value={formData.name}
@@ -143,7 +219,7 @@ export default function AdminAddProductPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Slug (URL)</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="text"
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
@@ -171,7 +247,7 @@ export default function AdminAddProductPage() {
             <h3 className="text-[11px] uppercase tracking-widest font-bold border-b border-brand-divider pb-4">Product Story & Details</h3>
             <div className="space-y-2">
               <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Details</label>
-              <textarea
+              <textarea id="prod-text-field" aria-label="Product Description Field"
                 rows={4}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -181,7 +257,7 @@ export default function AdminAddProductPage() {
             </div>
             <div className="space-y-2">
               <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Product Story</label>
-              <textarea
+              <textarea id="prod-text-field" aria-label="Product Description Field"
                 rows={4}
                 value={formData.productStory}
                 onChange={(e) => setFormData({ ...formData, productStory: e.target.value })}
@@ -198,7 +274,7 @@ export default function AdminAddProductPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Garment Format</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={2}
                   value={formData.garmentFormat || ''}
                   onChange={(e) => setFormData({ ...formData, garmentFormat: e.target.value })}
@@ -209,7 +285,7 @@ export default function AdminAddProductPage() {
 
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Composition</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={2}
                   value={formData.composition || ''}
                   onChange={(e) => setFormData({ ...formData, composition: e.target.value })}
@@ -220,7 +296,7 @@ export default function AdminAddProductPage() {
 
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Washing care</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={3}
                   value={formData.washingCare || ''}
                   onChange={(e) => setFormData({ ...formData, washingCare: e.target.value })}
@@ -231,7 +307,7 @@ export default function AdminAddProductPage() {
 
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Shipping</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={3}
                   value={formData.shipping || ''}
                   onChange={(e) => setFormData({ ...formData, shipping: e.target.value })}
@@ -242,7 +318,7 @@ export default function AdminAddProductPage() {
 
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Returns</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={2}
                   value={formData.returns || ''}
                   onChange={(e) => setFormData({ ...formData, returns: e.target.value })}
@@ -259,7 +335,7 @@ export default function AdminAddProductPage() {
             <div className="flex items-center justify-between">
               <label className="text-sm font-sans text-brand-black">Available as Ready-to-Stitch</label>
               <label className="relative inline-flex items-center cursor-pointer">
-                <input 
+                <input id="prod-input-field" aria-label="Product Configuration Field" 
                   type="checkbox" 
                   className="sr-only peer"
                   checked={formData.readyToStitch}
@@ -271,7 +347,7 @@ export default function AdminAddProductPage() {
             {formData.readyToStitch && (
               <div className="space-y-2 pt-4 border-t border-brand-divider">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Ready-to-Stitch Details</label>
-                <textarea
+                <textarea id="prod-text-field" aria-label="Product Description Field"
                   rows={3}
                   value={formData.readyToStitchInfo}
                   onChange={(e) => setFormData({ ...formData, readyToStitchInfo: e.target.value })}
@@ -321,9 +397,12 @@ export default function AdminAddProductPage() {
                     value={formData.image}
                     onChange={(val) => setFormData({ ...formData, image: val })}
                     placeholder="https://images.unsplash.com/..."
+                    purpose="Product primary image"
+                    recommendedSize="1200 × 1600"
+                    aspectRatio="3:4"
                   />
                   <p className="text-xs text-brand-secondary font-sans mt-2">
-                    This image will be used as the main thumbnail across the site. Use a 3:4 aspect ratio for best results.
+                    This image will be used as the main thumbnail across the site.
                   </p>
                 </div>
               </div>
@@ -336,6 +415,9 @@ export default function AdminAddProductPage() {
                       value={newImageUrl}
                       onChange={(val) => setNewImageUrl(val)}
                       placeholder="Add additional image URL..."
+                      purpose="Product gallery image"
+                      recommendedSize="1200 × 1600"
+                      aspectRatio="3:4"
                     />
                   </div>
                   <button 
@@ -412,7 +494,7 @@ export default function AdminAddProductPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Price (INR)</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="number"
                   required
                   value={formData.price}
@@ -422,7 +504,7 @@ export default function AdminAddProductPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Stock</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="number"
                   required
                   value={formData.stock}
@@ -432,7 +514,7 @@ export default function AdminAddProductPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Low Stock Threshold</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="number"
                   value={formData.lowStockThreshold}
                   onChange={(e) => setFormData({ ...formData, lowStockThreshold: Number(e.target.value) })}
@@ -448,7 +530,7 @@ export default function AdminAddProductPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Collection</label>
-                <input
+                <input id="prod-input-field" aria-label="Product Configuration Field"
                   type="text"
                   value={formData.collection}
                   onChange={(e) => setFormData({ ...formData, collection: e.target.value })}
@@ -472,7 +554,7 @@ export default function AdminAddProductPage() {
               <div className="flex items-center justify-between pt-4 border-t border-brand-divider">
                 <label className="text-sm font-sans text-brand-black">Featured Product</label>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
+                  <input id="prod-input-field" aria-label="Product Configuration Field" 
                     type="checkbox" 
                     className="sr-only peer"
                     checked={formData.featured}

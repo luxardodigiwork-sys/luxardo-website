@@ -83,78 +83,122 @@ export default function CraftsmanshipPage() {
           </motion.div>
         </div>
 
-        {/* Right: Premium Visual */}
-        <div className="w-full md:w-1/2 h-[50vh] md:h-screen relative overflow-hidden">
-          <motion.img 
-            initial={{ scale: 1.05, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 1.2, ease: "easeOut" }}
-            src={content.hero?.image} 
-            alt="Craftsmanship" 
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        </div>
-      </section>
-
-      {/* 2. VISUAL DEPTH SECTION */}
-      <section className="relative h-[60vh] md:h-[90vh] w-full overflow-hidden bg-brand-black">
-        {/* Mobile: Static Optimized Image */}
-        <div className="md:hidden absolute inset-0">
-          <img 
-            src={content.visualDepth?.mobileImage} 
-            alt="Crafting Detail" 
-            className="w-full h-full object-cover opacity-60"
-            referrerPolicy="no-referrer"
-          />
-        </div>
-
-        {/* Desktop: Layered Parallax */}
-        <div className="hidden md:block absolute inset-0">
-          <motion.div style={{ y: depthY1 }} className="absolute inset-0 z-0">
-            <img src={content.visualDepth?.layer1} alt="Fabric Layer" className="w-full h-full object-cover opacity-40" referrerPolicy="no-referrer" />
-          </motion.div>
-          <motion.div style={{ y: depthY2 }} className="absolute inset-0 z-10 mix-blend-overlay">
-            <img src={content.visualDepth?.layer2} alt="Detail Layer" className="w-full h-full object-cover opacity-50 grayscale" referrerPolicy="no-referrer" />
-          </motion.div>
-        </div>
-        
-        <div className="absolute inset-0 bg-gradient-to-t from-brand-black via-transparent to-brand-black z-20" />
-      </section>
-
-      {/* 3. PROCESS SECTION (4 STEPS) */}
-      <section className="py-20 md:py-40 bg-brand-white px-6 md:px-16 lg:px-24">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12">
-            {content.process?.map((step: any, idx: number) => (
-              <motion.div 
-                key={idx}
+        {/* Right: Premium Visual (image-optional) */}
+        <div className="w-full md:w-1/2 h-[50vh] md:h-screen relative overflow-hidden bg-gradient-to-br from-[#f3eee3] via-[#e8e0cd] to-[#d6cab0]">
+          {content.hero?.image && content.hero.image !== '/placeholder.svg' && !content.hero.image.endsWith('placeholder.svg') ? (
+            <motion.img
+              initial={{ scale: 1.05, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 1.2, ease: "easeOut" }}
+              src={content.hero.image}
+              alt="Craftsmanship"
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            // Editorial typography fallback
+            <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+              <div className="absolute inset-0 opacity-[0.06]" style={{
+                backgroundImage: 'linear-gradient(rgba(0,0,0,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.5) 1px, transparent 1px)',
+                backgroundSize: '50px 50px'
+              }} />
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.6, delay: idx * 0.1 }}
-                className="group flex flex-col"
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 1, delay: 0.4 }}
+                className="text-center px-8 relative z-10"
               >
-                <div 
-                  className="aspect-[3/4] overflow-hidden mb-6 bg-brand-black/5 transition-all duration-500 ease-out"
-                  onMouseMove={handleMouseMove}
-                  onMouseLeave={handleMouseLeave}
-                >
-                  <img 
-                    src={step.image} 
-                    alt={step.title}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-                <h3 className="text-sm md:text-base font-display tracking-widest uppercase text-brand-black mb-3">
-                  {step.title}
-                </h3>
-                <p className="text-xs md:text-sm font-sans text-brand-secondary/80 font-light leading-relaxed">
-                  {step.description}
-                </p>
+                <div className="text-[10px] uppercase tracking-[0.5em] text-brand-black/40 mb-6">Maison</div>
+                <div className="text-5xl md:text-7xl font-display tracking-[0.2em] text-brand-black/80">LUXARDO</div>
+                <div className="text-[11px] tracking-[0.4em] text-brand-black/40 mt-3">FASHION · ITALY</div>
+                <div className="mt-12 w-12 h-[1px] bg-brand-black/30 mx-auto"></div>
+                <div className="text-xs tracking-[0.3em] uppercase text-brand-black/40 mt-6 font-light">Crafted in Bhilwara</div>
               </motion.div>
-            ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* 2 + 3. PROCESS TIMELINE — Vertical story: Fabric → Handwork → QC → Packing */}
+      <section className="py-20 md:py-32 bg-brand-white px-6 md:px-16 lg:px-24 relative">
+        <div className="max-w-5xl mx-auto">
+          {/* Section header */}
+          <div className="text-center mb-16 md:mb-24">
+            <div className="inline-flex items-center gap-4 mb-6 justify-center">
+              <span className="w-8 h-[1px] bg-brand-black"></span>
+              <span className="text-[10px] uppercase tracking-[0.4em] font-bold text-brand-secondary">The Process</span>
+              <span className="w-8 h-[1px] bg-brand-black"></span>
+            </div>
+            <h2 className="text-3xl md:text-5xl lg:text-6xl font-display tracking-tight text-brand-black leading-[1.1] mb-6">
+              From Fabric to Finish
+            </h2>
+            <p className="text-sm md:text-base text-brand-secondary/80 font-light max-w-xl mx-auto leading-relaxed">
+              Four disciplined stages. Each one supervised, signed off, and refined before the next begins.
+            </p>
+          </div>
+
+          {/* Vertical timeline */}
+          <div className="relative">
+            {/* Center vertical line (desktop) */}
+            <div className="hidden md:block absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[1px] bg-brand-black/15"></div>
+            {/* Left-edge line (mobile) */}
+            <div className="md:hidden absolute left-6 top-0 bottom-0 w-[1px] bg-brand-black/15"></div>
+
+            {(content.process && content.process.length >= 4 ? content.process : [
+              { title: 'Fabric Sourcing', description: 'Premium fabrics imported from the world\'s finest mills — selected for texture, drape, weight, and structural integrity.' },
+              { title: 'Master Handwork', description: 'Master artisans hand-finish every stitch, embroidery, and detail. Heritage techniques refined over generations.' },
+              { title: 'Quality Check', description: 'Multi-stage QC: fabric inspection, stitch tension, hand-finish review, and final structural fit verification.' },
+              { title: 'Premium Packing', description: 'Each piece is folded with archival tissue, sealed in our Maison Box, and dispatched via DTDC Premium courier.' },
+            ]).slice(0, 4).map((step: any, idx: number) => {
+              const isLeft = idx % 2 === 0;
+              const labels = ['Fabric', 'Handwork', 'Quality Check', 'Packing'];
+              return (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-80px' }}
+                  transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+                  className="relative mb-16 md:mb-24 last:mb-0"
+                >
+                  {/* Numbered node (desktop center, mobile left-edge) */}
+                  <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 top-6 z-10 w-12 h-12 rounded-full bg-brand-black text-white items-center justify-center font-display text-lg shadow-lg">
+                    {String(idx + 1).padStart(2, '0')}
+                  </div>
+                  <div className="md:hidden absolute left-6 -translate-x-1/2 top-2 z-10 w-10 h-10 rounded-full bg-brand-black text-white flex items-center justify-center font-display text-sm shadow-lg">
+                    {String(idx + 1).padStart(2, '0')}
+                  </div>
+
+                  {/* Content card — alternating left/right on desktop, full-width on mobile */}
+                  <div className={`md:w-1/2 md:px-12 pl-14 md:pl-12 ${isLeft ? 'md:pr-12 md:text-right md:ml-0' : 'md:ml-[50%]'}`}>
+                    <div className="bg-[#FAFAFA] border border-brand-black/8 p-6 md:p-8 relative">
+                      {/* Decorative tag */}
+                      <div className={`flex items-center gap-3 mb-4 ${isLeft ? 'md:justify-end' : 'md:justify-start'}`}>
+                        <span className="text-[9px] tracking-[0.4em] uppercase text-brand-secondary font-bold">
+                          Stage {idx + 1}
+                        </span>
+                        <span className="w-6 h-[1px] bg-brand-secondary/40"></span>
+                        <span className="text-[9px] tracking-[0.3em] uppercase text-brand-secondary">{labels[idx] || step.title}</span>
+                      </div>
+                      <h3 className="text-2xl md:text-3xl font-display tracking-tight text-brand-black mb-4 leading-tight">
+                        {step.title}
+                      </h3>
+                      <p className="text-sm md:text-base text-brand-secondary/80 font-light leading-relaxed">
+                        {step.description}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          {/* Bottom divider with brand mark */}
+          <div className="mt-20 md:mt-32 flex flex-col items-center">
+            <div className="w-[1px] h-12 bg-brand-black/20 mb-6"></div>
+            <p className="text-[10px] tracking-[0.4em] uppercase text-brand-secondary text-center">
+              Every piece. Every time. Every stitch supervised.
+            </p>
           </div>
         </div>
       </section>

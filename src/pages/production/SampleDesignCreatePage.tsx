@@ -1,0 +1,138 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { httpsCallable } from 'firebase/functions';
+import { functions, db } from '../../firebase';
+import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { ArrowLeft, Loader2, Plus, X } from 'lucide-react';
+import type { DesignDoc } from '../../types/production';
+
+export default function SampleDesignCreatePage() {
+  const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [image, setImage] = useState('');
+  const [catalogDesignId, setCatalogDesignId] = useState('');
+  const [designVersionId, setDesignVersionId] = useState('');
+
+  const [designs, setDesigns] = useState<DesignDoc[]>([]);
+
+  const loadDesigns = useCallback(async () => {
+    try {
+      const q = query(
+        collection(db, 'catalogueDesigns'),
+        where('isFrozen', '==', true)
+      );
+      const snap = await getDocs(q);
+      setDesigns(snap.docs.map(d => d.data() as DesignDoc));
+    } catch (err) {
+      console.error('Failed to load designs:', err);
+    }
+  }, []);
+
+  useEffect(() => { loadDesigns(); }, [loadDesigns]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setCreating(true);
+    setToast(null);
+
+    try {
+      const fn = httpsCallable(functions, 'sampleDesignCreate');
+      const result = await fn({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        image: image.trim() || undefined,
+        catalogDesignId: catalogDesignId || undefined,
+        designVersionId: designVersionId || undefined,
+      });
+
+      setToast({ type: 'success', message: `Sample design created (ID: ${(result.data as any).id}).` });
+      setTimeout(() => navigate('/production/sample-designs'), 1200);
+    } catch (err: any) {
+      setToast({ type: 'error', message: err.message || 'Failed to create sample design.' });
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen p-6 md:p-8 max-w-2xl">
+      <button
+        onClick={() => navigate('/production/sample-designs')}
+        className="flex items-center gap-2 text-sm text-gray-500 hover:text-black transition-colors mb-6"
+      >
+        <ArrowLeft size={16} />
+        Back to Sample Designs
+      </button>
+
+      <h1 className="text-2xl font-display text-black tracking-wide mb-8">New Sample Design</h1>
+
+      <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 space-y-6">
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Sample Name *</label>
+          <input type="text" required value={name} onChange={e => setName(e.target.value)}
+            placeholder="e.g. Paisley Stripe Swatch"
+            className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all" />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Description (optional)</label>
+          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
+            className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all" />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Linked Catalogue Design (optional)</label>
+          <select
+            value={catalogDesignId}
+            onChange={e => setCatalogDesignId(e.target.value)}
+            className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all bg-white"
+          >
+            <option value="">None</option>
+            {designs.map(d => (
+              <option key={d.id} value={d.id}>{d.id} — {d.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Design Version ID (optional)</label>
+          <input type="text" value={designVersionId} onChange={e => setDesignVersionId(e.target.value)}
+            placeholder="e.g. KL-0001-v1"
+            className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all" />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Image URL (optional)</label>
+          <input type="url" value={image} onChange={e => setImage(e.target.value)}
+            placeholder="https://..."
+            className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black/20 transition-all" />
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button type="button" onClick={() => navigate('/production/sample-designs')}
+            className="px-5 py-2.5 text-sm text-gray-500 hover:text-black transition-colors">
+            Cancel
+          </button>
+          <button type="submit" disabled={creating || !name.trim()}
+            className="flex items-center gap-2 px-6 py-2.5 bg-black text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors">
+            {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            {creating ? 'Creating…' : 'Create Sample Design'}
+          </button>
+        </div>
+      </form>
+
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-xl shadow-xl ${
+          toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <span className="text-sm">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 text-white/70 hover:text-white"><X size={16} /></button>
+        </div>
+      )}
+    </div>
+  );
+}

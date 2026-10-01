@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useParams, useOutletContext } from 'react-router-dom';
 import { SectionHeader } from '../components/SectionHeader';
 import { COLLECTIONS } from '../constants';
-import { storage } from '../utils/localStorage';
 import { ProductCard } from '../components/ProductCard';
 import { Country } from '../types';
 import { motion } from 'motion/react';
 import { SlidersHorizontal } from 'lucide-react';
+import { useProducts } from '../context/ProductsContext';
 
 export default function CollectionDetailPage() {
   const { category } = useParams<{ category: string }>();
@@ -14,7 +14,7 @@ export default function CollectionDetailPage() {
   const [sortBy, setSortBy] = useState<'featured' | 'newest' | 'recommended'>('featured');
 
   const collection = COLLECTIONS.find(c => c.id === category);
-  const products = storage.getProducts();
+  const { products } = useProducts();
   
   let filteredProducts = products.filter(p => p.category === collection?.fullName);
 
@@ -32,7 +32,7 @@ export default function CollectionDetailPage() {
       {/* Category Banner */}
       <section className="relative h-[50vh] overflow-hidden bg-brand-black">
         <img 
-          src={collection?.image || "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=2000&auto=format&fit=crop"} 
+          src={collection?.image || "/placeholder.svg"} 
           alt={collection?.fullName} 
           className="absolute inset-0 w-full h-full object-cover"
           referrerPolicy="no-referrer"

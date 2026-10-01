@@ -3,44 +3,35 @@ import { Product } from '../../types';
 import { formatCurrency } from '../../utils/currency';
 import { Plus, Search, Edit2, Trash2, ExternalLink, Eye, EyeOff, Star, Image as ImageIcon, Filter, Copy, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { storage } from '../../utils/localStorage';
 import { ConfirmModal } from '../../components/admin/ConfirmModal';
+import { useProducts } from '../../context/ProductsContext';
+import { saveProductToFirestore, deleteProductFromFirestore } from '../../utils/productsFirestore';
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const { products, isLoading } = useProducts();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterCollection, setFilterCollection] = useState('all');
   const [filterVisibility, setFilterVisibility] = useState('all');
   const [filterStock, setFilterStock] = useState('all');
   const [filterFeatured, setFilterFeatured] = useState('all');
-  const [isLoading, setIsLoading] = useState(true);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchProducts = () => {
-      const productsData = storage.getProducts();
-      setProducts(productsData);
-      setIsLoading(false);
-    };
-
-    fetchProducts();
-  }, []);
 
   const handleDelete = (id: string) => {
     setItemToDelete(id);
   };
 
-  const confirmDelete = () => {
-    if (itemToDelete) {
-      const updatedProducts = products.filter(p => p.id !== itemToDelete);
-      storage.saveProducts(updatedProducts);
-      setProducts(updatedProducts);
-      setItemToDelete(null);
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+    try {
+      await deleteProductFromFirestore(itemToDelete);
+    } catch (e: any) {
+      alert('Delete failed: ' + (e?.message || 'Unknown'));
     }
+    setItemToDelete(null);
   };
 
-  const handleDuplicate = (id: string) => {
+  const handleDuplicate = async (id: string) => {
     const productToDuplicate = products.find(p => p.id === id);
     if (!productToDuplicate) return;
 
@@ -49,37 +40,36 @@ export default function AdminProductsPage() {
       ...productToDuplicate,
       id: newId,
       name: `${productToDuplicate.name} (Copy)`,
-      visibility: 'hidden', // Safe default for duplicates
+      visibility: 'hidden',
       featured: false,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
-
-    const updatedProducts = [duplicatedProduct, ...products];
-    storage.saveProducts(updatedProducts);
-    setProducts(updatedProducts);
+    try {
+      await saveProductToFirestore(duplicatedProduct);
+    } catch (e: any) {
+      alert('Duplicate failed: ' + (e?.message || 'Unknown'));
+    }
   };
 
-  const toggleVisibility = (id: string) => {
-    const updatedProducts = products.map(p => {
-      if (p.id === id) {
-        return { ...p, visibility: p.visibility === 'hidden' ? 'public' : 'hidden' as 'public' | 'hidden' };
-      }
-      return p;
-    });
-    storage.saveProducts(updatedProducts);
-    setProducts(updatedProducts);
+  const toggleVisibility = async (id: string) => {
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    try {
+      await saveProductToFirestore({ ...p, visibility: p.visibility === 'hidden' ? 'public' : 'hidden' });
+    } catch (e: any) {
+      alert('Update failed: ' + (e?.message || 'Unknown'));
+    }
   };
 
-  const toggleFeatured = (id: string) => {
-    const updatedProducts = products.map(p => {
-      if (p.id === id) {
-        return { ...p, featured: !p.featured };
-      }
-      return p;
-    });
-    storage.saveProducts(updatedProducts);
-    setProducts(updatedProducts);
+  const toggleFeatured = async (id: string) => {
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    try {
+      await saveProductToFirestore({ ...p, featured: !p.featured });
+    } catch (e: any) {
+      alert('Update failed: ' + (e?.message || 'Unknown'));
+    }
   };
 
   const collections = useMemo(() => {

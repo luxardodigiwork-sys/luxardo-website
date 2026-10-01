@@ -1,16 +1,11 @@
 import { Country, Language, Product } from './types';
-
 export const COUNTRIES: Country[] = [
   { name: 'India', code: 'IN', currency: { code: 'INR', symbol: '₹', rate: 1 }, active: true, language: 'English (US)' },
   { name: 'United States', code: 'US', currency: { code: 'USD', symbol: '$', rate: 0.012 }, active: true, language: 'English (US)' },
   { name: 'United Kingdom', code: 'GB', currency: { code: 'GBP', symbol: '£', rate: 0.0095 }, active: true, language: 'English (US)' },
   { name: 'United Arab Emirates', code: 'AE', currency: { code: 'AED', symbol: 'د.إ', rate: 0.044 }, active: true, language: 'Arabic' },
   { name: 'France', code: 'FR', currency: { code: 'EUR', symbol: '€', rate: 0.011 }, active: true, language: 'French' },
-  { name: 'Canada', code: 'CA', currency: { code: 'CAD', symbol: 'C$', rate: 0.016 }, active: false, language: 'English (US)' },
-  { name: 'Australia', code: 'AU', currency: { code: 'AUD', symbol: 'A$', rate: 0.018 }, active: false, language: 'English (US)' },
-  { name: 'Singapore', code: 'SG', currency: { code: 'SGD', symbol: 'S$', rate: 0.016 }, active: false, language: 'English (US)' },
 ];
-
 export const LANGUAGES: Language[] = ['English (US)', 'French', 'Arabic'];
 
 export const COLLECTIONS = [
@@ -19,125 +14,148 @@ export const COLLECTIONS = [
     fullName: '3 Piece Suit',
     shortName: '3 Piece Suit',
     descriptor: 'Complete tailored ensembles for the discerning gentleman.',
-    image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=1000&auto=format&fit=crop',
+    image: '/placeholder.svg',
     narrative: 'The ultimate expression of tailored perfection.',
-    craftsmanship: 'Three-layer construction for a flawless fit.',
-    packaging: 'Archival box with premium garment protection.'
+    craftsmanship: 'Three-layer canvas construction for a flawless drape.',
+    packaging: 'Archival garment carrier with custom hangers.',
   },
   {
     id: 'tuxedo',
     fullName: 'Tuxedo',
     shortName: 'Tuxedo',
     descriptor: 'The pinnacle of formal evening wear.',
-    image: 'https://images.unsplash.com/photo-1593030761757-71fae46af504?q=80&w=1000&auto=format&fit=crop',
+    image: '/placeholder.svg',
     narrative: 'Crafted for the most prestigious occasions.',
-    craftsmanship: 'Traditional canvassing and satin lapels.',
-    packaging: 'Structured garment carrier with custom hangers.'
+    craftsmanship: 'Traditional canvassing and satin peak lapels.',
+    packaging: 'Structured carrier with archival hangers.',
   },
   {
     id: 'jodhpuri',
     fullName: 'Jodhpuri',
     shortName: 'Jodhpuri',
     descriptor: 'Regal Jodhpuri jackets for a commanding presence.',
-    image: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=1000&auto=format&fit=crop',
+    image: '/placeholder.svg',
     narrative: 'A symbol of heritage and authority.',
     craftsmanship: 'Structured shoulders and hand-carved buttons.',
-    packaging: 'Signature archival box with certificate.'
+    packaging: 'Signature archival box with certificate.',
   },
   {
     id: 'koti-pant',
     fullName: 'Koti Pant',
     shortName: 'Koti Pant',
     descriptor: 'Indo-western fusion featuring tailored kotis and trousers.',
-    image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1000&auto=format&fit=crop',
-    narrative: 'The Koti Pant set is for the modern trendsetter.',
-    craftsmanship: 'Sharp silhouettes and premium wool-silk blends.',
-    packaging: 'Signature archival box presentation.'
+    image: '/placeholder.svg',
+    narrative: 'For the modern trendsetter.',
+    craftsmanship: 'Sharp silhouettes in premium wool-silk blends.',
+    packaging: 'Signature archival box.',
   },
   {
     id: 'koti-kurta',
     fullName: 'Koti Kurta',
     shortName: 'Koti Kurta',
     descriptor: 'Traditional silhouettes with a modern koti layer.',
-    image: 'https://images.unsplash.com/photo-1621335829175-95f437384d7c?q=80&w=1000&auto=format&fit=crop',
+    image: '/placeholder.svg',
     narrative: 'A refined fusion of tradition and tailoring.',
     craftsmanship: 'Hand-finished kotis with intricate detailing.',
-    packaging: 'Wrapped in custom silk dust bags.'
+    packaging: 'Custom silk dust-bag wrap.',
   },
   {
     id: 'kurta',
     fullName: 'Kurta',
     shortName: 'Kurta',
     descriptor: 'Timeless kurtas crafted from the finest silks and linens.',
-    image: 'https://images.unsplash.com/photo-1584916201218-f4242ceb4809?q=80&w=1000&auto=format&fit=crop',
-    narrative: 'The soul of LUXARDO FASHION lies in our classic kurtas.',
+    image: '/placeholder.svg',
+    narrative: 'The soul of LUXARDO FASHION.',
     craftsmanship: 'Precision cut and hand-finished seams.',
-    packaging: 'Acid-free tissue wrapping in archival boxes.'
+    packaging: 'Acid-free tissue wrapping in archival box.',
   },
   {
     id: 'casual',
     fullName: 'Casual',
     shortName: 'Casual',
     descriptor: 'Modern tailored shirts and trousers for daily luxury.',
-    image: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=1000&auto=format&fit=crop',
-    narrative: 'Our Casual collection defines contemporary workwear.',
+    image: '/placeholder.svg',
+    narrative: 'Contemporary workwear, refined.',
     craftsmanship: 'Precision stitching and premium cotton blends.',
-    packaging: 'Delivered in a signature LUXARDO FASHION box.'
-  }
+    packaging: 'Signature LUXARDO FASHION box.',
+  },
 ];
 
-// Generate 10 products for each category
-const generateProducts = () => {
-  const products: Product[] = [];
-  const categories = [
-    { name: '3 Piece Suit', prefix: '3s', basePrice: 85000 },
-    { name: 'Tuxedo', prefix: 't', basePrice: 75000 },
-    { name: 'Jodhpuri', prefix: 'j', basePrice: 65000 },
-    { name: 'Koti Pant', prefix: 'kp', basePrice: 55000 },
-    { name: 'Koti Kurta', prefix: 'kk', basePrice: 45000 },
-    { name: 'Kurta', prefix: 'k', basePrice: 35000 },
-    { name: 'Casual', prefix: 'c', basePrice: 25000 }
-  ];
-
-  const images = [
-    'https://images.unsplash.com/photo-1593030761757-71fae46af504?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1621335829175-95f437384d7c?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1584916201218-f4242ceb4809?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1504593811423-6dd665756598?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1520975954732-57dd22299614?q=80&w=1000&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=1000&auto=format&fit=crop'
-  ];
-
-  categories.forEach(cat => {
-    for (let i = 1; i <= 10; i++) {
-      const mainImg = images[(i - 1) % images.length];
-      const closeupImg = images[i % images.length];
-      
-      products.push({
-        id: `${cat.prefix}${i}`,
-        name: `${cat.name} Edition ${i}`,
-        price: cat.basePrice + (i * 2000),
-        category: cat.name,
-        image: mainImg,
-        images: [mainImg, closeupImg],
-        description: `A masterpiece of ${cat.name} tailoring, featuring selected fabrics and artisan craftsmanship.`,
-        fabricOrigin: i % 2 === 0 ? 'Italy' : 'India',
-        readyToStitch: true,
-        composition: '74% POLYESTER, 21% VISCOSE, 5% ELASTANE',
-        washingCare: 'Do not wash\nDo not bleach\nIron at low temperature (max. 110°C)\nDry clean only\nDo not spin dry',
-        shipping: 'Home delivery\n• 48h/72h working days\n• Spain: FREE shipping for orders of 69€ or more (Peninsula). For orders under 69€: 4,95€ (Peninsula) / 5,95€ (Balearic Islands). Orders for the Canary Islands: through the Banango.\n• Rest of the countries check here.\n\nDelivery at collection point\n• 3 to 5 days in Spain (peninsula). Free shipping for orders over 69€.',
-        returns: 'Items can be returned within 14 days in original condition.',
-        garmentFormat: 'This item is delivered as a premium ready-to-stitch fabric set in our signature presentation box. Please note that stitching is not included.',
-        createdAt: new Date(Date.now() - (i * 86400000)).toISOString()
-      });
-    }
-  });
-
-  return products;
-};
-
-export const PRODUCTS: Product[] = generateProducts();
+export const PRODUCTS: Product[] = [
+  {
+    id: '3ps-flagship-01',
+    name: 'Sovrano Three-Piece Suit',
+    slug: 'sovrano-three-piece-suit',
+    category: '3 Piece Suit',
+    collection: 'three-piece-suit',
+    price: 89999,
+    image: '/placeholder.svg',
+    images: [
+      '/placeholder.svg',
+      '/placeholder.svg',
+    ],
+    description: 'A flagship three-piece ensemble in midnight wool with full canvas construction, peak lapels and a matching waistcoat. Cut for a structured modern silhouette.',
+    fabricOrigin: 'Italy',
+    composition: '95% Super 120s Wool, 5% Mulberry Silk',
+    washingCare: 'Dry clean only • Do not bleach • Iron at low temp (≤110°C) • Steam to refresh',
+    shipping: 'Complimentary worldwide shipping on orders above ₹25,000. 3–7 business days dispatch.',
+    returns: '14-day return window on unworn, tagged items in original packaging.',
+    garmentFormat: 'Delivered ready-to-stitch as a premium fabric set in our archival presentation box. Tailoring not included.',
+    readyToStitch: true,
+    readyToStitchInfo: 'Includes coat, waistcoat & trouser fabric panels, signature lining, and a tailoring guide.',
+    stock: 12,
+    lowStockThreshold: 3,
+    visibility: 'public',
+    featured: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'tux-flagship-01',
+    name: 'Notturno Satin-Lapel Tuxedo',
+    slug: 'notturno-satin-lapel-tuxedo',
+    category: 'Tuxedo',
+    collection: 'tuxedo',
+    price: 79999,
+    image: '/placeholder.svg',
+    images: [
+      '/placeholder.svg',
+      '/placeholder.svg',
+    ],
+    description: 'An evening tuxedo in jet black with satin peak lapels, covered buttons, and a single besom welt pocket. The definitive black-tie cut.',
+    fabricOrigin: 'Italy',
+    composition: '100% Super 130s Worsted Wool with Silk Satin facing',
+    washingCare: 'Dry clean only • Iron at low temp • Cover lapels before pressing',
+    shipping: 'Complimentary worldwide shipping. 3–7 business days dispatch.',
+    returns: '14-day return window on unworn, tagged items.',
+    garmentFormat: 'Ready-to-stitch fabric set in archival presentation box. Tailoring not included.',
+    readyToStitch: true,
+    stock: 9,
+    visibility: 'public',
+    featured: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'jod-flagship-01',
+    name: 'Maharaja Jodhpuri Bandhgala',
+    slug: 'maharaja-jodhpuri-bandhgala',
+    category: 'Jodhpuri',
+    collection: 'jodhpuri',
+    price: 64999,
+    image: '/placeholder.svg',
+    images: [
+      '/placeholder.svg',
+    ],
+    description: 'Structured Jodhpuri bandhgala with mandarin collar, hand-carved horn buttons and an embroidered chest motif. Worn with tapered trousers.',
+    fabricOrigin: 'India',
+    composition: '70% Wool, 25% Silk, 5% Polyester (lining)',
+    washingCare: 'Dry clean only',
+    shipping: 'Complimentary worldwide shipping. 3–7 business days dispatch.',
+    returns: '14-day return window on unworn, tagged items.',
+    garmentFormat: 'Ready-to-stitch fabric set in archival box. Tailoring not included.',
+    readyToStitch: true,
+    stock: 15,
+    visibility: 'public',
+    featured: true,
+    createdAt: new Date().toISOString(),
+  }
+];

@@ -9,7 +9,10 @@ import { Country, Language } from '../types';
 import { COUNTRIES, LANGUAGES, COLLECTIONS } from '../constants';
 import { ALL_COUNTRIES } from '../countries';
 import Logo from './Logo';
-import { FirstVisitModal } from './FirstVisitModal';
+import ComplianceFooter from './ComplianceFooter';
+import { BUSINESS_CONFIG } from '../constants/businessConfig';
+import WhatsAppButton from './WhatsAppButton';
+import Animated3DHeader from './Animated3DHeader';
 import { SearchOverlay } from './SearchOverlay';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -37,7 +40,6 @@ export default function Layout() {
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<Language>('English (US)');
   const [showRegionModal, setShowRegionModal] = useState(false);
-  const [showFirstVisitModal, setShowFirstVisitModal] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showCollectionsDropdown, setShowCollectionsDropdown] = useState(false);
@@ -77,9 +79,7 @@ export default function Layout() {
           }
         } else {
           // Show first visit modal
-          setShowFirstVisitModal(true);
         }
-
         if (savedPrefs?.language) {
           setSelectedLanguage(savedPrefs.language as Language);
         } else {
@@ -100,10 +100,7 @@ export default function Layout() {
         if (savedCountry && firstVisitCompleted) {
           const country = ALL_COUNTRIES.find(c => c.code === savedCountry);
           if (country) setSelectedCountry(country);
-        } else {
-          setShowFirstVisitModal(true);
         }
-
         if (savedLang) {
           setSelectedLanguage(savedLang as Language);
         }
@@ -116,81 +113,63 @@ export default function Layout() {
   // Sync preferences with user profile
   useEffect(() => {
     if (isAuthReady && user && user.role !== 'admin') {
-      let needsUpdate = false;
-      const updates: { country?: string; language?: string; currency?: string } = {};
-
       const localCountry = localStorage.getItem('LUXARDO FASHION_country');
       const localLang = localStorage.getItem('LUXARDO FASHION_lang');
       const localCurrency = localStorage.getItem('LUXARDO FASHION_currency');
 
       if (user.country && user.country !== localCountry) {
-        let country = ALL_COUNTRIES.find(c => c.code === user.country);
-        if (!country) {
-          country = ALL_COUNTRIES.find(c => c.name === user.country);
-          if (country) {
-            updates.country = country.code;
-            needsUpdate = true;
-          }
-        }
+        const country = ALL_COUNTRIES.find(c => c.code === user.country) ||
+                        ALL_COUNTRIES.find(c => c.name === user.country);
         if (country) {
           setSelectedCountry(country);
           localStorage.setItem('LUXARDO FASHION_country', country.code);
           localStorage.setItem('LUXARDO FASHION_first_visit_completed', 'true');
-          setShowFirstVisitModal(false);
         }
-      } else if (!user.country && localCountry) {
-        updates.country = localCountry;
-        needsUpdate = true;
       }
-
       if (user.language && user.language !== localLang) {
         setSelectedLanguage(user.language as Language);
         localStorage.setItem('LUXARDO FASHION_lang', user.language);
-      } else if (!user.language && localLang) {
-        updates.language = localLang;
-        needsUpdate = true;
       }
-
       if (user.currency && user.currency !== localCurrency) {
         localStorage.setItem('LUXARDO FASHION_currency', user.currency);
-      } else if (!user.currency && localCurrency) {
-        updates.currency = localCurrency;
-        needsUpdate = true;
-      }
-
-      if (needsUpdate) {
-      // updateUserPreferences(); // इसे अभी के लिए बंद कर दें
       }
     }
-  }, [isAuthReady, user, updateUserPreferences]);
+  }, [isAuthReady, user]);
 
-  // Login Reminder Logic
+  // Login Reminder Logic — show ONCE per session for logged-out users,
+  // then never again (respecting sessionStorage dismissal flag).
   useEffect(() => {
-    if (isLoggedIn || showFirstVisitModal || showLoginReminder || reminderCount >= 3) return;
+    if (isLoggedIn) {
+      setShowLoginReminder(false);
+      return;
+    }
+    if (typeof window === 'undefined') return;
+    if (sessionStorage.getItem('LUXARDO_LOGIN_REMINDER_DISMISSED') === '1') return;
 
-    const delay = reminderCount === 0 ? 5000 : 30000;
-    
     const timer = setTimeout(() => {
       setShowLoginReminder(true);
-      setReminderCount(prev => prev + 1);
-      
-      // Auto hide after 5 seconds
-      setTimeout(() => {
+      // Auto hide after 6 seconds
+      const hideTimer = setTimeout(() => {
         setShowLoginReminder(false);
-      }, 5000);
-      
-    }, delay);
+        sessionStorage.setItem('LUXARDO_LOGIN_REMINDER_DISMISSED', '1');
+      }, 6000);
+      return () => clearTimeout(hideTimer);
+    }, 8000);
 
     return () => clearTimeout(timer);
-  }, [isLoggedIn, showFirstVisitModal, reminderCount, showLoginReminder]);
-
+  }, [isLoggedIn]);
   // Close menu on route change and handle scroll lock during transition
   useEffect(() => {
     setIsMenuOpen(false);
     
-    // Stop lenis during page transition to prevent janky scrolling
+    // Stop lenis briefly during page transition, then restart
     if ((window as any).lenis) {
       (window as any).lenis.stop();
+      setTimeout(() => {
+        if ((window as any).lenis) {
+          (window as any).lenis.start();
+        }
+      }, 100);
     }
   }, [location.pathname]);
 
@@ -209,7 +188,7 @@ export default function Layout() {
 
   // Lock body scroll when any modal/overlay is open
   useEffect(() => {
-    if (isMenuOpen || isSearchOpen || showFirstVisitModal || showRegionModal) {
+    if (isMenuOpen || isSearchOpen || showRegionModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -217,8 +196,7 @@ export default function Layout() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isMenuOpen, isSearchOpen, showFirstVisitModal, showRegionModal]);
-
+  }, [isMenuOpen, isSearchOpen, showRegionModal]);
   const handleCountrySelect = (country: Country) => {
     if (country.active) {
       setSelectedCountry(country);
@@ -270,42 +248,6 @@ export default function Layout() {
     }
   };
 
-  const handleFirstVisitSelect = (country: Country) => {
-    setSelectedCountry(country);
-    localStorage.setItem('LUXARDO FASHION_country', country.code);
-    localStorage.setItem('LUXARDO FASHION_currency', country.currency.code);
-    
-    const defaultLang = country.language;
-    setSelectedLanguage(defaultLang);
-    localStorage.setItem('LUXARDO FASHION_lang', defaultLang);
-    
-    localStorage.setItem('LUXARDO FASHION_first_visit_completed', 'true');
-    
-    // Mark first visit complete in Firebase
-    firebaseStorage.markFirstVisitComplete()
-      .catch(err => console.error('Failed to mark first visit:', err));
-    
-    // Save preferences to Firebase if user is logged in
-    if (isLoggedIn && user && user.role !== 'admin') {
-      firebaseStorage.saveUserPreferences({
-        country: country.code,
-        language: defaultLang,
-        currency: country.currency.code
-      }).catch(err => console.error('Failed to save preferences:', err));
-      
-      updateUserPreferences({
-        country: country.code,
-        language: defaultLang,
-        currency: country.currency.code
-      });
-    }
-    
-    setShowFirstVisitModal(false);
-    // Redirect to home if not already there
-    if (location.pathname !== '/') {
-      navigate('/');
-    }
-  };
 
   const navItems = [
     { name: 'HOME', path: '/' },
@@ -321,11 +263,11 @@ export default function Layout() {
     path: `/collections/${col.id}`
   }));
 
+
   return (
-    <div className="min-h-screen bg-brand-bg text-brand-black selection:bg-brand-black selection:text-brand-white flex flex-col">
+    <div className="min-h-screen w-full max-w-full bg-brand-bg text-brand-black selection:bg-brand-black selection:text-brand-white flex flex-col overflow-x-hidden">
       {/* First Visit Modal */}
       <AnimatePresence>
-        {showFirstVisitModal && <FirstVisitModal onSelect={handleFirstVisitSelect} />}
       </AnimatePresence>
 
       {/* Top Bar (Layer 1) */}
@@ -346,12 +288,12 @@ export default function Layout() {
       </div>
 
       {/* Main Header (Layer 2) */}
-      <header className={`sticky top-0 z-40 bg-brand-bg/95 backdrop-blur-md border-b border-brand-divider transition-all duration-500 ${isScrolled ? 'py-1.5 md:py-2 shadow-sm' : 'py-2.5 md:py-3.5'}`}>
+      <header className={`sticky top-0 z-40 bg-brand-bg/95 backdrop-blur-md border-b border-brand-divider transition-all duration-500 ${isScrolled ? 'py-1 md:py-1.5 shadow-md scale-[0.98]' : 'py-3 md:py-4'}`}>
         <div className="max-w-[1800px] mx-auto px-4 md:px-12 flex items-center justify-between">
           {/* Left: Logo */}
           <div className="flex-1 flex items-center">
             <Link to="/" className="flex items-center">
-              <Logo className={`transition-all duration-500 ${isScrolled ? 'h-[28px] md:h-[36px] w-[120px] md:w-[157px]' : 'h-[36px] md:h-[48px] w-[157px] md:w-[210px]'}`} />
+              <Logo className={`transition-all duration-500 ${isScrolled ? 'h-[24px] md:h-[30px] w-[100px] md:w-[140px]' : 'h-[40px] md:h-[52px] w-[170px] md:w-[220px]'}`} />
             </Link>
           </div>
           
@@ -421,7 +363,7 @@ export default function Layout() {
           {/* Right: Icons & Hamburger */}
           <div className="flex-1 flex justify-end items-center gap-3 md:gap-6">
             <button onClick={() => setIsSearchOpen(true)} className="hover:text-brand-secondary transition-colors"><Search className="w-[18px] h-[18px] md:w-6 md:h-6" /></button>
-            <Link to={isLoggedIn ? "/account" : "/login"} className="hover:text-brand-secondary transition-colors"><User className="w-[18px] h-[18px] md:w-6 md:h-6" /></Link>
+            <Link to={isLoggedIn ? (["admin","super_admin"].includes(user?.role || "") ? "/admin/dashboard" : "/account") : "/login"} className="hover:text-brand-secondary transition-colors"><User className="w-[18px] h-[18px] md:w-6 md:h-6" /></Link>
             <Link to="/cart" className="hover:text-brand-secondary transition-colors relative">
               <ShoppingBag className="w-[18px] h-[18px] md:w-6 md:h-6" />
               {cartCount > 0 && (
@@ -530,10 +472,11 @@ export default function Layout() {
                 <p className="text-sm font-sans opacity-80">Please log in to access your exclusive benefits.</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
                 setShowLoginReminder(false);
+                try { sessionStorage.setItem('LUXARDO_LOGIN_REMINDER_DISMISSED', '1'); } catch {}
               }}
               className="p-2 hover:bg-white/10 transition-colors"
             >
@@ -633,104 +576,12 @@ export default function Layout() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-brand-black text-brand-white pt-16 md:pt-24 pb-8 md:pb-8 px-6 md:px-16 relative overflow-hidden mt-auto">
-        {/* Large Watermark Logo */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] opacity-[0.03] pointer-events-none flex justify-center">
-          <Logo className="w-full" dark />
-        </div>
-
-        <div className="max-w-[1800px] mx-auto flex flex-col md:grid md:grid-cols-3 md:gap-16 mb-16 md:mb-20 relative z-10">
-          <div className="flex flex-col border-b border-brand-white/10 md:border-none py-4 md:py-0">
-            <button 
-              onClick={() => toggleFooterSection('maison')}
-              className="w-full flex justify-between items-center md:pointer-events-none"
-            >
-              <h4 className="text-[11px] md:text-[13px] uppercase tracking-[0.25em] font-bold text-brand-white">Maison</h4>
-              <div className="md:hidden text-brand-white/60">
-                {openFooterSection === 'maison' ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              </div>
-            </button>
-            <div className={`overflow-hidden transition-all duration-300 md:!max-h-none md:!opacity-100 md:!mt-8 ${openFooterSection === 'maison' ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
-              <ul className="space-y-3 md:space-y-4 text-xs md:text-sm font-sans text-brand-white/60">
-                <li><Link to="/prime-membership" className="hover:text-brand-white transition-colors">Prime Member</Link></li>
-                <li><Link to="/craftsmanship" className="hover:text-brand-white transition-colors">Craftsmanship</Link></li>
-                <li><Link to="/our-story" className="hover:text-brand-white transition-colors">Our Story</Link></li>
-                <li><Link to="/contact" className="hover:text-brand-white transition-colors">Contact</Link></li>
-                <li><Link to="/faq" className="hover:text-brand-white transition-colors">FAQ</Link></li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="flex flex-col border-b border-brand-white/10 md:border-none py-4 md:py-0">
-            <button 
-              onClick={() => toggleFooterSection('legal')}
-              className="w-full flex justify-between items-center md:pointer-events-none"
-            >
-              <h4 className="text-[11px] md:text-[13px] uppercase tracking-[0.25em] font-bold text-brand-white">Legal</h4>
-              <div className="md:hidden text-brand-white/60">
-                {openFooterSection === 'legal' ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              </div>
-            </button>
-            <div className={`overflow-hidden transition-all duration-300 md:!max-h-none md:!opacity-100 md:!mt-8 ${openFooterSection === 'legal' ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
-              <ul className="space-y-3 md:space-y-4 text-xs md:text-sm font-sans text-brand-white/60">
-                <li><Link to="/policies/shipping" className="hover:text-brand-white transition-colors">Shipping Policy</Link></li>
-                <li><Link to="/policies/returns" className="hover:text-brand-white transition-colors">Returns Policy</Link></li>
-                <li><Link to="/policies/privacy" className="hover:text-brand-white transition-colors">Privacy Policy</Link></li>
-                <li><Link to="/policies/terms" className="hover:text-brand-white transition-colors">Terms & Conditions</Link></li>
-                <li><Link to="/policies/membership-terms" className="hover:text-brand-white transition-colors">Membership Terms</Link></li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="flex flex-col py-8 md:py-0 space-y-8 md:space-y-12">
-            <div className="space-y-6 md:space-y-8">
-              <h4 className="text-[10px] md:text-[11px] uppercase tracking-[0.25em] font-bold text-brand-white">Newsletter</h4>
-              <div className="flex border-b border-brand-white/20 pb-3 md:pb-4 group">
-                <input type="email" placeholder="Email Address" className="bg-transparent w-full text-xs md:text-sm font-sans text-brand-white focus:outline-none placeholder:text-brand-white/40" />
-                <button className="text-brand-white hover:text-brand-white/60 transition-colors">
-                  <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3 md:space-y-4">
-              <h4 className="text-[10px] md:text-[11px] uppercase tracking-[0.25em] font-bold text-brand-white">Region</h4>
-              <button onClick={() => setShowRegionModal(true)} className="flex items-center gap-2 text-xs md:text-sm font-sans text-brand-white/60 hover:text-brand-white transition-colors">
-                <Globe className="w-3.5 h-3.5 md:w-4 md:h-4" /> {selectedCountry?.name || 'Select Region'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="max-w-[1800px] w-full mx-auto pt-8 border-t border-brand-white/10 flex flex-col md:flex-row justify-between items-center gap-6 relative z-10">
-          <div className="flex-1 flex justify-center md:justify-start">
-          </div>
-          <p className="flex-1 text-[10px] uppercase tracking-[0.25em] font-bold text-brand-white/60 flex flex-wrap items-center justify-center gap-2 text-center">
-            <span>@2015</span>
-            <Logo className="h-2.5 w-auto" dark />
-            <span>{footerContent?.copyrightText || 'LUXARDO FASHION Maison. All rights reserved.'}</span>
-          </p>
-          <div className="flex-1 flex justify-center md:justify-end gap-6">
-            {footerContent?.socialLinks?.instagram && (
-              <a href={footerContent.socialLinks?.instagram} target="_blank" rel="noopener noreferrer" className="text-brand-white/60 hover:text-brand-white transition-colors">
-                <Instagram className="w-5 h-5" />
-              </a>
-            )}
-            {footerContent?.socialLinks?.facebook && (
-              <a href={footerContent.socialLinks?.facebook} target="_blank" rel="noopener noreferrer" className="text-brand-white/60 hover:text-brand-white transition-colors">
-                <Facebook className="w-5 h-5" />
-              </a>
-            )}
-            {footerContent?.socialLinks?.twitter && (
-              <a href={footerContent.socialLinks?.twitter} target="_blank" rel="noopener noreferrer" className="text-brand-white/60 hover:text-brand-white transition-colors">
-                <Twitter className="w-5 h-5" />
-              </a>
-            )}
-          </div>
-        </div>
-      </footer>
+      <ComplianceFooter />
 
       <SearchOverlay isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <WhatsAppButton />
     </div>
   );
+
+
 }
