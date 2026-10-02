@@ -56,7 +56,6 @@ import RegisterPage from "./pages/RegisterPage";
 
 // Admin + role login pages (each role has dedicated login route)
 import AdminLoginPage from "./pages/admin/AdminLoginPage";
-import StaffLoginPage from "./pages/staff/StaffLoginPage";
 import OwnerLoginPage from "./pages/owner/OwnerLoginPage";
 import DispatchLoginPage from "./pages/dispatch/DispatchLoginPage";
 import AccountsLoginPage from "./pages/accounts/AccountsLoginPage";
@@ -91,33 +90,7 @@ import AnalysisLayout from "./components/analysis/AnalysisLayout";
 import AnalysisDashboardPage from "./pages/analysis/AnalysisDashboardPage";
 
 // V1 Production System
-import ProtectedProductionRoute from "./components/production/ProtectedProductionRoute";
-import ProductionLayout from "./components/production/ProductionLayout";
-import ProductionHomePage from "./pages/production/ProductionHomePage";
-import StaffManagementPage from "./pages/production/StaffManagementPage";
-import UserProfilePage from "./pages/production/UserProfilePage";
-import KarigarListPage from "./pages/production/KarigarListPage";
-import KarigarCreatePage from "./pages/production/KarigarCreatePage";
 // Phase 2 — Design → Sample Design → Sample Piece → Production Request
-import DesignListPage from "./pages/production/DesignListPage";
-import DesignCreatePage from "./pages/production/DesignCreatePage";
-import DesignDetailPage from "./pages/production/DesignDetailPage";
-import SampleDesignListPage from "./pages/production/SampleDesignListPage";
-import SampleDesignCreatePage from "./pages/production/SampleDesignCreatePage";
-import SampleDesignDetailPage from "./pages/production/SampleDesignDetailPage";
-import SamplePieceListPage from "./pages/production/SamplePieceListPage";
-import SamplePieceCreatePage from "./pages/production/SamplePieceCreatePage";
-import SamplePieceDetailPage from "./pages/production/SamplePieceDetailPage";
-import ProductionRequestListPage from "./pages/production/ProductionRequestListPage";
-import ProductionRequestCreatePage from "./pages/production/ProductionRequestCreatePage";
-import ProductionRequestDetailPage from "./pages/production/ProductionRequestDetailPage";
-import PieceListPage from "./pages/production/PieceListPage";
-import PieceDetailPage from "./pages/production/PieceDetailPage";
-import GuardQcWorkspacePage from "./pages/production/GuardQcWorkspacePage";
-import DispatchWorkspacePage from "./pages/production/DispatchWorkspacePage";
-import TailorWorkspacePage from "./pages/production/TailorWorkspacePage";
-import StoreWorkspacePage from "./pages/production/StoreWorkspacePage";
-import TailorRequestReviewPage from "./pages/production/TailorRequestReviewPage";
 
 const ProtectedBackendRoute = ({
   role,
@@ -151,72 +124,23 @@ const ProtectedBackendRoute = ({
   return <>{children}</>;
 };
 
-/* Loom production route subtree — shared by the full B2C SPA and the Loom-only
- * host gate (luxardo-flow). Defined once so both build paths stay identical. */
-function ProductionRoutes() {
-  return (
-    <>
-      <Route
-        path="/production"
-        element={
-          <ProtectedProductionRoute>
-            <ProductionLayout />
-          </ProtectedProductionRoute>
-        }
-      >
-        <Route index element={<ProductionHomePage />} />
-        <Route path="staff" element={<StaffManagementPage />} />
-        <Route path="profile" element={<UserProfilePage />} />
-        <Route path="profile/:uid" element={<UserProfilePage />} />
-        <Route path="karigars" element={<KarigarListPage />} />
-        <Route path="karigars/new" element={<KarigarCreatePage />} />
-        {/* Phase 2 — Design chain */}
-        <Route path="designs" element={<DesignListPage />} />
-        <Route path="designs/new" element={<DesignCreatePage />} />
-        <Route path="designs/:id" element={<DesignDetailPage />} />
-        <Route path="sample-designs" element={<SampleDesignListPage />} />
-        <Route path="sample-designs/new" element={<SampleDesignCreatePage />} />
-        <Route path="sample-designs/:id" element={<SampleDesignDetailPage />} />
-        <Route path="sample-pieces" element={<SamplePieceListPage />} />
-        <Route path="sample-pieces/new" element={<SamplePieceCreatePage />} />
-        <Route path="sample-pieces/:id" element={<SamplePieceDetailPage />} />
-        <Route path="requests" element={<ProductionRequestListPage />} />
-        <Route path="requests/new" element={<ProductionRequestCreatePage />} />
-        <Route path="requests/:id" element={<ProductionRequestDetailPage />} />
-        {/* Phase 2 — Production Pieces */}
-        <Route path="pieces" element={<PieceListPage />} />
-        <Route path="pieces/:id" element={<PieceDetailPage />} />
-        <Route path="qc" element={<GuardQcWorkspacePage />} />
-        {/* Phase 4 — Dispatch / Tailor / Store */}
-        <Route path="dispatch" element={<DispatchWorkspacePage />} />
-        <Route path="tailor" element={<TailorWorkspacePage />} />
-        <Route path="store" element={<StoreWorkspacePage />} />
-        <Route path="tailor-requests" element={<TailorRequestReviewPage />} />
-      </Route>
-    </>
-  );
+/* LUXARDO FLOW (production system) is a separate app and repo
+ * (luxardo-flow). Any old /production link on the website now sends the user
+ * there instead of a broken page. */
+const FLOW_URL = "https://luxardo-flow.web.app";
+function FlowRedirect() {
+  useEffect(() => {
+    window.location.replace(FLOW_URL + window.location.pathname + window.location.search);
+  }, []);
+  return null;
 }
 
-/* True when this is the LUXARDO FLOW (Loom) app: either the Loom build
- * (`vite build --mode loom`, whose dist-loom/ output only ever deploys to the
- * luxardo-flow project) or the app served from the dedicated Loom host. On the
- * Loom app only the production system + its logins are mounted; the B2C
- * storefront is never reachable. The B2C build is unaffected — its MODE is not
- * "loom" and its hostname does not match. */
-const isLoomHost =
-  (import.meta as ImportMeta).env?.MODE === "loom" ||
-  (typeof window !== "undefined" &&
-    /(^|\.)luxardo-flow\.(web\.app|firebaseapp\.com)$/.test(window.location.hostname));
+function ProductionRoutes() {
+  return <Route path="/production/*" element={<FlowRedirect />} />;
+}
 
 export default function App() {
   useEffect(() => {
-    if (isLoomHost) {
-      document.title = "LUXARDO LOOM | Production System";
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isLoomHost) return; // B2C site-content/products sync is website-only
 
     syncSiteContentFromFirestore();
     fetchProductsFromFirestore();
@@ -229,13 +153,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Loom is a data-dense internal tool with its own independently
-    // scrolling sidebar/content regions — cinematic window-level smooth
-    // scroll fights those nested panels and never gets reset on route
-    // change (that reset only happens in the B2C-only Layout.tsx), which is
-    // the root cause of the reported vertical/nested/sidebar scroll bugs.
-    if (isLoomHost) return;
-
     if ("scrollRestoration" in history) {
       history.scrollRestoration = "manual";
     }
@@ -264,31 +181,6 @@ export default function App() {
       delete (window as any).lenis;
     };
   }, []);
-
-  /* Loom-only host: mount the production system + role logins and redirect
-   * every other path to /production. The B2C storefront/provider tree is not
-   * mounted here, so nothing from the website is reachable on luxardo-flow. */
-  if (isLoomHost) {
-    return (
-      <AuthProvider>
-        <Routes>
-          {/* Owner / Super Admin / Admin — the ONE privileged entry point.
-              Google Sign-In + email/password, resolved via staff/{uid}. */}
-          <Route path="/admin/login" element={<AdminLoginPage />} />
-          {/* The ONE common staff login for every operational role */}
-          <Route path="/login" element={<StaffLoginPage />} />
-          {/* Legacy per-role login paths all funnel into one of the two pages above */}
-          <Route path="/owner/login" element={<Navigate to="/admin/login" replace />} />
-          <Route path="/dispatch/login" element={<Navigate to="/login" replace />} />
-          <Route path="/accounts/login" element={<Navigate to="/login" replace />} />
-          <Route path="/analysis/login" element={<Navigate to="/login" replace />} />
-          <Route path="/staff/login" element={<Navigate to="/login" replace />} />
-          {ProductionRoutes()}
-          <Route path="*" element={<Navigate to="/production" replace />} />
-        </Routes>
-      </AuthProvider>
-    );
-  }
 
   return (
     <AuthProvider>
@@ -416,7 +308,7 @@ export default function App() {
               <Route path="dashboard" element={<AnalysisDashboardPage />} />
             </Route>
 
-            {/* ── V1 Production System (Loom) ────────────────────────── */}
+            {/* ── LUXARDO FLOW moved to its own app — redirect old links ── */}
             {ProductionRoutes()}
 
             <Route path="/" element={<Layout />}>

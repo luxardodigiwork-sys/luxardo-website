@@ -52,7 +52,7 @@ export default function AdminLayout() {
       ]
     },
     {
-      title: 'Loom',
+      title: 'LUXARDO FLOW',
       items: [
         { path: '/production', label: 'Production', icon: Hammer },
       ]

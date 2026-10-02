@@ -178,59 +178,8 @@ export const razorpayWebhook = onRequest(
 // Email notifications (Day 3 — existing)
 export { sendOrderEmail } from "./emailSender";
 
-// V1 Production System — master-data CRUD + atomic ID generation
-export { nextId, staffCreate, staffUpdate, staffChangePassword, karigarCreate, karigarUpdate, userProfileSelfUpdate, mobileResetLookup, mobileResetSendOtp } from "./production";
-
-// Phase 2 · Block 2.1 — Catalogue Design management + version preservation
-export {
-  designCreate,
-  designUpdate,
-  designSubmit,
-  designApprove,
-  designSetCatalogueMeta,
-  designNewVersion,
-} from "./designs";
-
-// Phase 2 · Block 2.2/2.3 — Sample Design (fabric swatch) + Sample Piece (garment)
-export {
-  sampleDesignCreate,
-  sampleDesignUpdate,
-  sampleDesignSubmit,
-  sampleDesignApprove,
-  samplePieceCreate,
-  samplePieceComplete,
-  samplePieceApprove,
-} from "./samples";
-
-// Phase 2 · Block 2.4 — Production Request foundation
-export {
-  prCreate,
-  prUpdate,
-  prSubmit,
-  prApprove,
-  prReject,
-  prEditApproved,
-  prReproduce,
-  prGeneratePieces,
-} from "./productionRequests";
-
-// Phase 2 · Block 3 — Physical Piece domain
-export {
-  pieceAssignKarigar,
-  pieceRemoveKarigar,
-  recordRework,
-  completeRejectPiece,
-  createManualReplacementPiece,
-  recordPieceMovement,
-} from "./pieces";
-
-// Phase 2 · Block 4 — Karigar + Labour domain
-export {
-  labourStart,
-  labourStop,
-} from "./labour";
-
-// Phase 3 · Block 5 — Guard QC domain
-export {
-  guardQcPerform,
-} from "./guardQc";
+// Staff accounts for the e-commerce back office (Owner / Dispatch / Accounts /
+// Analysis portals). LUXARDO FLOW production callables (designs, PRs, pieces,
+// labour, QC, tailor, store, karigars) now live ONLY in the separate
+// luxardo-flow repo and Firebase project.
+export { nextId, staffCreate, staffUpdate, staffChangePassword, userProfileSelfUpdate, mobileResetLookup, mobileResetSendOtp } from "./production";
