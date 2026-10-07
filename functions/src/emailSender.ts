@@ -2,13 +2,26 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { Resend } from "resend";
 
-const resendApiKey = defineSecret("RESEND_API_KEY");
+export const resendApiKey = defineSecret("RESEND_API_KEY");
 
 const FROM_EMAIL = "LUXARDO FASHION <orders@luxardofashion.com>";
 const ADMIN_EMAIL = "connect@luxardofashion.com";
 const BRAND_NAME = "LUXARDO FASHION";
 const SITE_URL = "https://luxardofashion.com";
 const SUPPORT_WHATSAPP = "+91 96640 40699";
+
+/** Orders store the address as shippingAddress (addressLine1/postalCode);
+ * older docs used address (line1). Normalise for the email templates. */
+function addr(order: any) {
+  const a = order.shippingAddress || order.address || {};
+  return {
+    fullName: a.fullName || order.userName || "",
+    line1: a.addressLine1 || a.line1 || "",
+    line2: a.addressLine2 || a.line2 || "",
+    city: a.city || "", state: a.state || "", postalCode: a.postalCode || "",
+    phone: a.phone || (order.customer && order.customer.phone) || "",
+  };
+}
 
 function formatINR(amount: number): string {
   return "INR " + Number(amount || 0).toLocaleString("en-IN");
@@ -17,7 +30,7 @@ function formatINR(amount: number): string {
 function customerOrderHtml(order: any): string {
   const items = (order.items || []).map((it: any) =>
     "<tr><td style=\"padding:8px;border-bottom:1px solid #eee\">" +
-    (it.name || "Product") +
+    (it.name || it.title || "Product") + (it.size && it.size !== "N/A" ? " (" + it.size + ")" : "") + " × " + (it.quantity || 1) +
     "</td><td style=\"padding:8px;border-bottom:1px solid #eee;text-align:right\">" +
     formatINR(it.price * (it.quantity || 1)) +
     "</td></tr>"
@@ -45,9 +58,9 @@ function customerOrderHtml(order: any): string {
     "</table>" +
     "<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f8f8f5;padding:20px;margin:20px 0\"><tr><td>" +
     "<p style=\"margin:0 0 10px;color:#666;font-size:12px;text-transform:uppercase;letter-spacing:2px\">Delivery Address</p>" +
-    "<p style=\"margin:0;color:#000;line-height:1.6\">" + ((order.address && order.address.fullName) || order.userName || "") + "<br>" +
-    ((order.address && order.address.line1) || "") + "<br>" +
-    ((order.address && order.address.city) || "") + ", " + ((order.address && order.address.state) || "") + " " + ((order.address && order.address.postalCode) || "") +
+    "<p style=\"margin:0;color:#000;line-height:1.6\">" + addr(order).fullName + "<br>" +
+    addr(order).line1 + (addr(order).line2 ? ", " + addr(order).line2 : "") + "<br>" +
+    addr(order).city + ", " + addr(order).state + " " + addr(order).postalCode +
     "</p></td></tr></table>" +
     "<p style=\"text-align:center;margin:30px 0\">" +
     "<a href=\"" + SITE_URL + "/track-order/" + (order.id || "") + "\" style=\"display:inline-block;background:#000;color:#fff;padding:14px 32px;text-decoration:none;letter-spacing:3px;font-size:12px;text-transform:uppercase\">Track Order</a></p>" +
@@ -60,49 +73,58 @@ function adminAlertHtml(order: any): string {
     "<h2>New Order Received</h2>" +
     "<p><strong>Order ID:</strong> " + (order.id || "ORD-XXXX") + "</p>" +
     "<p><strong>Customer:</strong> " + (order.userName || "N/A") + " (" + (order.userEmail || "N/A") + ")</p>" +
-    "<p><strong>Phone:</strong> " + ((order.address && order.address.phone) || "N/A") + "</p>" +
+    "<p><strong>Phone:</strong> " + (addr(order).phone || "N/A") + "</p>" +
     "<p><strong>Total:</strong> " + formatINR(order.totalAmount || 0) + "</p>" +
-    "<p><strong>Payment:</strong> " + (order.paymentMethod || "COD") + "</p>" +
+    "<p><strong>Payment:</strong> " + (order.paymentMethod || "COD") + " · " + (order.paymentStatus || "pending") + "</p>" +
     "<p><strong>Status:</strong> " + (order.status || "pending") + "</p>" +
-    "<p><strong>Address:</strong> " + ((order.address && order.address.line1) || "") + ", " +
-    ((order.address && order.address.city) || "") + ", " + ((order.address && order.address.postalCode) || "") + "</p>" +
+    "<p><strong>Address:</strong> " + addr(order).line1 + ", " + addr(order).city + ", " + addr(order).postalCode + "</p>" +
     "<p>Action: <a href=\"" + SITE_URL + "/admin/dispatch\">/admin/dispatch</a></p>" +
     "</body></html>";
 }
 
-export const sendOrderEmail = onDocumentCreated(
-  {
-    document: "orders/{orderId}",
-    secrets: [resendApiKey],
-    region: "us-central1",
-  },
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const order: any = { id: event.params.orderId, ...snap.data() };
-    
+/**
+ * Send customer confirmation + admin alert for an order. Called by the
+ * checkout callables / webhook exactly once, after the order is confirmed
+ * (COD placed, or online payment verified). Never throws.
+ */
+export async function sendOrderEmails(order: any): Promise<void> {
+  if (process.env.FUNCTIONS_EMULATOR === "true" && !process.env.RESEND_LIVE) {
+    console.log("[emulator] would send order emails for", order.id, order.userEmail);
+    return;
+  }
+  try {
     const resend = new Resend(resendApiKey.value());
-    
-    try {
-      if (order.userEmail) {
-        await resend.emails.send({
-          from: FROM_EMAIL,
-          to: order.userEmail,
-          subject: "Order Confirmed - " + BRAND_NAME + " #" + order.id,
-          html: customerOrderHtml(order),
-        });
-        console.log("Customer email sent to", order.userEmail);
-      }
-      
+    if (order.userEmail) {
       await resend.emails.send({
         from: FROM_EMAIL,
-        to: ADMIN_EMAIL,
-        subject: "New Order " + order.id + " - " + formatINR(order.totalAmount || 0),
-        html: adminAlertHtml(order),
+        to: order.userEmail,
+        subject: "Order Confirmed - " + BRAND_NAME + " #" + order.id,
+        html: customerOrderHtml(order),
       });
-      console.log("Admin alert sent to", ADMIN_EMAIL);
-    } catch (err) {
-      console.error("Email send error:", err);
     }
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: ADMIN_EMAIL,
+      subject: "New Order " + order.id + " - " + formatINR(order.totalAmount || 0) + " (" + (order.paymentMethod || "") + ")",
+      html: adminAlertHtml(order),
+    });
+  } catch (err) {
+    console.error("Email send error:", err);
+  }
+}
+
+/**
+ * Legacy trigger kept (same name/type) so deploys don't need to delete it.
+ * Orders are now created only by the checkout callables, which send emails
+ * themselves after confirmation — so this does nothing for them. Without
+ * this guard it would email "Order Confirmed" for unpaid pending_payment
+ * orders.
+ */
+export const sendOrderEmail = onDocumentCreated(
+  { document: "orders/{orderId}", region: "us-central1" },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data || data.serverCreated) return;
+    console.warn("sendOrderEmail: ignoring non-server order", event.params.orderId);
   }
 );

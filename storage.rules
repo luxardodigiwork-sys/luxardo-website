@@ -5,7 +5,7 @@ service firebase.storage {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.uid == '0Frc6Dy2MqN0zc0UFkmqvpELFnr1' ||
-        request.auth.token.admin == true ||
+        request.auth.token.get('admin', false) == true ||
         request.auth.token.email == 'luxardodigiwork@gmail.com'
       );
     }

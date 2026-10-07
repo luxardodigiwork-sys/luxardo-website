@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { collection, addDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { signInAnonymously } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { httpsCallable, getFunctions } from "firebase/functions";
@@ -137,59 +137,47 @@ export default function CheckoutPage() {
     return Object.keys(errors).length === 0;
   };
 
-  const buildOrderPayload = (currentUser: any, paymentStatusOverride?: string, razorpayMeta?: any) => {
-    const orderItems = cartItems.map((item) => ({
-      productId: item.product.id,
-      title: item.product.name || "Product",
-      quantity: item.quantity,
-      size: item.size || "N/A",
-      price: item.product.price,
-      subtotal: item.product.price * item.quantity,
-    }));
+  /* Server-authoritative checkout: the browser sends only product ids,
+   * sizes, quantities and the address. Prices, totals and the order document
+   * are created by Cloud Functions (functions/src/checkout.ts). */
+  const functions = getFunctions(undefined, "us-central1");
 
-    return {
-      userId: currentUser.uid,
-      userEmail: currentUser.email || form.email.trim().toLowerCase(),
-      userName: form.fullName.trim(),
-      createdAt: new Date().toISOString(),
-      totalAmount: cartSubtotal,
-      status: "pending",
-      paymentStatus: paymentStatusOverride || (paymentMethod === "cod" ? "pending" : "pending"),
-      paymentMethod: paymentMethod === "cod" ? "COD" : "razorpay",
-      ...(razorpayMeta && { razorpay: razorpayMeta }),
-      items: orderItems,
-      customer: {
-        fullName: form.fullName.trim(),
-        email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim(),
-      },
-      shippingAddress: {
-        fullName: form.fullName.trim(),
-        email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim(),
-        addressLine1: form.addressLine1.trim(),
-        addressLine2: form.addressLine2.trim(),
-        city: form.city.trim(),
-        state: form.state,
-        postalCode: form.postalCode.trim(),
-        country: "India",
-      },
-      courierPartner: "DTDC",
-      trackingId: null,
-    };
-  };
+  const cartLines = () => cartItems.map((item) => ({
+    productId: item.product.id,
+    size: item.size || "N/A",
+    quantity: item.quantity,
+  }));
 
-  const handleCODOrder = async (currentUser: any) => {
-    const orderData = buildOrderPayload(currentUser);
-    const docRef = await addDoc(collection(db, "orders"), orderData);
+  const addressPayload = () => ({
+    fullName: form.fullName.trim(),
+    email: form.email.trim().toLowerCase(),
+    phone: form.phone.trim(),
+    addressLine1: form.addressLine1.trim(),
+    addressLine2: form.addressLine2.trim(),
+    city: form.city.trim(),
+    state: form.state,
+    postalCode: form.postalCode.trim(),
+  });
+
+  const goToConfirmation = async (orderId: string) => {
+    let order: any = { id: orderId };
+    try {
+      const snap = await getDoc(doc(db, "orders", orderId));
+      if (snap.exists()) order = { id: orderId, ...snap.data() };
+    } catch (e) {
+      console.warn("Could not load order for confirmation page", e);
+    }
     clearCart();
-    navigate("/order-confirmation", {
-      replace: true,
-      state: { order: { id: docRef.id, ...orderData } },
-    });
+    navigate("/order-confirmation", { replace: true, state: { order } });
   };
 
-  const handleRazorpayOrder = async (currentUser: any) => {
+  const handleCODOrder = async () => {
+    const createCod = httpsCallable(functions, "createCodOrder");
+    const res: any = await createCod({ items: cartLines(), address: addressPayload() });
+    await goToConfirmation(res.data.orderId);
+  };
+
+  const handleRazorpayOrder = async () => {
     const keyId = import.meta.env.VITE_RAZORPAY_KEY_ID;
     if (!keyId) {
       throw new Error("Razorpay not configured. Set VITE_RAZORPAY_KEY_ID in .env and rebuild.");
@@ -199,24 +187,18 @@ export default function CheckoutPage() {
       throw new Error("Razorpay SDK failed to load. Check your network and try again.");
     }
 
-    // 1. Create order on Cloud Function (server creates Razorpay order with key_secret)
-    const functions = getFunctions(undefined, "us-central1");
+    // 1. Server prices the cart, creates the Razorpay order and our order doc.
     const createOrder = httpsCallable(functions, "createRazorpayOrder");
-    const result: any = await createOrder({
-      amount: Math.round(cartSubtotal * 100), // paise
-      currency: "INR",
-      receipt: `LXF-${Date.now()}-${currentUser.uid.substring(0, 6)}`,
-      notes: { email: form.email, phone: form.phone },
-    });
-    const { razorpayOrderId } = result.data;
-    if (!razorpayOrderId) throw new Error("Failed to create Razorpay order");
+    const result: any = await createOrder({ items: cartLines(), address: addressPayload() });
+    const { orderId, razorpayOrderId, amount, currency } = result.data || {};
+    if (!orderId || !razorpayOrderId) throw new Error("Failed to start payment");
 
-    // 2. Open Razorpay Checkout
+    // 2. Open Razorpay Checkout for the SERVER amount.
     return new Promise<void>((resolve, reject) => {
       const rzp = new (window as any).Razorpay({
         key: keyId,
-        amount: Math.round(cartSubtotal * 100),
-        currency: "INR",
+        amount,
+        currency: currency || "INR",
         name: BUSINESS_CONFIG.brandName,
         description: `Order — ${cartItems.length} item${cartItems.length > 1 ? "s" : ""}`,
         order_id: razorpayOrderId,
@@ -225,33 +207,22 @@ export default function CheckoutPage() {
           email: form.email,
           contact: form.phone,
         },
+        notes: { orderId },
         theme: { color: "#000000" },
         handler: async (response: any) => {
           try {
-            // 3. Verify signature on server
+            // 3. Server verifies the signature and marks the order paid.
             const verifyFn = httpsCallable(functions, "verifyRazorpayPayment");
             const verifyRes: any = await verifyFn({
+              orderId,
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
             });
             if (!verifyRes.data?.verified) {
-              return reject(new Error("Payment verification failed"));
+              return reject(new Error("Payment verification failed. If money was deducted, it will be confirmed automatically or refunded — contact us on WhatsApp."));
             }
-
-            // 4. Create Firestore order with paymentStatus=paid + razorpay metadata
-            const orderData = buildOrderPayload(currentUser, "paid", {
-              orderId: response.razorpay_order_id,
-              paymentId: response.razorpay_payment_id,
-              signature: response.razorpay_signature,
-              paidAt: new Date().toISOString(),
-            });
-            const docRef = await addDoc(collection(db, "orders"), orderData);
-            clearCart();
-            navigate("/order-confirmation", {
-              replace: true,
-              state: { order: { id: docRef.id, ...orderData } },
-            });
+            await goToConfirmation(orderId);
             resolve();
           } catch (err) {
             reject(err);
@@ -293,17 +264,20 @@ export default function CheckoutPage() {
         const anonResult = await signInAnonymously(auth);
         currentUser = anonResult.user;
       }
+      if (!currentUser) throw new Error("Could not start checkout. Please refresh.");
       if (paymentMethod === "cod") {
-        await handleCODOrder(currentUser);
+        await handleCODOrder();
       } else {
-        await handleRazorpayOrder(currentUser);
+        await handleRazorpayOrder();
       }
     } catch (err: any) {
       console.error("Order error:", err);
       if (err?.code === "permission-denied") {
         setError("Permission denied. Please refresh and try again.");
       } else {
-        setError("Order failed: " + (err?.message || "Unknown error"));
+        if (err?.message !== "Payment dismissed by user") {
+          setError("Order failed: " + (err?.message || "Unknown error"));
+        }
       }
       setIsSubmitting(false);
     }

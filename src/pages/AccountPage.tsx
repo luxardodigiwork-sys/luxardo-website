@@ -103,7 +103,9 @@ export default function AccountPage() {
             (b.createdAt || '').localeCompare(a.createdAt || '')
         );
 
-        setOrders(fetched);
+        // Hide online-payment attempts that were never paid (customer closed
+        // the Razorpay window). They stay visible to admins.
+        setOrders(fetched.filter((o: any) => !o.awaitingPayment));
 
         const addrs: any[] = [];
         const seen = new Set();

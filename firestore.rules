@@ -4,7 +4,7 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null && (
         request.auth.uid == '0Frc6Dy2MqN0zc0UFkmqvpELFnr1' ||
-        request.auth.token.admin == true ||
+        request.auth.token.get('admin', false) == true ||
         (exists(/databases/$(database)/documents/customers/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/customers/$(request.auth.uid)).data.role in ['admin', 'super_admin'])
       );
@@ -41,7 +41,9 @@ service cloud.firestore {
     }
     match /orders/{id} {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // Orders are created ONLY by Cloud Functions (functions/src/checkout.ts),
+      // which price the cart from Firestore. Clients can never create or edit
+      // an order (no client-side price or paymentStatus).
       allow read, update, delete: if isAdmin();
     }
     match /carts/{userId} {

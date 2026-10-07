@@ -1,109 +1,22 @@
 /* eslint-disable */
-import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
+import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { setGlobalOptions } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
-import Razorpay from "razorpay";
 
 admin.initializeApp();
 
 setGlobalOptions({ region: "us-central1", maxInstances: 10 });
 
 // Razorpay secrets (set via: firebase functions:secrets:set RAZORPAY_KEY_SECRET)
-const RAZORPAY_KEY_ID = defineSecret("RAZORPAY_KEY_ID");
-const RAZORPAY_KEY_SECRET = defineSecret("RAZORPAY_KEY_SECRET");
 const RAZORPAY_WEBHOOK_SECRET = defineSecret("RAZORPAY_WEBHOOK_SECRET");
 
-/* ──────────────────────────────────────────────────────────────
- * createRazorpayOrder (callable)
- * Frontend calls: httpsCallable(functions, "createRazorpayOrder")
- * Input : { amount, currency, receipt, notes }
- * Output: { razorpayOrderId, amount, currency }
- * ─────────────────────────────────────────────────────────────*/
-export const createRazorpayOrder = onCall(
-  { secrets: [RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET] },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Sign in (or anonymous auth) required.");
-    }
-
-    const { amount, currency = "INR", receipt, notes } = request.data as any;
-
-    if (!amount || typeof amount !== "number" || amount <= 0) {
-      throw new HttpsError("invalid-argument", "Valid amount (in paise) required.");
-    }
-    if (amount < 100) {
-      throw new HttpsError("invalid-argument", "Amount must be at least ₹1 (100 paise).");
-    }
-
-    const keyId = RAZORPAY_KEY_ID.value();
-    const keySecret = RAZORPAY_KEY_SECRET.value();
-    if (!keyId || !keySecret) {
-      throw new HttpsError("failed-precondition", "Razorpay secrets not configured on server.");
-    }
-
-    try {
-      const rzp = new Razorpay({ key_id: keyId, key_secret: keySecret });
-      const order = await rzp.orders.create({
-        amount: Math.round(amount), // already in paise from client
-        currency,
-        receipt: receipt || `LXF-${request.auth.uid}-${Date.now()}`,
-        notes: notes || {},
-      });
-
-      return {
-        razorpayOrderId: order.id,
-        amount: order.amount,
-        currency: order.currency,
-      };
-    } catch (err: any) {
-      console.error("createRazorpayOrder failed:", err);
-      throw new HttpsError("internal", err?.error?.description || err?.message || "Razorpay order failed");
-    }
-  }
-);
-
-/* ──────────────────────────────────────────────────────────────
- * verifyRazorpayPayment (callable)
- * Frontend calls after Razorpay checkout success.
- * Input : { razorpay_order_id, razorpay_payment_id, razorpay_signature }
- * Output: { verified: boolean }
- * ─────────────────────────────────────────────────────────────*/
-export const verifyRazorpayPayment = onCall(
-  { secrets: [RAZORPAY_KEY_SECRET] },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Auth required.");
-    }
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = request.data as any;
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      throw new HttpsError("invalid-argument", "Missing payment fields.");
-    }
-
-    const keySecret = RAZORPAY_KEY_SECRET.value();
-    const expected = crypto
-      .createHmac("sha256", keySecret)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      .digest("hex");
-
-    let verified = false;
-    try {
-      verified = crypto.timingSafeEqual(
-        Buffer.from(expected, "hex"),
-        Buffer.from(razorpay_signature, "hex")
-      );
-    } catch {
-      verified = false;
-    }
-
-    if (!verified) {
-      console.error("Razorpay signature mismatch", { razorpay_order_id, razorpay_payment_id });
-    }
-
-    return { verified };
-  }
-);
+// Server-authoritative checkout (prices from Firestore, orders created
+// server-side, paid only after signature verification) — see checkout.ts.
+export { createRazorpayOrder, verifyRazorpayPayment, createCodOrder } from "./checkout";
+import { markOrderPaid } from "./checkout";
+import { resendApiKey } from "./emailSender";
 
 /* ──────────────────────────────────────────────────────────────
  * razorpayWebhook (HTTP)
@@ -111,7 +24,7 @@ export const verifyRazorpayPayment = onCall(
  * Updates Firestore order on payment.captured / order.paid
  * ─────────────────────────────────────────────────────────────*/
 export const razorpayWebhook = onRequest(
-  { secrets: [RAZORPAY_WEBHOOK_SECRET] },
+  { secrets: [RAZORPAY_WEBHOOK_SECRET, resendApiKey] },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
@@ -160,11 +73,9 @@ export const razorpayWebhook = onRequest(
           return;
         }
 
-        await snapshot.docs[0].ref.update({
-          paymentStatus: "paid",
-          "razorpay.paymentId": paymentId,
-          "razorpay.verifiedAt": admin.firestore.FieldValue.serverTimestamp(),
-        });
+        // Confirms the order even if the customer's browser closed after
+        // paying. Idempotent with verifyRazorpayPayment (paid once only).
+        await markOrderPaid(snapshot.docs[0].ref, razorpayOrderId, paymentId, "webhook");
       }
 
       res.status(200).json({ status: "ok" });
