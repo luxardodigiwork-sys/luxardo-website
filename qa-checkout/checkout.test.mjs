@@ -9,7 +9,7 @@ import { getAuth, connectAuthEmulator, signInAnonymously } from 'firebase/auth';
 import { getFunctions, connectFunctionsEmulator, httpsCallable } from 'firebase/functions';
 import { getFirestore, connectFirestoreEmulator, doc, getDoc, addDoc, collection, updateDoc } from 'firebase/firestore';
 const require = createRequire(import.meta.url);
-process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8280';
+process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
 const admin = require(require.resolve('firebase-admin', { paths: [path.resolve('../functions')] }));
 admin.initializeApp({ projectId: 'demo-luxardo-b2c' });
 const adb = admin.firestore();
@@ -19,10 +19,10 @@ const ok = (c, m) => { c ? pass++ : fail++; console.log(c ? 'PASS' : 'FAIL', m);
 const rejects = async (p, re, m) => { try { await p; ok(false, m + ' (no error)'); } catch (e) { ok(re.test(e.message), m + ' -> ' + e.message); } };
 async function customer() {
   const app = initializeApp({ apiKey: 'demo', projectId: 'demo-luxardo-b2c', authDomain: 'x' }, 'c' + (n++));
-  const a = getAuth(app); connectAuthEmulator(a, 'http://127.0.0.1:9499', { disableWarnings: true });
+  const a = getAuth(app); connectAuthEmulator(a, 'http://127.0.0.1:9099', { disableWarnings: true });
   const u = (await signInAnonymously(a)).user;
-  const f = getFunctions(app, 'us-central1'); connectFunctionsEmulator(f, '127.0.0.1', 5101);
-  const db = getFirestore(app); connectFirestoreEmulator(db, '127.0.0.1', 8280);
+  const f = getFunctions(app, 'us-central1'); connectFunctionsEmulator(f, '127.0.0.1', 5001);
+  const db = getFirestore(app); connectFirestoreEmulator(db, '127.0.0.1', 8080);
   return { uid: u.uid, db, call: (name, d) => httpsCallable(f, name)(d).then(r => r.data) };
 }
 const sig = (o, p) => crypto.createHmac('sha256', SECRET).update(`${o}|${p}`).digest('hex');
@@ -62,9 +62,9 @@ ok((await adb.doc('products/P1').get()).data().stock === 3, 'repeat verify does 
 // 7. webhook confirms when browser closed
 const r3 = await B.call('createRazorpayOrder', { items: [{ productId: 'P1', quantity: 1 }], address });
 const body = JSON.stringify({ event: 'payment.captured', payload: { payment: { entity: { id: 'pay_wh', order_id: r3.razorpayOrderId } } } });
-const whBad = await fetch('http://127.0.0.1:5101/demo-luxardo-b2c/us-central1/razorpayWebhook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-razorpay-signature': 'nope' }, body });
+const whBad = await fetch('http://127.0.0.1:5001/demo-luxardo-b2c/us-central1/razorpayWebhook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-razorpay-signature': 'nope' }, body });
 ok(whBad.status === 400, 'webhook with bad signature rejected');
-const wh = await fetch('http://127.0.0.1:5101/demo-luxardo-b2c/us-central1/razorpayWebhook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-razorpay-signature': crypto.createHmac('sha256', WH).update(body).digest('hex') }, body });
+const wh = await fetch('http://127.0.0.1:5001/demo-luxardo-b2c/us-central1/razorpayWebhook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-razorpay-signature': crypto.createHmac('sha256', WH).update(body).digest('hex') }, body });
 o = (await adb.doc(`orders/${r3.orderId}`).get()).data();
 ok(wh.status === 200 && o.paymentStatus === 'paid' && o.razorpay.verifiedBy === 'webhook', 'webhook marks order paid without browser');
 // 8. stock and availability
