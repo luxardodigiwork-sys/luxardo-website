@@ -36,31 +36,31 @@ const A = await customer(), B = await customer();
 // 1. client cannot create orders (price tampering / fake paid)
 await rejects(addDoc(collection(A.db, 'orders'), { userId: A.uid, totalAmount: 1, paymentStatus: 'paid', items: [] }), /permission/i, 'client cannot write a fake paid order');
 // 2. server prices the cart — any client-sent price/amount ignored
-const r = await A.call('createRazorpayOrder', { items: [{ productId: 'P1', size: 'M', quantity: 2, price: 1 }, { productId: 'P2', quantity: 1 }], address, amount: 100 });
+const r = await A.call('createRazorpayOrderV2', { items: [{ productId: 'P1', size: 'M', quantity: 2, price: 1 }, { productId: 'P2', quantity: 1 }], address, amount: 100 });
 ok(r.amount === (15000 * 2 + 4500) * 100, `server amount = 34500 INR in paise (${r.amount})`);
 let o = (await adb.doc(`orders/${r.orderId}`).get()).data();
 ok(o.paymentStatus === 'pending' && o.awaitingPayment === true && o.totalAmount === 34500, 'order created server-side, unpaid');
 ok(o.items[0].price === 15000 && o.items[0].title === 'Navy Bandhgala Fabric', 'line price from Firestore');
 await rejects(updateDoc(doc(A.db, 'orders', r.orderId), { paymentStatus: 'paid' }), /permission/i, 'client cannot mark own order paid');
 // 3. bad signature
-const bad = await A.call('verifyRazorpayPayment', { orderId: r.orderId, razorpay_order_id: r.razorpayOrderId, razorpay_payment_id: 'pay_1', razorpay_signature: 'ab'.repeat(32) });
+const bad = await A.call('verifyRazorpayPaymentV2', { orderId: r.orderId, razorpay_order_id: r.razorpayOrderId, razorpay_payment_id: 'pay_1', razorpay_signature: 'ab'.repeat(32) });
 ok(bad.verified === false, 'forged signature rejected');
 ok((await adb.doc(`orders/${r.orderId}`).get()).data().paymentStatus === 'pending', 'order still unpaid after forged signature');
 // 4. other user cannot confirm A's order
-await rejects(B.call('verifyRazorpayPayment', { orderId: r.orderId, razorpay_order_id: r.razorpayOrderId, razorpay_payment_id: 'pay_1', razorpay_signature: sig(r.razorpayOrderId, 'pay_1') }), /not found for this user/, "another customer cannot confirm someone else's order");
+await rejects(B.call('verifyRazorpayPaymentV2', { orderId: r.orderId, razorpay_order_id: r.razorpayOrderId, razorpay_payment_id: 'pay_1', razorpay_signature: sig(r.razorpayOrderId, 'pay_1') }), /not found for this user/, "another customer cannot confirm someone else's order");
 // 5. signature for a different razorpay order cannot pay this order
-const r2 = await A.call('createRazorpayOrder', { items: [{ productId: 'P2', quantity: 1 }], address });
-await rejects(A.call('verifyRazorpayPayment', { orderId: r.orderId, razorpay_order_id: r2.razorpayOrderId, razorpay_payment_id: 'pay_x', razorpay_signature: sig(r2.razorpayOrderId, 'pay_x') }), /does not belong/, 'cheap order payment cannot confirm an expensive order');
+const r2 = await A.call('createRazorpayOrderV2', { items: [{ productId: 'P2', quantity: 1 }], address });
+await rejects(A.call('verifyRazorpayPaymentV2', { orderId: r.orderId, razorpay_order_id: r2.razorpayOrderId, razorpay_payment_id: 'pay_x', razorpay_signature: sig(r2.razorpayOrderId, 'pay_x') }), /does not belong/, 'cheap order payment cannot confirm an expensive order');
 // 6. valid payment
-const good = await A.call('verifyRazorpayPayment', { orderId: r.orderId, razorpay_order_id: r.razorpayOrderId, razorpay_payment_id: 'pay_1', razorpay_signature: sig(r.razorpayOrderId, 'pay_1') });
+const good = await A.call('verifyRazorpayPaymentV2', { orderId: r.orderId, razorpay_order_id: r.razorpayOrderId, razorpay_payment_id: 'pay_1', razorpay_signature: sig(r.razorpayOrderId, 'pay_1') });
 o = (await adb.doc(`orders/${r.orderId}`).get()).data();
 ok(good.verified && o.paymentStatus === 'paid' && o.status === 'processing' && o.razorpay.paymentId === 'pay_1', 'valid payment marks order paid/processing');
 ok((await adb.doc('products/P1').get()).data().stock === 3, 'stock 5 -> 3 after paid order');
 ok((await getDoc(doc(A.db, 'orders', r.orderId))).data().totalAmount === 34500, 'customer can read own order');
-await A.call('verifyRazorpayPayment', { orderId: r.orderId, razorpay_order_id: r.razorpayOrderId, razorpay_payment_id: 'pay_1', razorpay_signature: sig(r.razorpayOrderId, 'pay_1') });
+await A.call('verifyRazorpayPaymentV2', { orderId: r.orderId, razorpay_order_id: r.razorpayOrderId, razorpay_payment_id: 'pay_1', razorpay_signature: sig(r.razorpayOrderId, 'pay_1') });
 ok((await adb.doc('products/P1').get()).data().stock === 3, 'repeat verify does not decrement stock twice');
 // 7. webhook confirms when browser closed
-const r3 = await B.call('createRazorpayOrder', { items: [{ productId: 'P1', quantity: 1 }], address });
+const r3 = await B.call('createRazorpayOrderV2', { items: [{ productId: 'P1', quantity: 1 }], address });
 const body = JSON.stringify({ event: 'payment.captured', payload: { payment: { entity: { id: 'pay_wh', order_id: r3.razorpayOrderId } } } });
 const whBad = await fetch('http://127.0.0.1:5001/demo-luxardo-b2c/us-central1/razorpayWebhook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-razorpay-signature': 'nope' }, body });
 ok(whBad.status === 400, 'webhook with bad signature rejected');
@@ -68,9 +68,9 @@ const wh = await fetch('http://127.0.0.1:5001/demo-luxardo-b2c/us-central1/razor
 o = (await adb.doc(`orders/${r3.orderId}`).get()).data();
 ok(wh.status === 200 && o.paymentStatus === 'paid' && o.razorpay.verifiedBy === 'webhook', 'webhook marks order paid without browser');
 // 8. stock and availability
-await rejects(A.call('createRazorpayOrder', { items: [{ productId: 'P1', quantity: 9 }], address }), /Only 2 left/, 'cannot order more than stock');
-await rejects(A.call('createRazorpayOrder', { items: [{ productId: 'HIDDEN', quantity: 1 }], address }), /no longer available/, 'hidden product cannot be ordered');
-await rejects(A.call('createRazorpayOrder', { items: [{ productId: 'P2', quantity: 1 }], address: { ...address, postalCode: '12' } }), /pincode/, 'invalid pincode rejected');
+await rejects(A.call('createRazorpayOrderV2', { items: [{ productId: 'P1', quantity: 9 }], address }), /Only 2 left/, 'cannot order more than stock');
+await rejects(A.call('createRazorpayOrderV2', { items: [{ productId: 'HIDDEN', quantity: 1 }], address }), /no longer available/, 'hidden product cannot be ordered');
+await rejects(A.call('createRazorpayOrderV2', { items: [{ productId: 'P2', quantity: 1 }], address: { ...address, postalCode: '12' } }), /pincode/, 'invalid pincode rejected');
 // 9. COD
 await rejects(A.call('createCodOrder', { items: [{ productId: 'P2', quantity: 1 }], address: { ...address, postalCode: '110001' } }), /not available for this pincode/, 'COD blocked outside COD pincodes');
 const cod = await A.call('createCodOrder', { items: [{ productId: 'P2', quantity: 2, price: 1 }], address });

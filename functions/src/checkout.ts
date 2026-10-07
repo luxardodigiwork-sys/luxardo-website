@@ -189,7 +189,7 @@ export async function markOrderPaid(orderRef: admin.firestore.DocumentReference,
  * Input : { items: [{productId, size, quantity}], address: {...} }
  * Output: { orderId, razorpayOrderId, amount, currency }
  * ═══════════════════════════════════════════════════════════════════ */
-export const createRazorpayOrder = onCall(
+export const createRazorpayOrderV2 = onCall(
   { secrets: [RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET] },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in (or guest checkout) required.");
@@ -235,7 +235,7 @@ export const createRazorpayOrder = onCall(
  * Input : { orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature }
  * Output: { verified, orderId }
  * ═══════════════════════════════════════════════════════════════════ */
-export const verifyRazorpayPayment = onCall(
+export const verifyRazorpayPaymentV2 = onCall(
   { secrets: [RAZORPAY_KEY_SECRET, resendApiKey] },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");

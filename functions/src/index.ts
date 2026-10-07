@@ -14,7 +14,10 @@ const RAZORPAY_WEBHOOK_SECRET = defineSecret("RAZORPAY_WEBHOOK_SECRET");
 
 // Server-authoritative checkout (prices from Firestore, orders created
 // server-side, paid only after signature verification) — see checkout.ts.
-export { createRazorpayOrder, verifyRazorpayPayment, createCodOrder } from "./checkout";
+// V2 names so they can be deployed alongside the old createRazorpayOrder /
+// verifyRazorpayPayment that the currently-live site still calls; the old
+// ones can be deleted after the new site is live.
+export { createRazorpayOrderV2, verifyRazorpayPaymentV2, createCodOrder } from "./checkout";
 import { markOrderPaid } from "./checkout";
 import { resendApiKey } from "./emailSender";
 

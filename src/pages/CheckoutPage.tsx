@@ -188,7 +188,7 @@ export default function CheckoutPage() {
     }
 
     // 1. Server prices the cart, creates the Razorpay order and our order doc.
-    const createOrder = httpsCallable(functions, "createRazorpayOrder");
+    const createOrder = httpsCallable(functions, "createRazorpayOrderV2");
     const result: any = await createOrder({ items: cartLines(), address: addressPayload() });
     const { orderId, razorpayOrderId, amount, currency } = result.data || {};
     if (!orderId || !razorpayOrderId) throw new Error("Failed to start payment");
@@ -212,7 +212,7 @@ export default function CheckoutPage() {
         handler: async (response: any) => {
           try {
             // 3. Server verifies the signature and marks the order paid.
-            const verifyFn = httpsCallable(functions, "verifyRazorpayPayment");
+            const verifyFn = httpsCallable(functions, "verifyRazorpayPaymentV2");
             const verifyRes: any = await verifyFn({
               orderId,
               razorpay_order_id: response.razorpay_order_id,

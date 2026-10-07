@@ -42,10 +42,12 @@ const saveCartToStorage = async (items: CartItem[]) => {
       size: item.size,
     }));
     
-    if (auth.currentUser) {
+    // Always keep a local copy: the cart is read on page load before Firebase
+    // Auth has restored the session, so a Firebase-only cart (any signed-in
+    // or anonymous-after-checkout user) used to come back empty on reload.
+    localStorage.setItem('LUXARDO FASHION_cart', JSON.stringify(minimal));
+    if (auth.currentUser && !auth.currentUser.isAnonymous) {
       await firebaseStorage.saveCart(items);
-    } else {
-      localStorage.setItem('LUXARDO FASHION_cart', JSON.stringify(minimal));
     }
   } catch (e) {
     console.error('Cart save failed:', e);
@@ -63,8 +65,11 @@ const saveCartToStorage = async (items: CartItem[]) => {
 // Restore full product objects from saved IDs
 const loadCartFromStorage = async (): Promise<CartItem[]> => {
   try {
-    // Try Firebase first if user is logged in
-    if (auth.currentUser) {
+    // Local copy first (always written on save, available before auth is
+    // ready); Firebase only when there is no local cart.
+    const localRaw = localStorage.getItem('LUXARDO FASHION_cart');
+    const hasLocal = !!localRaw && localRaw !== '[]';
+    if (!hasLocal && auth.currentUser) {
       const cartData = await firebaseStorage.getCart();
       if (cartData) {
         const allProducts = storage.getProducts();
