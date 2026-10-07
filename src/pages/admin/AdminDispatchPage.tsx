@@ -244,9 +244,16 @@ export default function AdminDispatchPage() {
                             <Lock size={14} />
                             <span className="text-[10px] font-bold uppercase tracking-widest">Locked</span>
                           </div>
-                          <p className="text-[9px] text-brand-secondary italic">Awaiting Accounts Approval</p>
+                          <p className="text-[9px] text-brand-secondary italic">
+                            {(order as any).awaitingPayment
+                              ? 'Online payment NOT completed — do not ship'
+                              : (order as any).paymentMethod === 'COD' ? 'Cash on Delivery' : 'Awaiting Accounts Approval'}
+                          </p>
                         </div>
                       )}
+                      <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-brand-secondary">
+                        {(order as any).paymentMethod === 'COD' ? 'COD' : 'Online'} · ₹{Number(order.totalAmount || 0).toLocaleString('en-IN')}
+                      </p>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded ${getStatusColor(order.status)}`}>

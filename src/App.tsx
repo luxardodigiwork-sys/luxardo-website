@@ -393,14 +393,10 @@ export default function App() {
               <Route path="policies/privacy" element={<PrivacyPolicyPage />} />
               <Route path="policies/terms" element={<TermsPage />} />
               <Route path="cart" element={<CartPage />} />
-              <Route
-                path="checkout"
-                element={
-                  <ProtectedRoute>
-                    <CheckoutPage />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Guest checkout: CheckoutPage signs the visitor in anonymously
+                  if needed, so buyers from a live stream don't have to create
+                  an account before paying. Logged-in users work as before. */}
+              <Route path="checkout" element={<CheckoutPage />} />
               <Route
                 path="order-confirmation"
                 element={<OrderConfirmationPage />}

@@ -78,7 +78,9 @@ export default function Layout() {
             if (country) setSelectedCountry(country);
           }
         } else {
-          // Show first visit modal
+          // First visit: India by default (we ship to India only).
+          const india = ALL_COUNTRIES.find(c => c.code === 'IN');
+          if (india) setSelectedCountry(india);
         }
         if (savedPrefs?.language) {
           setSelectedLanguage(savedPrefs.language as Language);
@@ -97,10 +99,9 @@ export default function Layout() {
         const savedLang = localStorage.getItem('LUXARDO FASHION_lang');
         const firstVisitCompleted = localStorage.getItem('LUXARDO FASHION_first_visit_completed');
         
-        if (savedCountry && firstVisitCompleted) {
-          const country = ALL_COUNTRIES.find(c => c.code === savedCountry);
-          if (country) setSelectedCountry(country);
-        }
+        const country = (savedCountry && firstVisitCompleted && ALL_COUNTRIES.find(c => c.code === savedCountry))
+          || ALL_COUNTRIES.find(c => c.code === 'IN');
+        if (country) setSelectedCountry(country);
         if (savedLang) {
           setSelectedLanguage(savedLang as Language);
         }

@@ -1,3 +1,4 @@
+import type { Product } from '../types';
 import React, { useState } from 'react';
 import { useOutletContext, Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Country } from '../types';
@@ -12,8 +13,7 @@ import {
   X,
   Info,
   Share2,
-  Bell,
-  Star
+  Bell
 } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
@@ -22,7 +22,35 @@ import { formatCurrency } from '../utils/currency';
 import { db, auth } from '../firebase';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
+/**
+ * Wrapper: products stream in from Firestore after first paint, so a direct
+ * link (e.g. shared from Instagram) used to render before the list arrived
+ * and crash on `products[0].image`. Wait for the product, and show a proper
+ * "not found" instead of silently showing a different product.
+ */
 export default function ProductPage() {
+  const { id } = useParams<{ id: string }>();
+  const { products, isLoading } = useProducts();
+  const product = products.find(p => p.id === id || p.slug === id);
+  if (!product) {
+    return (
+      <div className="section-padding min-h-[60vh] flex flex-col items-center justify-center text-center gap-4">
+        {isLoading ? (
+          <p className="text-brand-secondary">Loading…</p>
+        ) : (
+          <>
+            <h1 className="font-display text-3xl">Product not found</h1>
+            <p className="text-brand-secondary">This product may have been removed or the link is incorrect.</p>
+            <Link to="/collections" className="underline">Browse collections</Link>
+          </>
+        )}
+      </div>
+    );
+  }
+  return <ProductView key={product.id} product={product} />;
+}
+
+function ProductView({ product }: { product: Product }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -31,8 +59,6 @@ export default function ProductPage() {
   const { addToCart } = useCart();
   const { isLoggedIn } = useAuth();
   const { products } = useProducts();
-
-  const product = products.find(p => p.id === id) || products[0];
 
   const [openSection, setOpenSection] = useState<string | null>('description');
   const [isAdding, setIsAdding] = useState(false);
@@ -278,17 +304,10 @@ export default function ProductPage() {
                   {product.name}
                 </h1>
                 
-                {/* Social Proof (H9 Fix) */}
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="flex text-black">
-                    <Star className="w-4 h-4 fill-black" />
-                    <Star className="w-4 h-4 fill-black" />
-                    <Star className="w-4 h-4 fill-black" />
-                    <Star className="w-4 h-4 fill-black" />
-                    <Star className="w-4 h-4 fill-black" />
-                  </div>
-                  <span className="text-xs font-sans text-gray-500 underline decoration-1 underline-offset-4 cursor-pointer">128 Reviews</span>
-                </div>
+                {/* A hardcoded 5-star "128 Reviews" badge was shown on every
+                    product with no real reviews behind it — removed before
+                    launch (fake reviews mislead customers and break consumer
+                    e-commerce rules). Add back only with real review data. */}
 
                 <div className="pt-2">
                   <p className="text-2xl font-sans text-black">
