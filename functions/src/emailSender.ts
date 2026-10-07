@@ -114,17 +114,18 @@ export async function sendOrderEmails(order: any): Promise<void> {
 }
 
 /**
- * Legacy trigger kept (same name/type) so deploys don't need to delete it.
- * Orders are now created only by the checkout callables, which send emails
- * themselves after confirmation — so this does nothing for them. Without
- * this guard it would email "Order Confirmed" for unpaid pending_payment
- * orders.
+ * Legacy trigger (same name/type, so deploys never need to delete it).
+ * - Orders created by the new checkout callables (serverCreated: true) send
+ *   their own emails after confirmation, so this skips them — otherwise it
+ *   would email "Order Confirmed" for unpaid online attempts.
+ * - Orders created the old way (by the previous site version, still live
+ *   until the new site goes live) keep getting emails exactly as before.
  */
 export const sendOrderEmail = onDocumentCreated(
-  { document: "orders/{orderId}", region: "us-central1" },
+  { document: "orders/{orderId}", secrets: [resendApiKey], region: "us-central1" },
   async (event) => {
     const data = event.data?.data();
     if (!data || data.serverCreated) return;
-    console.warn("sendOrderEmail: ignoring non-server order", event.params.orderId);
+    await sendOrderEmails({ id: event.params.orderId, ...data });
   }
 );
