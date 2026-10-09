@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useOutletContext } from 'react-router-dom';
 import { SectionHeader } from '../components/SectionHeader';
-import { COLLECTIONS } from '../constants';
+import { useCategories, productInCategory } from '../context/CategoriesContext';
 import { ProductCard } from '../components/ProductCard';
 import { Country } from '../types';
 import { motion } from 'motion/react';
@@ -13,10 +13,16 @@ export default function CollectionDetailPage() {
   const { selectedCountry } = useOutletContext<{ selectedCountry: Country | null }>();
   const [sortBy, setSortBy] = useState<'featured' | 'newest' | 'recommended'>('featured');
 
-  const collection = COLLECTIONS.find(c => c.id === category);
-  const { products } = useProducts();
-  
-  let filteredProducts = products.filter(p => p.category === collection?.fullName);
+  // Collections come from Admin → Collections. Old links (/collections/tuxedo)
+  // still resolve. Products match by collection name, slug or id, any case.
+  const { findCategory, isLoading: catsLoading } = useCategories();
+  const collection = findCategory(category);
+  const { products, isLoading: productsLoading } = useProducts();
+
+  let filteredProducts = collection
+    ? products.filter(p => (p as any).visibility !== 'hidden' && productInCategory(p, collection))
+    : [];
+  const stillLoading = catsLoading || productsLoading;
 
   // Sorting logic for luxury curation
   if (sortBy === 'newest') {
@@ -32,8 +38,9 @@ export default function CollectionDetailPage() {
       {/* Category Banner */}
       <section className="relative h-[50vh] overflow-hidden bg-brand-black">
         <img 
-          src={collection?.image || "/placeholder.svg"} 
-          alt={collection?.fullName} 
+          src={collection?.bannerImageUrl || collection?.heroImageUrl || "/placeholder.svg"}
+          alt={collection?.name || ''}
+          decoding="async" 
           className="absolute inset-0 w-full h-full object-cover"
           referrerPolicy="no-referrer"
         />
@@ -46,9 +53,9 @@ export default function CollectionDetailPage() {
             className="max-w-3xl"
           >
             <p className="text-[13px] uppercase tracking-[0.4em] font-bold mb-6 opacity-70">Collection</p>
-            <h1 className="text-6xl md:text-8xl font-display tracking-wide mb-8">{collection?.fullName}</h1>
+            <h1 className="text-6xl md:text-8xl font-display tracking-wide mb-8">{collection?.name || (stillLoading ? '' : 'Collection not found')}</h1>
             <p className="text-xl md:text-2xl font-display italic opacity-90 max-w-2xl mx-auto leading-relaxed">
-              {collection?.descriptor}
+              {collection?.shortDescription}
             </p>
           </motion.div>
         </div>
@@ -88,6 +95,8 @@ export default function CollectionDetailPage() {
                     />
                   ))}
                 </div>
+              ) : stillLoading ? (
+                <div className="py-32" aria-busy="true" />
               ) : (
                 <div className="py-32 text-center">
                   <p className="text-xl font-display text-brand-secondary italic">No pieces found in this collection.</p>

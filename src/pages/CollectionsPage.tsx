@@ -3,8 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ProductCard } from '../components/ProductCard';
 import { useProducts } from '../context/ProductsContext';
-import { db } from '../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { useCategories, productInCategory } from '../context/CategoriesContext';
 
 export default function CollectionsPage() {
   const { products: allProducts } = useProducts();
@@ -12,20 +11,8 @@ export default function CollectionsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [conditionFilter, setConditionFilter] = useState<'All' | 'Newly' | 'Regular' | 'Limited Edition'>('All');
   
-  // 🚀 Fetch Live Categories from Database
-  const [dbCategories, setDbCategories] = useState<any[]>([]);
-  
-  useEffect(() => {
-    const fetchCats = async () => {
-      const snap = await getDocs(collection(db, 'categories'));
-      if (!snap.empty) {
-        const cats = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        cats.sort((a: any, b: any) => a.sortOrder - b.sortOrder);
-        setDbCategories(cats);
-      }
-    };
-    fetchCats();
-  }, []);
+  // Collections from Admin → Collections (shared with menu and home page).
+  const { categories: dbCategories, findCategory } = useCategories();
 
   // Set the selected category based on the URL Slug
   const [selectedCategory, setSelectedCategory] = useState<string | null>(urlCategorySlug || null);
@@ -58,21 +45,13 @@ export default function CollectionsPage() {
       result = result.filter(p => !p.name.toLowerCase().includes('limited') && (!p.price || p.price <= 150000));
     }
 
-    // 🚀 FILTER MATCHING FIX: Check if Product Category matches Category SLUG or ID
-    if (selectedCategory && dbCategories.length > 0) {
-      // Find the actual category object
-      const matchedCat = dbCategories.find(c => c.slug === selectedCategory || c.id === selectedCategory);
-      if (matchedCat) {
-        // If your AdminProduct upload saves category as the ID or Slug, match it here
-        result = result.filter(p => p.category === matchedCat.id || p.category === matchedCat.slug || p.category === matchedCat.name);
-      } else {
-        // Fallback for custom names
-        result = result.filter(p => p.category.toLowerCase().replace(/\s+/g, '-') === selectedCategory.toLowerCase());
-      }
+    if (selectedCategory) {
+      const matchedCat = findCategory(selectedCategory);
+      result = matchedCat ? result.filter(p => productInCategory(p, matchedCat)) : [];
     }
 
     return result;
-  }, [allProducts, searchQuery, conditionFilter, selectedCategory, dbCategories]);
+  }, [allProducts, searchQuery, conditionFilter, selectedCategory, dbCategories, findCategory]);
 
   return (
     <div className="min-h-screen bg-brand-bg pb-32">

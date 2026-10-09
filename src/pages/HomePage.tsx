@@ -6,6 +6,7 @@ import { storage } from "../utils/localStorage";
 import { useAuth } from "../context/AuthContext";
 import { db } from '../firebase';
 import { collection, addDoc, getDocs } from 'firebase/firestore';
+import { useCategories } from '../context/CategoriesContext';
 import { subscribeSiteContent } from '../utils/siteContentSync';
 
 const isMissingImage = (src?: string) => !src || src === '/placeholder.svg' || src.endsWith('placeholder.svg') || src.startsWith('data:');
@@ -137,25 +138,12 @@ export default function HomePage() {
   // LIVE FIREBASE SYNC FOR CONTENT
   const [siteContent, setSiteContent] = useState(storage.getSiteContent());
   // 🚀 MASTER FIX: LIVE FIREBASE SYNC FOR COLLECTIONS (Directly from Admin)
-  const [liveCollections, setLiveCollections] = useState<any[]>([]);
+  const { categories: liveCollections } = useCategories();
   
   useEffect(() => {
     const unsubscribe = subscribeSiteContent((content) => {
       if (content) setSiteContent(content);
     });
-
-    // Fetch REAL collections from Firestore 'categories'
-    const fetchLiveCollections = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'categories'));
-        const cats = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        cats.sort((a: any, b: any) => a.sortOrder - b.sortOrder);
-        setLiveCollections(cats.filter((c: any) => c.isVisible));
-      } catch (err) {
-        console.error("Failed to load live collections", err);
-      }
-    };
-    fetchLiveCollections();
 
     return () => unsubscribe();
   }, []);

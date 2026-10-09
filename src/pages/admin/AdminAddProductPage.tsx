@@ -6,6 +6,7 @@ import { storage } from '../../utils/localStorage';
 import { saveProductToFirestore, getProductFromFirestore } from '../../utils/productsFirestore';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 import { auth } from '../../firebase';
+import { useCategories } from '../../context/CategoriesContext';
 import { useAuth } from '../../context/AuthContext';
 
 export default function AdminAddProductPage() {
@@ -18,7 +19,7 @@ export default function AdminAddProductPage() {
     name: '',
     slug: '',
     price: 0,
-    category: 'Premium Kurta Pajama',
+    category: '',
     collection: '',
     image: '',
     images: [] as string[],
@@ -38,13 +39,9 @@ export default function AdminAddProductPage() {
   });
   const [newImageUrl, setNewImageUrl] = useState('');
 
-  const categories = [
-    'Premium Tuxedos',
-    'Premium Suits',
-    'Premium Koti Kurta',
-    'Premium Kurta Pajama',
-    'Premium Bomber Jackets'
-  ];
+  // Same list as the website menu: Admin → Collections.
+  const { allCategories } = useCategories();
+  const categories = allCategories.map(c => c.name);
 
   const handleAddImage = () => {
     if (newImageUrl && !formData.images.includes(newImageUrl)) {
@@ -88,6 +85,16 @@ export default function AdminAddProductPage() {
     }
     if (!formData.name?.trim()) {
       setSaveStatus({ type: 'err', msg: 'Product Name is required.' });
+      setIsLoading(false);
+      return;
+    }
+    if (!formData.category?.trim()) {
+      setSaveStatus({ type: 'err', msg: 'Choose a Collection — otherwise the product will not appear in any collection page.' });
+      setIsLoading(false);
+      return;
+    }
+    if (!(Number(formData.price) > 0)) {
+      setSaveStatus({ type: 'err', msg: 'Price must be more than ₹0.' });
       setIsLoading(false);
       return;
     }
@@ -198,8 +205,10 @@ export default function AdminAddProductPage() {
                   type="text"
                   required
                   value={formData.id}
-                  onChange={(e) => setFormData({ ...formData, id: e.target.value })}
-                  placeholder="e.g. midnight-tuxedo"
+                  // The ID becomes the product's web link (/product/<id>), so only
+                  // letters, numbers and dashes are allowed — spaces become dashes.
+                  onChange={(e) => setFormData({ ...formData, id: e.target.value.replace(/\s+/g, '-').replace(/[^A-Za-z0-9_-]/g, '') })}
+                  placeholder="e.g. LXF-DIS-1001-CC08"
                   className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black"
                 />
               </div>
@@ -234,9 +243,13 @@ export default function AdminAddProductPage() {
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black"
                 >
+                  <option value="">Choose a collection…</option>
                   {categories.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
+                  {formData.category && !categories.includes(formData.category) && (
+                    <option value={formData.category}>{formData.category} (old — pick a collection)</option>
+                  )}
                 </select>
               </div>
             </div>

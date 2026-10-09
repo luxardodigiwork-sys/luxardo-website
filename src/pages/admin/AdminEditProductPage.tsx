@@ -4,6 +4,7 @@ import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { saveProductToFirestore, deleteProductFromFirestore, getProductFromFirestore } from '../../utils/productsFirestore';
 import { Product } from '../../types';
+import { useCategories } from '../../context/CategoriesContext';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 
 export default function AdminEditProductPage() {
@@ -14,13 +15,9 @@ export default function AdminEditProductPage() {
   const [formData, setFormData] = useState<Product | null>(null);
   const [newImageUrl, setNewImageUrl] = useState('');
 
-  const categories = [
-    'Premium Tuxedos',
-    'Premium Suits',
-    'Premium Koti Kurta',
-    'Premium Kurta Pajama',
-    'Premium Bomber Jackets'
-  ];
+  // Same list as the website menu: Admin → Collections.
+  const { allCategories } = useCategories();
+  const categories = allCategories.map(c => c.name);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -171,9 +168,13 @@ export default function AdminEditProductPage() {
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black"
                 >
+                  <option value="">Choose a collection…</option>
                   {categories.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
+                  {formData.category && !categories.includes(formData.category) && (
+                    <option value={formData.category}>{formData.category} (old — pick a collection)</option>
+                  )}
                 </select>
               </div>
             </div>
