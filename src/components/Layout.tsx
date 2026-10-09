@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Country, Language } from '../types';
 import { COUNTRIES, LANGUAGES, COLLECTIONS } from '../constants';
-import { ALL_COUNTRIES } from '../countries';
+import { ALL_COUNTRIES, SUPPORTED_COUNTRIES } from '../countries';
 import Logo from './Logo';
 import { FirstVisitModal } from './FirstVisitModal';
 import { SearchOverlay } from './SearchOverlay';
@@ -577,7 +577,10 @@ export default function Layout() {
                       className="w-full py-4 px-6 text-sm font-sans tracking-[0.1em] border border-brand-divider focus:border-brand-black outline-none appearance-none bg-transparent cursor-pointer transition-colors"
                     >
                       <option value="" disabled>Select a country...</option>
-                      {ALL_COUNTRIES.map((country) => (
+                      {(selectedCountry && !SUPPORTED_COUNTRIES.some(c => c.code === selectedCountry.code)
+                        ? [selectedCountry, ...SUPPORTED_COUNTRIES]
+                        : SUPPORTED_COUNTRIES
+                      ).map((country) => (
                         <option key={country.code} value={country.code}>
                           {country.name}
                         </option>

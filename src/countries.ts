@@ -409,3 +409,23 @@ ALL_COUNTRIES.forEach(country => {
     Object.assign(country, specificData[country.name]);
   }
 });
+
+// Countries we actively sell to / show in country pickers (edit this list to add or remove markets).
+// The full ALL_COUNTRIES list is still used internally so previously saved users keep working.
+export const SUPPORTED_COUNTRY_CODES = ['IN', 'US', 'AE', 'GB', 'CA', 'AU', 'SG'] as const;
+export const DEFAULT_COUNTRY_CODE = 'IN';
+
+export const SUPPORTED_COUNTRIES: Country[] = SUPPORTED_COUNTRY_CODES
+  .map(code => ALL_COUNTRIES.find(c => c.code === code))
+  .filter((c): c is Country => !!c);
+
+// Phone dial codes for the supported markets (used by the login page).
+export const SUPPORTED_DIAL_CODES: Record<string, { dial: string; flag: string }> = {
+  IN: { dial: '+91', flag: '\u{1F1EE}\u{1F1F3}' },
+  US: { dial: '+1', flag: '\u{1F1FA}\u{1F1F8}' },
+  CA: { dial: '+1', flag: '\u{1F1E8}\u{1F1E6}' },
+  GB: { dial: '+44', flag: '\u{1F1EC}\u{1F1E7}' },
+  AE: { dial: '+971', flag: '\u{1F1E6}\u{1F1EA}' },
+  AU: { dial: '+61', flag: '\u{1F1E6}\u{1F1FA}' },
+  SG: { dial: '+65', flag: '\u{1F1F8}\u{1F1EC}' },
+};

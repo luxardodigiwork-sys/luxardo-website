@@ -9,7 +9,8 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { ALL_COUNTRIES } from '../countries';
+import { SUPPORTED_DIAL_CODES } from '../countries';
+import { detectCountryCode } from '../utils/detectCountry';
 
 declare global { interface Window { recaptchaVerifier?: RecaptchaVerifier; } }
 
@@ -26,6 +27,9 @@ if (TEST_OTP) {
   if (adminPhone) TEST_ACCOUNTS[adminPhone] = { otp: TEST_OTP, role: 'admin', name: 'Test Admin', email: 'testadmin@luxardo.com' };
 }
 
+// One option per dial code (US and CA share +1).
+const DIAL_OPTIONS = Object.values(SUPPORTED_DIAL_CODES).filter((o, i, arr) => arr.findIndex(x => x.dial === o.dial) === i);
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,6 +40,14 @@ export default function LoginPage() {
   const [countryCode, setCountryCode] = useState('+91');
   const [countryFlag, setCountryFlag] = useState('\u{1F1EE}\u{1F1F3}');
   const [phone, setPhone] = useState('');
+
+  // Default the dial code to the visitor's detected country.
+  useEffect(() => {
+    detectCountryCode().then(code => {
+      const match = code && SUPPORTED_DIAL_CODES[code];
+      if (match) { setCountryCode(match.dial); setCountryFlag(match.flag); }
+    });
+  }, []);
   const [otp, setOtp] = useState('');
   const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -154,8 +166,6 @@ export default function LoginPage() {
     } finally { setLoading(false); }
   };
 
-  const COUNTRY_CODES = ALL_COUNTRIES.filter(c => (c as any).dialCode).map(c => ({ code: (c as any).dialCode, flag: (c as any).flag || '', name: c.name }));
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F5F5F0] px-4">
       <div className="bg-white p-10 shadow-sm border border-gray-100 w-full max-w-md">
@@ -176,15 +186,9 @@ export default function LoginPage() {
                 onChange={e => setCountryCode(e.target.value)}
                 className="border border-gray-200 px-2 py-3 text-sm focus:outline-none focus:border-black w-28"
               >
-                <option value="+91">{'\u{1F1EE}\u{1F1F3}'} +91</option>
-                <option value="+1">{'\u{1F1FA}\u{1F1F8}'} +1</option>
-                <option value="+44">{'\u{1F1EC}\u{1F1E7}'} +44</option>
-                <option value="+971">{'\u{1F1E6}\u{1F1EA}'} +971</option>
-                <option value="+65">{'\u{1F1F8}\u{1F1EC}'} +65</option>
-                <option value="+60">{'\u{1F1F2}\u{1F1FE}'} +60</option>
-                <option value="+61">{'\u{1F1E6}\u{1F1FA}'} +61</option>
-                <option value="+49">{'\u{1F1E9}\u{1F1EA}'} +49</option>
-                <option value="+33">{'\u{1F1EB}\u{1F1F7}'} +33</option>
+                {DIAL_OPTIONS.map(o => (
+                  <option key={o.dial} value={o.dial}>{o.flag} {o.dial}</option>
+                ))}
               </select>
               <input
                 type="tel"

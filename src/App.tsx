@@ -37,15 +37,9 @@ import StyleConsultationPage from "./pages/StyleConsultationPage";
 import FabricLibraryPage from "./pages/FabricLibraryPage";
 
 import { WishlistProvider } from "./context/WishlistContext";
-import { CountryProvider, useCountry } from "./context/CountryContext";
-import { FirstVisitModal } from "./components/FirstVisitModal";
+import { CountryProvider } from "./context/CountryContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
-function CountryModalBridge() {
-  const { showModal, setCountry } = useCountry();
-  if (!showModal) return null;
-  return <FirstVisitModal onSelect={setCountry} />;
-}
 import { CartProvider } from "./context/CartContext";
 
 import RegisterPage from "./pages/RegisterPage";
@@ -159,7 +153,6 @@ export default function App() {
   return (
     <AuthProvider>
       <CountryProvider>
-        <CountryModalBridge />
       <CartProvider>
         <WishlistProvider>
           <Routes>
