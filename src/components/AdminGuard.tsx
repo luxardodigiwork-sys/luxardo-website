@@ -7,8 +7,7 @@ import { auth } from '../firebase';
 export function AdminGuard() {
   const { isAuthReady } = useAuth();
   
-  // Single-Admin hardcoded override + Env variable fallback
-  const ADMIN_PHONE = import.meta.env.VITE_ADMIN_PHONE || '+917976672811';
+  const ADMIN_PHONE = import.meta.env.VITE_ADMIN_PHONE as string | undefined;
 
   if (!isAuthReady) {
     return (

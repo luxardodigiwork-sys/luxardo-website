@@ -1,82 +1,34 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Search } from 'lucide-react';
+import { Check, MapPin } from 'lucide-react';
 import Logo from './Logo';
 import { Country } from '../types';
-import { ALL_COUNTRIES } from '../countries';
+import { SUPPORTED_COUNTRIES, DEFAULT_COUNTRY_CODE } from '../countries';
+import { detectCountryCode, isSupportedCountryCode } from '../utils/detectCountry';
 
 interface FirstVisitModalProps {
   onSelect: (country: Country) => void;
 }
 
 export const FirstVisitModal: React.FC<FirstVisitModalProps> = ({ onSelect }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCountryCode, setSelectedCountryCode] = useState<string>('');
-  
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const continueButtonRef = useRef<HTMLButtonElement>(null);
+  const [detecting, setDetecting] = useState(true);
+  const [detectedCode, setDetectedCode] = useState<string | null>(null);
+  const [selectedCode, setSelectedCode] = useState<string>(DEFAULT_COUNTRY_CODE);
+  const [changing, setChanging] = useState(false);
 
   useEffect(() => {
-    // Auto-focus search input on mount
-    searchInputRef.current?.focus();
+    let active = true;
+    detectCountryCode().then(code => {
+      if (!active) return;
+      setDetectedCode(code);
+      if (isSupportedCountryCode(code)) setSelectedCode(code as string);
+      setDetecting(false);
+    });
+    return () => { active = false; };
   }, []);
 
-  const filteredCountries = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return ALL_COUNTRIES;
-    return ALL_COUNTRIES.filter(c => 
-      c.name.toLowerCase().includes(query) || 
-      c.code.toLowerCase().includes(query)
-    );
-  }, [searchQuery]);
-
-  // Reset item refs when filtered countries change
-  useEffect(() => {
-    itemRefs.current = itemRefs.current.slice(0, filteredCountries.length);
-  }, [filteredCountries]);
-
-  const handleContinue = () => {
-    const country = ALL_COUNTRIES.find(c => c.code === selectedCountryCode);
-    if (country) {
-      onSelect(country);
-    }
-  };
-
-  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (filteredCountries.length > 0) {
-        itemRefs.current[0]?.focus();
-      }
-    }
-  };
-
-  const handleItemKeyDown = (e: React.KeyboardEvent, index: number, country: Country) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      setSelectedCountryCode(country.code);
-      onSelect(country);
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (index < filteredCountries.length - 1) {
-        const nextEl = itemRefs.current[index + 1];
-        nextEl?.focus();
-        nextEl?.scrollIntoView({ block: 'nearest' });
-      } else {
-        continueButtonRef.current?.focus();
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (index > 0) {
-        const prevEl = itemRefs.current[index - 1];
-        prevEl?.focus();
-        prevEl?.scrollIntoView({ block: 'nearest' });
-      } else {
-        searchInputRef.current?.focus();
-      }
-    }
-  };
+  const selected = SUPPORTED_COUNTRIES.find(c => c.code === selectedCode) || SUPPORTED_COUNTRIES[0];
+  const detectedSupported = isSupportedCountryCode(detectedCode) && detectedCode === selectedCode;
 
   return (
     <motion.div
@@ -89,79 +41,75 @@ export const FirstVisitModal: React.FC<FirstVisitModalProps> = ({ onSelect }) =>
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 1.2, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-        className="w-full max-w-xl bg-brand-white p-8 md:p-16 flex flex-col items-center text-center shadow-sm border border-brand-divider max-h-[90vh]"
+        className="w-full max-w-xl bg-brand-white p-8 md:p-16 flex flex-col items-center text-center shadow-sm border border-brand-divider max-h-[90vh] overflow-y-auto"
       >
         <div className="mb-8 shrink-0">
           <Logo className="h-16 md:h-20 w-auto" />
         </div>
 
-        <h2 className="text-2xl md:text-3xl font-display mb-8 tracking-tight shrink-0">Select Your Country</h2>
+        <h2 className="text-2xl md:text-3xl font-display mb-3 tracking-tight shrink-0">
+          {changing ? 'Select Your Country' : 'Confirm Your Country'}
+        </h2>
 
-        <div className="w-full flex flex-col min-h-0 mb-8">
-          <div className="relative border border-brand-divider focus-within:border-brand-black transition-colors shrink-0 mb-4">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-secondary pointer-events-none" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search country..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              className="w-full py-4 pl-12 pr-6 text-sm font-sans tracking-[0.1em] outline-none bg-transparent pointer-events-auto"
-            />
+        {!changing && (
+          <div className="w-full mb-8">
+            <p className="text-sm font-sans text-brand-secondary mb-6">
+              {detecting
+                ? 'Detecting your location...'
+                : detectedSupported
+                  ? 'Based on your location, we will show prices and shipping for:'
+                  : 'We could not match your location automatically. Showing:'}
+            </p>
+            <div className="flex items-center justify-center gap-3 border border-brand-divider py-5 px-6">
+              <MapPin className="w-5 h-5 text-brand-secondary" />
+              <span className="text-lg font-display tracking-wide">{detecting ? '...' : selected.name}</span>
+              {!detecting && (
+                <span className="text-xs font-sans text-brand-secondary tracking-widest">
+                  ({selected.currency.code})
+                </span>
+              )}
+            </div>
           </div>
-          
-          <div 
-            className="overflow-y-auto border border-brand-divider bg-brand-white text-left flex-1 min-h-[200px] max-h-[300px] pointer-events-auto relative z-10"
+        )}
+
+        {changing && (
+          <div
+            className="w-full mb-8 border border-brand-divider bg-brand-white text-left"
             role="listbox"
             aria-label="Countries"
           >
-            {filteredCountries.length > 0 ? (
-              filteredCountries.map((country, index) => (
-                <button
-                  key={country.code}
-                  ref={(el) => { itemRefs.current[index] = el; }}
-                  onClick={() => setSelectedCountryCode(country.code)}
-                  onKeyDown={(e) => handleItemKeyDown(e, index, country)}
-                  role="option"
-                  aria-selected={selectedCountryCode === country.code}
-                  tabIndex={0}
-                  className={`w-full px-6 py-3 text-sm font-sans tracking-[0.1em] text-left hover:bg-brand-bg transition-colors flex justify-between items-center focus:outline-none focus:bg-brand-bg focus:ring-1 focus:ring-inset focus:ring-brand-black ${
-                    selectedCountryCode === country.code ? 'bg-brand-bg font-bold' : ''
-                  }`}
-                >
-                  <span>{country.name}</span>
-                </button>
-              ))
-            ) : (
-              <div className="p-6 text-center text-sm font-sans text-brand-secondary">
-                No countries found.
-              </div>
-            )}
+            {SUPPORTED_COUNTRIES.map(country => (
+              <button
+                key={country.code}
+                onClick={() => setSelectedCode(country.code)}
+                role="option"
+                aria-selected={selectedCode === country.code}
+                className={`w-full px-6 py-4 text-sm font-sans tracking-[0.1em] text-left hover:bg-brand-bg transition-colors flex justify-between items-center focus:outline-none focus:bg-brand-bg ${
+                  selectedCode === country.code ? 'bg-brand-bg font-bold' : ''
+                }`}
+              >
+                <span>{country.name}</span>
+                {selectedCode === country.code && <Check className="w-4 h-4" />}
+              </button>
+            ))}
           </div>
-        </div>
+        )}
 
         <button
-          ref={continueButtonRef}
-          onClick={handleContinue}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              if (filteredCountries.length > 0) {
-                itemRefs.current[filteredCountries.length - 1]?.focus();
-              } else {
-                searchInputRef.current?.focus();
-              }
-            }
-          }}
-          disabled={!selectedCountryCode}
+          onClick={() => onSelect(selected)}
+          disabled={detecting}
           className={`btn-primary w-full py-5 text-[11px] uppercase tracking-[0.25em] font-bold transition-all duration-300 shrink-0 pointer-events-auto rounded-full ${
-            selectedCountryCode
-              ? ''
-              : 'opacity-50 pointer-events-none'
+            detecting ? 'opacity-50 pointer-events-none' : ''
           }`}
         >
-          Continue
+          {changing ? 'Continue' : 'Confirm'}
+        </button>
+
+        <button
+          onClick={() => setChanging(c => !c)}
+          className="mt-5 text-[11px] uppercase tracking-[0.2em] font-sans text-brand-secondary underline underline-offset-4 hover:text-brand-black transition-colors"
+        >
+          {changing ? 'Back' : 'Change country'}
         </button>
       </motion.div>
     </motion.div>

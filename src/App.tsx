@@ -37,15 +37,9 @@ import StyleConsultationPage from "./pages/StyleConsultationPage";
 import FabricLibraryPage from "./pages/FabricLibraryPage";
 
 import { WishlistProvider } from "./context/WishlistContext";
-import { CountryProvider, useCountry } from "./context/CountryContext";
-import { FirstVisitModal } from "./components/FirstVisitModal";
+import { CountryProvider } from "./context/CountryContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
-function CountryModalBridge() {
-  const { showModal, setCountry } = useCountry();
-  if (!showModal) return null;
-  return <FirstVisitModal onSelect={setCountry} />;
-}
 import { CartProvider } from "./context/CartContext";
 
 import RegisterPage from "./pages/RegisterPage";
@@ -151,7 +145,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-brand-bg flex flex-col gap-6 items-center justify-center font-display uppercase tracking-widest text-sm text-brand-black">
         <div className="w-12 h-12 border-t-2 border-r-2 border-brand-black rounded-full animate-spin"></div>
-        <p className="animate-pulse">Loading LUXARDO FASHION...</p>
+        <p className="animate-pulse">Loading Luxardo...</p>
       </div>
     );
   }
@@ -159,7 +153,6 @@ export default function App() {
   return (
     <AuthProvider>
       <CountryProvider>
-        <CountryModalBridge />
       <CartProvider>
         <WishlistProvider>
           <Routes>

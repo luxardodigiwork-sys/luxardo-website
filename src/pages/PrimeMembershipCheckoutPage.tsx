@@ -111,7 +111,7 @@ export default function PrimeMembershipCheckoutPage() {
         key: orderData.keyId,
         amount: orderData.order.amount,
         currency: orderData.order.currency,
-        name: "LUXARDO FASHION",
+        name: "Luxardo",
         description: "Prime Membership",
         order_id: orderData.order.id,
         handler: async function (response: any) {

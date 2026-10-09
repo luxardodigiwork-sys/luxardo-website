@@ -16,7 +16,7 @@ export function AdminAuth() {
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
 
   const navigate = useNavigate();
-  const ADMIN_PHONE = import.meta.env.VITE_ADMIN_PHONE || '+917976672811';
+  const ADMIN_PHONE = import.meta.env.VITE_ADMIN_PHONE as string | undefined;
 
   // Real-time strict validation check
   const isInputValid = `+${phoneNumber}` === ADMIN_PHONE;

@@ -12,7 +12,15 @@ import { GoogleGenAI } from "@google/genai";
 const app = express();
 const PUBLIC_PORT = Number(process.env.PUBLIC_PORT || 3000);
 const ADMIN_PORT = Number(process.env.ADMIN_PORT || 24678);
-const JWT_SECRET = process.env.JWT_SECRET || "LUXARDO FASHION-super-secret-key-2026";
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+if (IS_PRODUCTION && !process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is required in production.");
+}
+// In development an ephemeral secret is generated; sessions reset on restart.
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  (console.warn("[auth] JWT_SECRET not set - using a temporary random secret."),
+  crypto.randomBytes(48).toString("hex"));
 
 const adminRoutePrefixes = [
   "/admin",
@@ -37,7 +45,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Initialize SQLite Database
-const db = new Database("LUXARDO FASHION.db");
+const db = new Database("luxardo.db");
 
 // Create tables
 db.exec(`
@@ -127,13 +135,17 @@ db.exec(`
 
 // Seed default admin and permissions if not exists
 const seedData = () => {
-  const adminEmail = "LUXARDO FASHIONdigiwork@gmail.com";
-  const adminPassword = "7976672811";
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
 
   const stmt = db.prepare("SELECT * FROM users WHERE role = ?");
   const admin = stmt.get("super_admin");
 
-  if (!admin) {
+  if (!admin && (!adminEmail || !adminPassword)) {
+    console.warn(
+      "[seed] No super admin exists. Set ADMIN_EMAIL and ADMIN_PASSWORD to create one.",
+    );
+  } else if (!admin && adminEmail && adminPassword) {
     const hash = bcrypt.hashSync(adminPassword, 10);
     const insert = db.prepare(
       "INSERT INTO users (email, password_hash, role, full_name) VALUES (?, ?, ?, ?)",
@@ -177,11 +189,13 @@ const seedData = () => {
   });
 
   // Seed default backend users for each role
-  const defaultPassword = "311001";
+  // Test users are only created when SEED_TEST_PASSWORD is explicitly set (dev only).
+  const defaultPassword = process.env.SEED_TEST_PASSWORD;
+  if (!defaultPassword || IS_PRODUCTION) return;
   const rolesWithUsers = [
-    { role: "owner", email: "owner_311001" },
-    { role: "dispatch", email: "dispatch_311001" },
-    { role: "analysis", email: "analysis_311001" },
+    { role: "owner", email: "owner_test" },
+    { role: "dispatch", email: "dispatch_test" },
+    { role: "analysis", email: "analysis_test" },
   ];
 
   const userStmt = db.prepare("SELECT * FROM users WHERE email = ?");
@@ -190,8 +204,8 @@ const seedData = () => {
   );
 
   // Seed default customer user
-  const customerEmail = "testuser@LUXARDO FASHION.com";
-  const customerPassword = "311001";
+  const customerEmail = "testuser@luxardo.com";
+  const customerPassword = defaultPassword;
   const existingCustomer = userStmt.get(customerEmail) as any;
   if (!existingCustomer) {
     const hash = bcrypt.hashSync(customerPassword, 10);
@@ -873,7 +887,7 @@ app.post("/api/admin/chat", authenticate, async (req: any, res) => {
       return res.status(400).json({ error: "Invalid messages format" });
     }
 
-    const systemInstruction = `You are the LUXARDO FASHION Admin Panel Assistant. You help the store owner and staff navigate and use the admin panel. 
+    const systemInstruction = `You are the Luxardo Admin Panel Assistant. You help the store owner and staff navigate and use the admin panel. 
 You know everything about the admin panel. Here is the structure and functionality:
 - Dashboard (/admin/dashboard): Overview of store performance, recent orders, and key metrics.
 - Products (/admin/products): Manage inventory, add/edit/remove products, set prices, and stock levels.

@@ -84,7 +84,7 @@ export default function WholesalePage() {
           <div className="space-y-4">
             <h2 className="text-4xl font-display">Application Received</h2>
             <p className="font-sans text-brand-secondary text-lg leading-relaxed">
-              Thank you for your interest in partnering with LUXARDO FASHION. Our global partnership team will review your application and contact you within 3-5 business days.
+              Thank you for your interest in partnering with Luxardo. Our global partnership team will review your application and contact you within 3-5 business days.
             </p>
           </div>
           <button onClick={() => setSubmitted(false)} className="text-[11px] uppercase tracking-widest font-bold text-brand-black hover:opacity-60 transition-opacity">
@@ -102,7 +102,7 @@ export default function WholesalePage() {
         <div className="absolute inset-0 opacity-30">
           <img 
             src={content.hero.imageUrl} 
-            alt="LUXARDO FASHION Global Partnerships" 
+            alt="Luxardo Global Partnerships" 
             className="w-full h-full object-cover "
             referrerPolicy="no-referrer"
           />
@@ -178,7 +178,7 @@ export default function WholesalePage() {
             >
               <img 
                 src={content.trust.imageUrl} 
-                alt="LUXARDO FASHION Scale" 
+                alt="Luxardo Scale" 
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
               />
@@ -375,7 +375,7 @@ export default function WholesalePage() {
 
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Message / Partnership Notes</label>
-                <textarea name="message" required rows={4} className="w-full bg-transparent border-b border-brand-divider py-4 font-sans focus:outline-none focus:border-brand-black transition-colors resize-none" placeholder="Tell us about your retail space, current brand portfolio, and vision for LUXARDO FASHION..."></textarea>
+                <textarea name="message" required rows={4} className="w-full bg-transparent border-b border-brand-divider py-4 font-sans focus:outline-none focus:border-brand-black transition-colors resize-none" placeholder="Tell us about your retail space, current brand portfolio, and vision for Luxardo..."></textarea>
               </div>
 
               <div className="space-y-2">
