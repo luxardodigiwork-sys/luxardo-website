@@ -32,7 +32,7 @@ export default function OurStoryPage() {
             animate={{ opacity: 1, scale: 1 }}
             className="flex justify-center"
           >
-            <img src="https://www.LUXARDO FASHIONfashion.in/Img/LOGOn.png" alt="LUXARDO FASHION" className="h-16 md:h-24 invert brightness-0" />
+            <img src="/logo.png" alt="LUXARDO FASHION" className="h-16 md:h-24 invert brightness-0" />
           </motion.div>
           <div className="space-y-6">
             <motion.p 

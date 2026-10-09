@@ -183,7 +183,7 @@ const INITIAL_BACKEND_USERS: BackendUser[] = [
     fullName: 'Arjun Singh',
     username: 'arjun_dispatch',
     email: 'arjun@LUXARDO FASHION.com',
-    password: 'dispatch123',
+    password: '',
     role: 'dispatch',
     status: 'active',
     accessScope: ['all_orders'],

@@ -148,8 +148,8 @@ export default function OrderConfirmationPage() {
 
         <p className="text-xs text-brand-secondary">
           For queries:{' '}
-          <a href="mailto:support@LUXARDO FASHIONfashion.com" className="underline">
-            support@LUXARDO FASHIONfashion.com
+          <a href="mailto:connect@luxardofashion.com" className="underline">
+            connect@luxardofashion.com
           </a>
         </p>
       </div>

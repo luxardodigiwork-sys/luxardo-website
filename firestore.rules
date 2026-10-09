@@ -62,7 +62,13 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       allow read, write: if isAdmin();
     }
-    match /sessions/{id} { allow create, read, update: if true; allow delete: if isAdmin(); }
+    // Visitor country/currency choice. Anyone may write their own small
+    // record; only admins can read them (was readable by everyone).
+    match /sessions/{id} {
+      allow create, update: if request.resource.data.keys().hasOnly(['country', 'currency', 'language', 'updatedAt'])
+                            && request.resource.data.size() <= 4;
+      allow read, delete: if isAdmin();
+    }
     match /favorites/{id} { allow read: if request.auth != null; allow write: if isAdmin(); }
     match /lowStockNotifications/{id} { allow read, write: if isAdmin(); }
     match /bespokeRequests/{id} {
