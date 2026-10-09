@@ -15,7 +15,8 @@ export async function initSentry(): Promise<void> {
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
     beforeSend(event) {
-      if (window.location.hostname === "localhost") return null;
+      const h = window.location.hostname;
+      if (h === "localhost" || h === "127.0.0.1") return null; // don't report local testing
       return event;
     },
   });

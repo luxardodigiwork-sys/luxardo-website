@@ -17,6 +17,7 @@ export const SITE = {
   /** Meta (Facebook/Instagram) Pixel ID. */
   metaPixelId: import.meta.env.VITE_META_PIXEL_ID || "1465672478130736",
   currency: "INR",
-  /** Sentry error reporting. Empty = off. */
-  sentryDsn: import.meta.env.VITE_SENTRY_DSN || "",
+  /** Sentry error reporting (automatic bug tracker). Public key; empty = off. */
+  sentryDsn: import.meta.env.VITE_SENTRY_DSN ||
+    "https://551c54bafe1f3f0b2bf6ea8a56aa4bc0@o4511394718875648.ingest.us.sentry.io/4511394732769280",
 } as const;
