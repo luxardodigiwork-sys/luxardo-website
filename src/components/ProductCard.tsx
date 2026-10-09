@@ -42,6 +42,7 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
                 src={mainImage}
                 alt={product.name}
                 loading="lazy"
+                decoding="async"
                 className={`absolute inset-0 w-full h-full object-cover transition-all duration-[1200ms] ease-out ${
                   secondaryImage ? 'group-hover:opacity-0' : 'group-hover:scale-[1.04]'
                 }`}

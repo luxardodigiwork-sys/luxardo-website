@@ -11,7 +11,7 @@ interface ImageUploadInputProps {
   placeholder?: string;
   storagePath?: string;   // optional custom path, default: "uploads"
   maxSizeMB?: number;     // default: 50MB
-  quality?: '4k' | '2k' | '1080p' | 'original'; // default: 'original' (no compression)
+  quality?: 'web' | '4k' | '2k' | '1080p' | 'original'; // default: 'web' (2000px WebP)
   /** Recommended pixel size shown when no image is uploaded yet. e.g. "1920 × 1080" */
   recommendedSize?: string;
   /** Recommended aspect ratio. e.g. "16:9", "3:4" */
@@ -26,7 +26,7 @@ export const ImageUploadInput = ({
   placeholder,
   storagePath = 'products',
   maxSizeMB = 50,
-  quality = 'original',
+  quality = 'web',
   recommendedSize,
   aspectRatio,
   purpose,
@@ -37,53 +37,41 @@ export const ImageUploadInput = ({
   const [error, setError] = useState('');
   const [loadedDims, setLoadedDims] = useState<{ w: number; h: number } | null>(null);
 
-  // Only resize if quality param is explicitly set (not 'original')
-  // For 4K: no resize at all — upload as-is
-  const processImage = (file: File): Promise<File> => {
-    return new Promise((resolve, reject) => {
-      // 'original' or '4k' = no compression, upload raw file
-      if (quality === 'original' || quality === '4k') {
-        resolve(file);
-        return;
-      }
+  /*
+   * Every upload is converted for the web before it reaches Storage:
+   * longest side capped (2000px by default), saved as WebP at ~85% quality.
+   * A 15–20 MB phone/camera photo becomes roughly 200–500 KB and looks the
+   * same on screen. Pass quality="original" only for a file that must stay
+   * byte-for-byte (e.g. a downloadable PDF-like asset) — nothing uses it now.
+   */
+  const MAX_EDGE: Record<string, number> = { web: 2000, '2k': 2560, '1080p': 1920, '4k': 3840 };
 
-      // For 2k/1080p — only downscale if image is LARGER than target
-      const maxWidths: Record<string, number> = {
-        '2k': 2560,
-        '1080p': 1920,
-      };
-      const maxWidth = maxWidths[quality] || 1920;
-
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (e) => {
-        const img = new Image();
-        img.src = e.target?.result as string;
-        img.onload = () => {
-          // If image is smaller than target, don't upscale
-          if (img.width <= maxWidth) {
-            resolve(file);
-            return;
-          }
-          const ratio = maxWidth / img.width;
-          const canvas = document.createElement('canvas');
-          canvas.width = maxWidth;
-          canvas.height = Math.round(img.height * ratio);
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) { resolve(file); return; }
-              resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-            },
-            'image/jpeg',
-            0.92  // 92% quality — high quality, not destructive
-          );
-        };
-        img.onerror = () => reject(new Error('Image load failed'));
-      };
-      reader.onerror = () => reject(new Error('File read failed'));
-    });
+  const processImage = async (file: File): Promise<File> => {
+    if (quality === 'original') return file;
+    const maxEdge = MAX_EDGE[quality] || 2000;
+    // createImageBitmap honours the photo's EXIF rotation, so phone photos
+    // don't come out sideways.
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as any);
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/webp', 0.85));
+    // Very old browsers can't encode WebP and silently return PNG — fall back to JPEG.
+    const out = blob && blob.type === 'image/webp'
+      ? blob
+      : await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.85));
+    if (!out || out.size >= file.size) return file;
+    const base = file.name.replace(/\.[^.]+$/, '');
+    const ext = out.type === 'image/webp' ? 'webp' : 'jpg';
+    return new File([out], `${base}.${ext}`, { type: out.type });
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,8 +103,7 @@ export const ImageUploadInput = ({
 
       // Upload to Firebase Storage
       const timestamp = Date.now();
-      const ext = file.name.split('.').pop() || 'jpg';
-      const filename = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const filename = `${timestamp}_${processedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       const fullPath = `${storagePath}/${filename}`;
 
       const storageRef = ref(firebaseStorage, fullPath);

@@ -39,7 +39,7 @@ export default function CartPage() {
               <div key={`${item.product.id}-${item.size || 'no-size'}`} className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center py-8 border-b border-brand-divider">
                 <div className="col-span-1 md:col-span-6 flex gap-8">
                   <div className="w-32 h-40 bg-brand-divider shrink-0 overflow-hidden">
-                    <img src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <img src={item.product.image} alt={item.product.name} loading="lazy" decoding="async" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <div className="flex flex-col justify-center space-y-3">
                     <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-brand-secondary">{item.product.category}</p>
