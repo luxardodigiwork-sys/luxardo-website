@@ -18,6 +18,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 
 import { storage } from '../utils/localStorage';
+import { useCategories } from '../context/CategoriesContext';
 import { firebaseStorage } from '../utils/firebaseStorage';
 
 function ScrollToTopOnMount() {
@@ -259,9 +260,11 @@ export default function Layout() {
     { name: 'CONTACT', path: '/contact' }
   ];
 
-  const collectionItems = COLLECTIONS.map(col => ({
-    name: col.shortName,
-    path: `/collections/${col.id}`
+  // Menu collections come from Admin → Collections (same list as the home page and collection pages).
+  const { categories } = useCategories();
+  const collectionItems = categories.map(col => ({
+    name: col.name,
+    path: `/collections/${col.slug}`
   }));
 
 
@@ -571,7 +574,9 @@ export default function Layout() {
             className="h-full min-h-screen"
           >
             <ScrollToTopOnMount />
-            <Outlet context={{ selectedCountry, selectedLanguage }} />
+            <React.Suspense fallback={<div className="min-h-[60vh]" aria-busy="true" />}>
+              <Outlet context={{ selectedCountry, selectedLanguage }} />
+            </React.Suspense>
           </motion.div>
         </AnimatePresence>
       </main>

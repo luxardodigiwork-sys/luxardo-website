@@ -207,7 +207,9 @@ export default function AdminLayout() {
 
         {/* Content Outlet */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8 lg:p-10">
-          <Outlet />
+          <React.Suspense fallback={<div className="p-8 text-sm">Loading…</div>}>
+            <Outlet />
+          </React.Suspense>
         </div>
       </main>
     </div>

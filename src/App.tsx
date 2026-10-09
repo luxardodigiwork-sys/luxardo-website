@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { Suspense, lazy, useEffect, useState } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { BackendPermissions } from "./types";
 import Lenis from "lenis";
@@ -9,33 +9,33 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import HomePage from "./pages/HomePage";
 import CollectionsPage from "./pages/CollectionsPage";
 import CollectionDetailPage from "./pages/CollectionDetailPage";
-import PrimePage from "./pages/PrimePage";
-import PrimeMembershipCheckoutPage from "./pages/PrimeMembershipCheckoutPage";
-import PrimeMembershipSuccessPage from "./pages/PrimeMembershipSuccessPage";
-import PrimeMembershipFailedPage from "./pages/PrimeMembershipFailedPage";
-import PrimeDashboardPage from "./pages/PrimeDashboardPage";
-import MembershipTermsPage from "./pages/MembershipTermsPage";
-import CraftsmanshipPage from "./pages/CraftsmanshipPage";
-import OurStoryPage from "./pages/OurStoryPage";
-import WholesalePage from "./pages/WholesalePage";
-import ContactPage from "./pages/ContactPage";
-import AboutPage from "./pages/AboutPage";
-import FAQPage from "./pages/FAQPage";
-import ShippingPolicyPage from "./pages/ShippingPolicyPage";
-import ReturnsPolicyPage from "./pages/ReturnsPolicyPage";
-import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
-import TermsPage from "./pages/TermsPage";
+const PrimePage = lazy(() => import("./pages/PrimePage"));
+const PrimeMembershipCheckoutPage = lazy(() => import("./pages/PrimeMembershipCheckoutPage"));
+const PrimeMembershipSuccessPage = lazy(() => import("./pages/PrimeMembershipSuccessPage"));
+const PrimeMembershipFailedPage = lazy(() => import("./pages/PrimeMembershipFailedPage"));
+const PrimeDashboardPage = lazy(() => import("./pages/PrimeDashboardPage"));
+const MembershipTermsPage = lazy(() => import("./pages/MembershipTermsPage"));
+const CraftsmanshipPage = lazy(() => import("./pages/CraftsmanshipPage"));
+const OurStoryPage = lazy(() => import("./pages/OurStoryPage"));
+const WholesalePage = lazy(() => import("./pages/WholesalePage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const FAQPage = lazy(() => import("./pages/FAQPage"));
+const ShippingPolicyPage = lazy(() => import("./pages/ShippingPolicyPage"));
+const ReturnsPolicyPage = lazy(() => import("./pages/ReturnsPolicyPage"));
+const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import OrderConfirmationPage from "./pages/OrderConfirmationPage";
-import TrackOrderPage from "./pages/TrackOrderPage";
-import AccountPage from "./pages/AccountPage";
-import OrderDetailsPage from "./pages/OrderDetailsPage";
-import LoginPage from "./pages/LoginPage";
+const TrackOrderPage = lazy(() => import("./pages/TrackOrderPage"));
+const AccountPage = lazy(() => import("./pages/AccountPage"));
+const OrderDetailsPage = lazy(() => import("./pages/OrderDetailsPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
 import ProductPage from "./pages/ProductPage";
-import BespokeRequestPage from "./pages/BespokeRequestPage";
-import StyleConsultationPage from "./pages/StyleConsultationPage";
-import FabricLibraryPage from "./pages/FabricLibraryPage";
+const BespokeRequestPage = lazy(() => import("./pages/BespokeRequestPage"));
+const StyleConsultationPage = lazy(() => import("./pages/StyleConsultationPage"));
+const FabricLibraryPage = lazy(() => import("./pages/FabricLibraryPage"));
 
 import { WishlistProvider } from "./context/WishlistContext";
 import { CountryProvider, useCountry } from "./context/CountryContext";
@@ -55,39 +55,40 @@ import { fetchProductsFromFirestore } from "./utils/productsFirestore";
 import RegisterPage from "./pages/RegisterPage";
 
 // Admin + role login pages (each role has dedicated login route)
-import AdminLoginPage from "./pages/admin/AdminLoginPage";
-import OwnerLoginPage from "./pages/owner/OwnerLoginPage";
-import DispatchLoginPage from "./pages/dispatch/DispatchLoginPage";
-import AccountsLoginPage from "./pages/accounts/AccountsLoginPage";
-import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
-import AdminDispatchPage from "./pages/admin/AdminDispatchPage";
-import AdminOrderDetailsPage from "./pages/admin/AdminOrderDetailsPage";
-import AdminProductsPage from "./pages/admin/AdminProductsPage";
-import AdminCollectionsPage from "./pages/admin/AdminCollectionsPage";
-import AdminAddProductPage from "./pages/admin/AdminAddProductPage";
-import AdminEditProductPage from "./pages/admin/AdminEditProductPage";
-import AdminContentPage from "./pages/admin/AdminContentPage";
-import AdminMediaPage from "./pages/admin/AdminMediaPage";
-import AdminPoliciesPage from "./pages/admin/AdminPoliciesPage";
-import AdminPrimeContentPage from "./pages/admin/AdminPrimeContentPage";
-import AdminBespokeRequestsPage from "./pages/admin/AdminBespokeRequestsPage";
-import AdminPrimeMembersPage from "./pages/admin/AdminPrimeMembersPage";
-import AdminBackendManagementPage from "./pages/admin/BackendManagementPage";
-import AdminPartnersPage from "./pages/admin/AdminPartnersPage";
-import AdminContactMessagesPage from "./pages/admin/AdminContactMessagesPage";
-import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
-import AdminNewsletterPage from "./pages/admin/AdminNewsletterPage";
-import DispatchDashboardPage from "./pages/dispatch/DispatchDashboardPage";
-import BackendGatewayPage from "./pages/BackendGatewayPage";
-import DispatchLayout from "./components/dispatch/DispatchLayout";
+const AdminLoginPage = lazy(() => import("./pages/admin/AdminLoginPage"));
+const OwnerLoginPage = lazy(() => import("./pages/owner/OwnerLoginPage"));
+const DispatchLoginPage = lazy(() => import("./pages/dispatch/DispatchLoginPage"));
+const AccountsLoginPage = lazy(() => import("./pages/accounts/AccountsLoginPage"));
+const AdminDashboardPage = lazy(() => import("./pages/admin/AdminDashboardPage"));
+const AdminDispatchPage = lazy(() => import("./pages/admin/AdminDispatchPage"));
+const AdminOrderDetailsPage = lazy(() => import("./pages/admin/AdminOrderDetailsPage"));
+const AdminProductsPage = lazy(() => import("./pages/admin/AdminProductsPage"));
+const AdminCollectionsPage = lazy(() => import("./pages/admin/AdminCollectionsPage"));
+const AdminAddProductPage = lazy(() => import("./pages/admin/AdminAddProductPage"));
+const AdminEditProductPage = lazy(() => import("./pages/admin/AdminEditProductPage"));
+const AdminContentPage = lazy(() => import("./pages/admin/AdminContentPage"));
+const AdminMediaPage = lazy(() => import("./pages/admin/AdminMediaPage"));
+const AdminPoliciesPage = lazy(() => import("./pages/admin/AdminPoliciesPage"));
+const AdminPrimeContentPage = lazy(() => import("./pages/admin/AdminPrimeContentPage"));
+const AdminBespokeRequestsPage = lazy(() => import("./pages/admin/AdminBespokeRequestsPage"));
+const AdminPrimeMembersPage = lazy(() => import("./pages/admin/AdminPrimeMembersPage"));
+const AdminBackendManagementPage = lazy(() => import("./pages/admin/BackendManagementPage"));
+const AdminPartnersPage = lazy(() => import("./pages/admin/AdminPartnersPage"));
+const AdminContactMessagesPage = lazy(() => import("./pages/admin/AdminContactMessagesPage"));
+const AdminSettingsPage = lazy(() => import("./pages/admin/AdminSettingsPage"));
+const AdminNewsletterPage = lazy(() => import("./pages/admin/AdminNewsletterPage"));
+const DispatchDashboardPage = lazy(() => import("./pages/dispatch/DispatchDashboardPage"));
+const BackendGatewayPage = lazy(() => import("./pages/BackendGatewayPage"));
+const DispatchLayout = lazy(() => import("./components/dispatch/DispatchLayout"));
 
-import AdminLayout from "./components/admin/AdminLayout";
+const AdminLayout = lazy(() => import("./components/admin/AdminLayout"));
+import { CategoriesProvider } from "./context/CategoriesContext";
 import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
 
-import OwnerLayout from "./components/owner/OwnerLayout";
-import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
-import AnalysisLayout from "./components/analysis/AnalysisLayout";
-import AnalysisDashboardPage from "./pages/analysis/AnalysisDashboardPage";
+const OwnerLayout = lazy(() => import("./components/owner/OwnerLayout"));
+const OwnerDashboardPage = lazy(() => import("./pages/owner/OwnerDashboardPage"));
+const AnalysisLayout = lazy(() => import("./components/analysis/AnalysisLayout"));
+const AnalysisDashboardPage = lazy(() => import("./pages/analysis/AnalysisDashboardPage"));
 
 // V1 Production System
 // Phase 2 — Design → Sample Design → Sample Piece → Production Request
@@ -139,6 +140,13 @@ function ProductionRoutes() {
   return <Route path="/production/*" element={<FlowRedirect />} />;
 }
 
+/* Shown for the split second while a page's code downloads (back-office
+ * screens and less-visited pages are loaded on demand, so a shopper's first
+ * visit only downloads the storefront). */
+function RouteFallback() {
+  return <div className="min-h-[60vh]" aria-busy="true" />;
+}
+
 export default function App() {
   useEffect(() => {
 
@@ -187,8 +195,10 @@ export default function App() {
       <CountryProvider>
         <CountryModalBridge />
       <ProductsProvider>
+      <CategoriesProvider>
       <CartProvider>
         <WishlistProvider>
+          <Suspense fallback={<RouteFallback />}>
           <Routes>
             {/* Dedicated login pages — one per role */}
             <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -424,8 +434,10 @@ export default function App() {
               <Route path="product/:id" element={<ProductPage />} />
             </Route>
           </Routes>
+          </Suspense>
         </WishlistProvider>
       </CartProvider>
+      </CategoriesProvider>
       </ProductsProvider>
       </CountryProvider>
     </AuthProvider>

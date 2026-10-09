@@ -1,13 +1,12 @@
-import * as Sentry from "@sentry/react";
+import { SITE } from "../config/site";
 
-const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN || "";
+const SENTRY_DSN = SITE.sentryDsn;
 
-export function initSentry(): void {
-  if (!SENTRY_DSN) {
-    console.log("[Sentry] Not configured. Add VITE_SENTRY_DSN to .env.local");
-    return;
-  }
-  
+export async function initSentry(): Promise<void> {
+  // Off unless a DSN is set in src/config/site.ts. Loaded on demand so the
+  // library (with session replay) never weighs down the shop when unused.
+  if (!SENTRY_DSN) return;
+  const Sentry = await import("@sentry/react");
   Sentry.init({
     dsn: SENTRY_DSN,
     environment: import.meta.env.MODE,
@@ -20,5 +19,4 @@ export function initSentry(): void {
       return event;
     },
   });
-  console.log("[Sentry] Initialized");
 }
