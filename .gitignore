@@ -29,3 +29,6 @@ luxardo fashion-production-setup.sh
 dist-loom/
 functions-loom/lib/
 functions-loom/node_modules/
+
+# Firebase CLI local cache
+.firebase/

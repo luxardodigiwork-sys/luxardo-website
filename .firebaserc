@@ -1,22 +1,5 @@
 {
   "projects": {
     "default": "luxardo-fashion-website"
-  },
-  "targets": {
-    "luxardo-fashion-website": {
-      "hosting": {
-        "loom": [
-          "luxardo-flow"
-        ]
-      }
-    },
-    "luxardo-flow": {
-      "hosting": {
-        "loom": [
-          "luxardo-flow"
-        ]
-      }
-    }
-  },
-  "etags": {}
+  }
 }
