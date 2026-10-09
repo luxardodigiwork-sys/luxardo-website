@@ -91,7 +91,6 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
           {product.name}
         </h3>
         <div className="flex items-baseline gap-2">
-          <span className="text-[10px] uppercase tracking-[0.25em] text-brand-secondary">MRP</span>
           <span className="text-sm md:text-base font-sans text-brand-black tracking-wide">
             {formatCurrency(product.price)}
           </span>
