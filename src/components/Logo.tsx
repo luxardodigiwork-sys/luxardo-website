@@ -9,7 +9,7 @@ export default function Logo({ className = '', dark = false }: LogoProps) {
   return (
     <img
       src="/logo.png"
-      alt="LUXARDO FASHION"
+      alt="Luxardo"
       className={className}
       style={dark ? { filter: 'brightness(0) invert(1)' } : {}}
     />

@@ -509,24 +509,6 @@ export default function BackendManagementPage() {
         </div>
 
         {/* Default Credentials Info */}
-        <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl mb-12 flex items-start gap-3">
-          <div className="p-2 bg-white rounded-xl text-amber-600 shadow-sm">
-            <Shield size={18} />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-amber-900 uppercase tracking-tight mb-1">
-              Testing Credentials
-            </p>
-            <p className="text-xs text-amber-800 opacity-80 leading-relaxed">
-              For testing purposes, each role has a default user seeded.
-              <span className="font-bold ml-1">Password: 311001</span>.
-              Usernames:{" "}
-              <code className="bg-white/50 px-1 rounded">owner_311001</code>,{" "}
-              <code className="bg-white/50 px-1 rounded">dispatch_311001</code>,
-              etc.
-            </p>
-          </div>
-        </div>
 
         {/* Role Selection Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
@@ -1179,7 +1161,7 @@ export default function BackendManagementPage() {
                             })
                           }
                           className="w-full pl-12 pr-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:outline-none focus:border-black focus:bg-white transition-all"
-                          placeholder="e.g. arjun@LUXARDO FASHION.in"
+                          placeholder="e.g. arjun@Luxardo.in"
                           required
                         />
                       </div>

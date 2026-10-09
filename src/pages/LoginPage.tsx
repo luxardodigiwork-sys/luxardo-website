@@ -15,11 +15,16 @@ declare global { interface Window { recaptchaVerifier?: RecaptchaVerifier; } }
 
 type Step = 'phone' | 'otp' | 'profile';
 
-// Test accounts — hidden from UI, only work when exact number is entered
-const TEST_ACCOUNTS: Record<string, { otp: string; role: string; name: string; email: string }> = {
-  '+915799957999': { otp: '999755', role: 'customer', name: 'Test User', email: 'testuser@LUXARDO FASHION.com' },
-  '+915700057000': { otp: '999755', role: 'admin', name: 'Test Admin', email: 'testadmin@LUXARDO FASHION.com' },
-};
+// Test accounts - disabled unless explicitly configured via env (never commit real values).
+// VITE_TEST_LOGIN_OTP=<otp>  VITE_TEST_CUSTOMER_PHONE=+91...  VITE_TEST_ADMIN_PHONE=+91...
+const TEST_OTP = import.meta.env.VITE_TEST_LOGIN_OTP as string | undefined;
+const TEST_ACCOUNTS: Record<string, { otp: string; role: string; name: string; email: string }> = {};
+if (TEST_OTP) {
+  const customerPhone = import.meta.env.VITE_TEST_CUSTOMER_PHONE as string | undefined;
+  const adminPhone = import.meta.env.VITE_TEST_ADMIN_PHONE as string | undefined;
+  if (customerPhone) TEST_ACCOUNTS[customerPhone] = { otp: TEST_OTP, role: 'customer', name: 'Test User', email: 'testuser@luxardo.com' };
+  if (adminPhone) TEST_ACCOUNTS[adminPhone] = { otp: TEST_OTP, role: 'admin', name: 'Test Admin', email: 'testadmin@luxardo.com' };
+}
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -154,7 +159,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F5F5F0] px-4">
       <div className="bg-white p-10 shadow-sm border border-gray-100 w-full max-w-md">
-        <h2 className="font-display uppercase tracking-[0.3em] text-xl mb-2 text-center">LUXARDO FASHION</h2>
+        <h2 className="font-display uppercase tracking-[0.3em] text-xl mb-2 text-center">Luxardo</h2>
         <p className="text-xs text-gray-400 tracking-widest uppercase text-center mb-8">
           {step === 'phone' && 'Enter your mobile number'}
           {step === 'otp' && 'Enter OTP'}

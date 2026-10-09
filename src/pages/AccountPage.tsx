@@ -9,8 +9,6 @@ import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebas
 import { db, auth } from '../firebase';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { formatCurrency } from '../utils/currency';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db, auth } from '../firebase';
 import { 
   User, 
   Package, 
@@ -42,6 +40,7 @@ export default function AccountPage() {
   // Naya Firebase Fetch Logic
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
 
   const handleTrackOrder = (orderId: string) => {
     setTrackingInput(orderId);
@@ -70,7 +69,7 @@ export default function AccountPage() {
         const ordersRef = collection(db, 'orders');
         const q = query(ordersRef, where('userId', '==', uid));
         const snapshot = await getDocs(q);
-        const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const fetched: any[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         fetched.sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         setOrders(fetched);
 
@@ -106,32 +105,6 @@ export default function AccountPage() {
   useEffect(() => {
     setGlobalSettings(storage.getPrimeGlobalSettings());
   }, []);
-
-  // Firebase se orders lane ka Effect
-  useEffect(() => {
-    const fetchOrders = async () => {
-      if (!user) return;
-      setOrdersLoading(true);
-      try {
-        const uid = auth.currentUser?.uid || user.id;
-        const ordersRef = collection(db, 'orders');
-        const q = query(ordersRef, where('userId', '==', uid));
-        const snapshot = await getDocs(q);
-        
-        const fetchedOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Latest order pehle dikhane ke liye sort karein
-        fetchedOrders.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        
-        setOrders(fetchedOrders);
-      } catch (error) {
-        console.error("Orders fetch karne mein error:", error);
-      } finally {
-        setOrdersLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, [user]);
 
   if (!user) return null;
 

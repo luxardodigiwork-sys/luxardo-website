@@ -1,12 +1,12 @@
 #!/bin/bash
 # ============================================================
-# LUXARDO FASHION Fashion World — FINAL FIX SCRIPT
+# Luxardo Fashion World — FINAL FIX SCRIPT
 # Fixes: CheckoutPage, OrderConfirmation, Firestore rules
 # Run in Codespace terminal:  bash FINAL-FIX.sh
 # ============================================================
 set -e
-echo "🚀 LUXARDO FASHION Final Fix Script Starting..."
-cd /workspaces/LUXARDO FASHION-website
+echo "🚀 Luxardo Final Fix Script Starting..."
+cd /workspaces/luxardo-website
 
 # ---- 1. Fix CheckoutPage.tsx via base64 (no heredoc issues) ----
 echo ""
@@ -120,7 +120,7 @@ firebase deploy --only hosting,firestore:rules,firestore:indexes
 echo ""
 echo "============================================================"
 echo "🎉 ALL FIXES DEPLOYED!"
-echo "   Website: https://LUXARDO FASHION-fashion-website.web.app"
+echo "   Website: https://luxardo-fashion-website.web.app"
 echo ""
 echo "   What was fixed:"
 echo "   ✅ CheckoutPage: Full customer form + userId (Firestore rules fix)"

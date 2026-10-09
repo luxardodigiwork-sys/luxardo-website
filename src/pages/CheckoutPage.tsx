@@ -97,7 +97,7 @@ export default function CheckoutPage() {
 
       const orderItems = cartItems.map((item) => ({
         productId: item.product.id,
-        title: item.product.title || item.product.name || "Product",
+        title: (item.product as any).title || item.product.name || "Product",
         quantity: item.quantity,
         size: item.size || "N/A",
         price: item.product.price,
@@ -233,7 +233,7 @@ export default function CheckoutPage() {
                 <div key={item.product.id + "-" + (item.size || "default")} className="rounded-2xl border border-brand-divider p-4">
                   <div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-center">
                     <div>
-                      <p className="font-semibold">{item.product.title || item.product.name}</p>
+                      <p className="font-semibold">{(item.product as any).title || item.product.name}</p>
                       {item.size && <p className="text-sm text-brand-secondary">Size: {item.size}</p>}
                       <p className="text-sm text-brand-secondary">Qty: {item.quantity}</p>
                     </div>

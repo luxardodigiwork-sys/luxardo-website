@@ -241,7 +241,7 @@ export default function AdminSettingsPage() {
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
                     className="w-full border border-brand-divider p-4 pl-12 focus:outline-none focus:border-brand-black transition-colors"
-                    placeholder="new-admin@LUXARDO FASHION.com"
+                    placeholder="new-admin@luxardo.com"
                     required
                   />
                 </div>
