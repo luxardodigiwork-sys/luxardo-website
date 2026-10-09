@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { SectionHeader } from '../components/SectionHeader';
 import { Package, Truck, CheckCircle, Clock, MapPin } from 'lucide-react';
 import { storage } from '../utils/localStorage';
+import { photo } from '../utils/images';
 import { Order } from '../types';
 
 interface TrackingEvent {
@@ -250,7 +251,7 @@ export default function TrackOrderPage() {
               <div className="space-y-4">
                 {order.items.map((item, idx) => (
                   <div key={idx} className="flex items-center gap-4">
-                    <img src={item.image} alt={item.name} className="w-16 h-16 object-cover bg-brand-bg" />
+                    <img {...photo(item.image, 'card')} alt={item.name} loading="lazy" className="w-16 h-16 object-cover bg-brand-bg" />
                     <div className="flex-1">
                       <p className="text-sm font-medium">{item.name}</p>
                       <p className="text-xs font-sans text-brand-secondary">Qty: {item.quantity}</p>

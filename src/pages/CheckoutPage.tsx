@@ -1,12 +1,30 @@
 import React, { useState, useEffect } from "react";
-import { collection, addDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { signInAnonymously } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
+import { httpsCallable, getFunctions } from "firebase/functions";
 import { db, auth } from "../firebase";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { formatCurrency } from "../utils/currency";
 import { SectionHeader } from "../components/SectionHeader";
+import { trackBeginCheckout } from "../utils/analytics";
+import { isCODEligible, BUSINESS_CONFIG } from "../constants/businessConfig";
+
+type PaymentMethod = "razorpay" | "cod";
+
+// Lazily inject Razorpay Checkout script
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") return resolve(false);
+    if ((window as any).Razorpay) return resolve(true);
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 
 const INDIAN_STATES = [
   "Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh",
@@ -44,6 +62,61 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<CustomerForm>(emptyForm);
   const [formErrors, setFormErrors] = useState<Partial<CustomerForm>>({});
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("razorpay");
+  const [pincodeLookup, setPincodeLookup] = useState<{ status: 'idle' | 'loading' | 'ok' | 'err'; msg?: string }>({ status: 'idle' });
+
+  // begin_checkout / InitiateCheckout once per visit to this page, as soon as the cart is known.
+  const checkoutTracked = React.useRef(false);
+  useEffect(() => {
+    if (checkoutTracked.current || cartItems.length === 0) return;
+    checkoutTracked.current = true;
+    trackBeginCheckout(cartItems.map((i) => ({
+      id: i.product.id, name: i.product.name, price: Number(i.product.price) || 0, quantity: i.quantity, size: i.size,
+    })));
+  }, [cartItems]);
+
+  // Task #10 — Country whitelist: only India for now
+  const ALLOWED_COUNTRY = "India";
+
+  // Task #9 — Auto-fill city + state from pincode (India Post API, free, no key)
+  useEffect(() => {
+    const pin = form.postalCode?.trim();
+    if (!pin || !/^\d{6}$/.test(pin)) {
+      setPincodeLookup({ status: 'idle' });
+      return;
+    }
+    let cancelled = false;
+    setPincodeLookup({ status: 'loading' });
+    fetch(`https://api.postalpincode.in/pincode/${pin}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const entry = Array.isArray(data) ? data[0] : null;
+        if (entry?.Status === 'Success' && entry?.PostOffice?.[0]) {
+          const po = entry.PostOffice[0];
+          setForm((prev) => ({
+            ...prev,
+            city: prev.city || po.District || po.Name || prev.city,
+            state: prev.state || po.State || prev.state,
+          }));
+          setPincodeLookup({ status: 'ok', msg: `${po.District}, ${po.State}` });
+        } else {
+          setPincodeLookup({ status: 'err', msg: 'Pincode not found in postal directory' });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPincodeLookup({ status: 'err', msg: 'Network error checking pincode' });
+      });
+    return () => { cancelled = true; };
+  }, [form.postalCode]);
+
+  const codEligible = isCODEligible(form.postalCode || "");
+  // If user had selected COD but pincode is no longer eligible, flip back to razorpay
+  useEffect(() => {
+    if (paymentMethod === "cod" && !codEligible) {
+      setPaymentMethod("razorpay");
+    }
+  }, [codEligible, paymentMethod]);
 
   useEffect(() => {
     if (user?.email) {
@@ -75,6 +148,112 @@ export default function CheckoutPage() {
     return Object.keys(errors).length === 0;
   };
 
+  /* Server-authoritative checkout: the browser sends only product ids,
+   * sizes, quantities and the address. Prices, totals and the order document
+   * are created by Cloud Functions (functions/src/checkout.ts). */
+  const functions = getFunctions(undefined, "us-central1");
+
+  const cartLines = () => cartItems.map((item) => ({
+    productId: item.product.id,
+    size: item.size || "N/A",
+    quantity: item.quantity,
+  }));
+
+  const addressPayload = () => ({
+    fullName: form.fullName.trim(),
+    email: form.email.trim().toLowerCase(),
+    phone: form.phone.trim(),
+    addressLine1: form.addressLine1.trim(),
+    addressLine2: form.addressLine2.trim(),
+    city: form.city.trim(),
+    state: form.state,
+    postalCode: form.postalCode.trim(),
+  });
+
+  const goToConfirmation = async (orderId: string) => {
+    let order: any = { id: orderId };
+    try {
+      const snap = await getDoc(doc(db, "orders", orderId));
+      if (snap.exists()) order = { id: orderId, ...snap.data() };
+    } catch (e) {
+      console.warn("Could not load order for confirmation page", e);
+    }
+    clearCart();
+    navigate("/order-confirmation", { replace: true, state: { order } });
+  };
+
+  const handleCODOrder = async () => {
+    const createCod = httpsCallable(functions, "createCodOrder");
+    const res: any = await createCod({ items: cartLines(), address: addressPayload() });
+    await goToConfirmation(res.data.orderId);
+  };
+
+  const handleRazorpayOrder = async () => {
+    const scriptOk = await loadRazorpayScript();
+    if (!scriptOk) {
+      throw new Error("Razorpay SDK failed to load. Check your network and try again.");
+    }
+
+    // 1. Server prices the cart, creates the Razorpay order and our order doc.
+    const createOrder = httpsCallable(functions, "createRazorpayOrderV2");
+    const result: any = await createOrder({ items: cartLines(), address: addressPayload() });
+    const { orderId, razorpayOrderId, amount, currency } = result.data || {};
+    if (!orderId || !razorpayOrderId) throw new Error("Failed to start payment");
+    // Key id comes from the server (same Razorpay account as the secret).
+    // VITE_RAZORPAY_KEY_ID is only a fallback for an older backend.
+    const keyId = result.data?.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID;
+    if (!keyId) throw new Error("Online payment is not available right now. Please choose Cash on Delivery or contact us on WhatsApp.");
+
+    // 2. Open Razorpay Checkout for the SERVER amount.
+    return new Promise<void>((resolve, reject) => {
+      const rzp = new (window as any).Razorpay({
+        key: keyId,
+        amount,
+        currency: currency || "INR",
+        name: BUSINESS_CONFIG.brandName,
+        description: `Order — ${cartItems.length} item${cartItems.length > 1 ? "s" : ""}`,
+        order_id: razorpayOrderId,
+        prefill: {
+          name: form.fullName,
+          email: form.email,
+          contact: form.phone,
+        },
+        notes: { orderId },
+        theme: { color: "#000000" },
+        handler: async (response: any) => {
+          try {
+            // 3. Server verifies the signature and marks the order paid.
+            const verifyFn = httpsCallable(functions, "verifyRazorpayPaymentV2");
+            const verifyRes: any = await verifyFn({
+              orderId,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            if (!verifyRes.data?.verified) {
+              return reject(new Error("Payment verification failed. If money was deducted, it will be confirmed automatically or refunded — contact us on WhatsApp."));
+            }
+            await goToConfirmation(orderId);
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setIsSubmitting(false);
+            setError("Payment cancelled. You can try again or switch to COD.");
+            reject(new Error("Payment dismissed by user"));
+          },
+        },
+      });
+      rzp.on("payment.failed", (resp: any) => {
+        reject(new Error(resp.error?.description || "Payment failed"));
+      });
+      rzp.open();
+    });
+  };
+
   const handlePlaceOrder = async () => {
     if (cartItems.length === 0) {
       setError("Your cart is empty. Add items before checkout.");
@@ -84,67 +263,32 @@ export default function CheckoutPage() {
       setError("Please fill all required fields correctly.");
       return;
     }
+    if (paymentMethod === "cod" && !codEligible) {
+      setError("COD is not available for your pincode. Please choose Razorpay/prepaid.");
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
-      // FIXED: Sign in anonymously if no Firebase Auth session exists
-      // This satisfies Firestore rules (request.auth != null) without requiring email login
       let currentUser = auth.currentUser;
       if (!currentUser) {
         const anonResult = await signInAnonymously(auth);
         currentUser = anonResult.user;
       }
-
-      const orderItems = cartItems.map((item) => ({
-        productId: item.product.id,
-        title: item.product.title || item.product.name || "Product",
-        quantity: item.quantity,
-        size: item.size || "N/A",
-        price: item.product.price,
-        subtotal: item.product.price * item.quantity,
-      }));
-
-      const orderData = {
-        userId: currentUser.uid,
-        userEmail: currentUser.email || form.email.trim().toLowerCase(),
-        createdAt: new Date().toISOString(),
-        totalAmount: cartSubtotal,
-        status: "pending",
-        paymentStatus: "pending",
-        paymentMethod: "COD",
-        items: orderItems,
-        customer: {
-          fullName: form.fullName.trim(),
-          email: form.email.trim().toLowerCase(),
-          phone: form.phone.trim(),
-        },
-        shippingAddress: {
-          fullName: form.fullName.trim(),
-          email: form.email.trim().toLowerCase(),
-          phone: form.phone.trim(),
-          addressLine1: form.addressLine1.trim(),
-          addressLine2: form.addressLine2.trim(),
-          city: form.city.trim(),
-          state: form.state,
-          postalCode: form.postalCode.trim(),
-          country: "India",
-        },
-        courierPartner: "DTDC",
-        trackingId: null,
-      };
-
-      const docRef = await addDoc(collection(db, "orders"), orderData);
-      clearCart();
-      navigate("/order-confirmation", {
-        replace: true,
-        state: { order: { id: docRef.id, ...orderData } },
-      });
+      if (!currentUser) throw new Error("Could not start checkout. Please refresh.");
+      if (paymentMethod === "cod") {
+        await handleCODOrder();
+      } else {
+        await handleRazorpayOrder();
+      }
     } catch (err: any) {
       console.error("Order error:", err);
       if (err?.code === "permission-denied") {
         setError("Permission denied. Please refresh and try again.");
       } else {
-        setError("Order failed: " + (err?.message || "Unknown error"));
+        if (err?.message !== "Payment dismissed by user") {
+          setError("Order failed: " + (err?.message || "Unknown error"));
+        }
       }
       setIsSubmitting(false);
     }
@@ -215,6 +359,9 @@ export default function CheckoutPage() {
                   <label className={labelClass}>Pincode *</label>
                   <input type="text" name="postalCode" value={form.postalCode} onChange={handleChange} placeholder="6-digit pincode" maxLength={6} className={inputClass} />
                   {formErrors.postalCode && <p className={errorClass}>{formErrors.postalCode}</p>}
+                  {pincodeLookup.status === 'loading' && <p className="text-[10px] text-brand-secondary mt-1">Checking pincode...</p>}
+                  {pincodeLookup.status === 'ok' && <p className="text-[10px] text-emerald-700 mt-1">✓ {pincodeLookup.msg} (auto-filled)</p>}
+                  {pincodeLookup.status === 'err' && <p className="text-[10px] text-amber-700 mt-1">⚠ {pincodeLookup.msg}</p>}
                 </div>
               </div>
               <div>
@@ -225,6 +372,11 @@ export default function CheckoutPage() {
                 </select>
                 {formErrors.state && <p className={errorClass}>{formErrors.state}</p>}
               </div>
+              {/* Country whitelist notice */}
+              <div className="rounded-2xl bg-brand-bg border border-brand-divider p-3 text-xs text-brand-secondary flex items-center gap-3">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span>Currently shipping to <strong>{ALLOWED_COUNTRY}</strong> only. International orders coming soon.</span>
+              </div>
             </div>
 
             <div className="rounded-3xl border border-brand-divider bg-white p-8 space-y-4">
@@ -233,7 +385,7 @@ export default function CheckoutPage() {
                 <div key={item.product.id + "-" + (item.size || "default")} className="rounded-2xl border border-brand-divider p-4">
                   <div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-center">
                     <div>
-                      <p className="font-semibold">{item.product.title || item.product.name}</p>
+                      <p className="font-semibold">{item.product.name || "Product"}</p>
                       {item.size && <p className="text-sm text-brand-secondary">Size: {item.size}</p>}
                       <p className="text-sm text-brand-secondary">Qty: {item.quantity}</p>
                     </div>
@@ -264,10 +416,62 @@ export default function CheckoutPage() {
                   <span>{formatCurrency(cartSubtotal)}</span>
                 </div>
               </div>
+              {/* Payment method selector */}
+              <div className="space-y-3">
+                <h3 className="text-xs uppercase tracking-widest font-bold text-brand-secondary">Payment Method</h3>
+
+                <label className={`flex items-start gap-3 rounded-2xl border p-4 cursor-pointer transition ${
+                  paymentMethod === "razorpay" ? "border-brand-black bg-brand-bg" : "border-brand-divider hover:border-brand-black/40"
+                }`}>
+                  <input
+                    type="radio"
+                    name="pay"
+                    value="razorpay"
+                    checked={paymentMethod === "razorpay"}
+                    onChange={() => setPaymentMethod("razorpay")}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Prepaid · Razorpay</p>
+                    <p className="text-xs text-brand-secondary mt-1">Cards, UPI, Netbanking, Wallets · Secure payment gateway</p>
+                  </div>
+                </label>
+
+                <label className={`flex items-start gap-3 rounded-2xl border p-4 transition ${
+                  !codEligible
+                    ? "border-brand-divider opacity-50 cursor-not-allowed"
+                    : paymentMethod === "cod"
+                      ? "border-brand-black bg-brand-bg cursor-pointer"
+                      : "border-brand-divider hover:border-brand-black/40 cursor-pointer"
+                }`}>
+                  <input
+                    type="radio"
+                    name="pay"
+                    value="cod"
+                    disabled={!codEligible}
+                    checked={paymentMethod === "cod"}
+                    onChange={() => setPaymentMethod("cod")}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Cash on Delivery (COD)</p>
+                    {form.postalCode && form.postalCode.length === 6 ? (
+                      codEligible ? (
+                        <p className="text-xs text-emerald-700 mt-1">✓ Available for pincode {form.postalCode}</p>
+                      ) : (
+                        <p className="text-xs text-red-600 mt-1">Not available for pincode {form.postalCode}. Choose Razorpay above.</p>
+                      )
+                    ) : (
+                      <p className="text-xs text-brand-secondary mt-1">Enter pincode above to check COD availability</p>
+                    )}
+                  </div>
+                </label>
+              </div>
+
               <div className="rounded-2xl border border-brand-divider p-4 text-xs text-brand-secondary space-y-1">
-                <p>• Cash on Delivery (COD)</p>
                 <p>• Shipped via DTDC courier</p>
                 <p>• Estimated delivery: 5-7 business days</p>
+                <p>• Free shipping on orders above {formatCurrency(BUSINESS_CONFIG.freeShippingMinAmount)}</p>
               </div>
               {error && (
                 <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>

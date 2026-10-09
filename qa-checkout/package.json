@@ -1,0 +1,3 @@
+{ "name": "luxardo-checkout-qa", "private": true, "type": "module",
+  "scripts": { "test": "node checkout.test.mjs" },
+  "dependencies": { "firebase": "^12.13.0" } }

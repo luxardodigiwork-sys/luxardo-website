@@ -20,12 +20,29 @@ export function CountryProvider({ children }: { children: React.ReactNode }) {
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const found = ALL_COUNTRIES.find(c => c.code === saved);
-      if (found) { setSelectedCountry(found); setShowModal(false); return; }
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const found = ALL_COUNTRIES.find(c => c.code === saved);
+        if (found) { setSelectedCountry(found); setShowModal(false); return; }
+      }
+      // Launch (Oct 2026): we ship to India only, so a first-time visitor is
+      // set to India directly instead of being blocked by a country picker
+      // (they can still change it from the header region selector).
+      const india = ALL_COUNTRIES.find(c => c.code === 'IN');
+      if (india) {
+        setSelectedCountry(india);
+        setShowModal(false);
+        localStorage.setItem(STORAGE_KEY, 'IN');
+        localStorage.setItem('LUXARDO FASHION_country', 'IN');
+        localStorage.setItem('LUXARDO FASHION_first_visit_completed', 'true');
+        return;
+      }
+      setShowModal(true);
+    } catch (e) {
+      console.error('CountryContext init error:', e);
+      setShowModal(true);
     }
-    setShowModal(true);
   }, []);
 
   const setCountry = async (country: Country) => {

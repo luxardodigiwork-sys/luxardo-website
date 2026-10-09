@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, Image as ImageIcon, Plus, Trash2, Link as LinkIcon, Phone, Mail, MapPin, Layout as LayoutIcon, BookOpen, Scissors, Globe, MessageSquare, Info, RotateCcw, ChevronRight, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { storage } from '../../utils/localStorage';
+import { saveSiteContentToFirestore, subscribeSiteContent } from '../../utils/siteContentSync';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 import { ConfirmModal } from '../../components/admin/ConfirmModal';
 
@@ -42,24 +43,59 @@ const TextArea = ({ className, ...props }: React.TextareaHTMLAttributes<HTMLText
   />
 );
 
-const ImagePreview = ({ url, label }: { url: string; label: string }) => (
-  <div className="space-y-3">
-    <label className="block text-[10px] uppercase tracking-widest font-bold text-brand-secondary">{label}</label>
-    <div className="aspect-video border border-brand-divider overflow-hidden bg-brand-bg relative group">
-      {url ? (
-        <>
-          <img src={url} alt="Preview" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" referrerPolicy="no-referrer" />
-          <div className="absolute inset-0 bg-brand-black/0 group-hover:bg-brand-black/10 transition-colors" />
-        </>
-      ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-brand-secondary/30 gap-2">
-          <ImageIcon size={40} strokeWidth={1} />
-          <span className="text-[10px] uppercase tracking-widest font-bold">No Image Provided</span>
-        </div>
-      )}
+const ImagePreview = ({
+  url,
+  label,
+  recommendedSize = '1920 × 1080',
+  aspectRatio = '16:9',
+}: {
+  url: string;
+  label: string;
+  recommendedSize?: string;
+  aspectRatio?: string;
+}) => {
+  const [dims, setDims] = React.useState<{ w: number; h: number } | null>(null);
+  return (
+    <div className="space-y-3">
+      <label className="block text-[10px] uppercase tracking-widest font-bold text-brand-secondary">{label}</label>
+      <div className="aspect-video border border-brand-divider overflow-hidden bg-brand-bg relative group">
+        {url ? (
+          <>
+            <img
+              src={url}
+              alt="Preview"
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              referrerPolicy="no-referrer"
+              onLoad={(e) => {
+                const img = e.target as HTMLImageElement;
+                setDims({ w: img.naturalWidth, h: img.naturalHeight });
+              }}
+            />
+            <div className="absolute inset-0 bg-brand-black/0 group-hover:bg-brand-black/10 transition-colors" />
+            {dims && (
+              <div className="absolute bottom-2 right-2 bg-brand-black/80 backdrop-blur-sm text-white text-[9px] font-mono px-2 py-1 rounded">
+                {dims.w} × {dims.h} px
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-brand-secondary/60 gap-2 px-4 text-center">
+            <ImageIcon size={36} strokeWidth={1} />
+            <span className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">No Image Provided</span>
+            <div className="mt-2 pt-2 border-t border-brand-divider/60 w-full max-w-[200px] space-y-1">
+              <p className="text-[10px] text-brand-secondary/80">
+                <span className="font-bold text-brand-black/70">Recommended:</span> <span className="font-mono">{recommendedSize}</span>
+              </p>
+              <p className="text-[10px] text-brand-secondary/80">
+                <span className="font-bold text-brand-black/70">Ratio:</span> <span className="font-mono">{aspectRatio}</span>
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default function AdminContentPage() {
   const [activeTab, setActiveTab] = useState<TabType>('homepage');
@@ -67,16 +103,32 @@ export default function AdminContentPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [hasLoadedFromFirestore, setHasLoadedFromFirestore] = useState(false);
 
+  // Live subscribe to Firestore — admin sees ACTUAL website content + reorders + edits propagate.
+  // We don't blow away local edits in progress: only replace state if user has NOT typed yet (!isDirty).
   useEffect(() => {
-    setContent(storage.getSiteContent());
+    const unsub = subscribeSiteContent((fresh) => {
+      setHasLoadedFromFirestore(true);
+      setContent((prev) => (isDirty ? prev : (fresh as any)));
+    });
+    return () => { try { unsub(); } catch {} };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
       storage.saveSiteContent(content);
+      // Save to Firestore (live to all visitors).
+      try {
+        await saveSiteContentToFirestore(content);
+      } catch (firestoreErr) {
+        console.error('Firestore save failed (localStorage saved):', firestoreErr);
+      }
       setIsSaved(true);
+      setIsDirty(false); // clear unsaved-marker so next snapshot can refresh form
       setTimeout(() => setIsSaved(false), 3000);
     } catch (error: any) {
       console.error('Error saving content:', error);
@@ -104,6 +156,7 @@ export default function AdminContentPage() {
   };
 
   const updateContent = (section: keyof typeof content, field: string, value: any) => {
+    setIsDirty(true);
     setContent({
       ...content,
       [section]: {
@@ -114,6 +167,7 @@ export default function AdminContentPage() {
   };
 
   const updateNestedContent = (section: keyof typeof content, subSection: string, field: string, value: any) => {
+    setIsDirty(true);
     const sectionData = content[section] as any;
     setContent({
       ...content,
@@ -124,6 +178,23 @@ export default function AdminContentPage() {
           [field]: value
         }
       }
+    });
+  };
+
+  // Reorder helper for any array inside content (e.g. collections.items, hero.slides)
+  const reorderArray = (sectionPath: string[], fromIndex: number, toIndex: number) => {
+    setIsDirty(true);
+    setContent((prev: any) => {
+      const next = JSON.parse(JSON.stringify(prev));
+      let parent = next;
+      for (let i = 0; i < sectionPath.length - 1; i++) parent = parent[sectionPath[i]];
+      const key = sectionPath[sectionPath.length - 1];
+      const arr = parent[key];
+      if (!Array.isArray(arr)) return prev;
+      if (toIndex < 0 || toIndex >= arr.length || fromIndex === toIndex) return prev;
+      const [moved] = arr.splice(fromIndex, 1);
+      arr.splice(toIndex, 0, moved);
+      return next;
     });
   };
 
@@ -155,42 +226,69 @@ export default function AdminContentPage() {
       <FormSection title="Hero Section" description="The first thing visitors see. High impact imagery and clear calls to action.">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           <div className="space-y-8">
-            <FormField label="Media Type">
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="heroMediaType"
-                    value="image"
-                    checked={content.homepage.hero.mediaType !== 'video'}
-                    onChange={() => updateNestedContent('homepage', 'hero', 'mediaType', 'image')}
-                    className="accent-brand-black"
-                  />
-                  <span className="text-sm font-sans">Image</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="heroMediaType"
-                    value="video"
-                    checked={content.homepage.hero.mediaType === 'video'}
-                    onChange={() => updateNestedContent('homepage', 'hero', 'mediaType', 'video')}
-                    className="accent-brand-black"
-                  />
-                  <span className="text-sm font-sans">Video</span>
-                </label>
+            {/* Hero Media — clean tabbed switcher */}
+            <FormField label="Hero Background Media">
+              <div className="border border-brand-divider bg-brand-bg/40">
+                <div className="grid grid-cols-2 border-b border-brand-divider">
+                  <button
+                    type="button"
+                    onClick={() => updateNestedContent('homepage', 'hero', 'mediaType', 'image')}
+                    className={`py-3 px-4 text-[11px] uppercase tracking-[0.3em] font-bold transition-colors ${
+                      content.homepage.hero.mediaType !== 'video'
+                        ? 'bg-brand-black text-white'
+                        : 'bg-transparent text-brand-secondary hover:bg-white'
+                    }`}
+                  >
+                    Image Slides
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateNestedContent('homepage', 'hero', 'mediaType', 'video')}
+                    className={`py-3 px-4 text-[11px] uppercase tracking-[0.3em] font-bold transition-colors ${
+                      content.homepage.hero.mediaType === 'video'
+                        ? 'bg-brand-black text-white'
+                        : 'bg-transparent text-brand-secondary hover:bg-white'
+                    }`}
+                  >
+                    Video Loop
+                  </button>
+                </div>
+
+                <div className="p-5 bg-white">
+                  {content.homepage.hero.mediaType === 'video' ? (
+                    <div className="space-y-3">
+                      <label className="block text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Video URL (.mp4)</label>
+                      <Input
+                        type="text"
+                        placeholder="https://example.com/hero.mp4 — also accepts Firebase Storage URL"
+                        value={content.homepage.hero.videoUrl || ''}
+                        onChange={(e) => updateNestedContent('homepage', 'hero', 'videoUrl', e.target.value)}
+                      />
+                      <div className="rounded border border-brand-divider bg-brand-bg/50 p-3 text-[11px] text-brand-secondary leading-relaxed">
+                        <p className="font-bold text-brand-black mb-1">Recommended:</p>
+                        <p>• MP4 / H.264, 1920×1080, 24–30 fps, &lt; 6 MB, 10–15s loop</p>
+                        <p>• Muted, looped, no audio</p>
+                        <p>• Image slides below are ignored while Video Loop is active</p>
+                      </div>
+                      {content.homepage.hero.videoUrl && (
+                        <div className="aspect-video border border-brand-divider overflow-hidden bg-brand-black">
+                          <video
+                            src={content.homepage.hero.videoUrl}
+                            className="w-full h-full object-cover"
+                            autoPlay muted loop playsInline
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-brand-secondary leading-relaxed">
+                      Image slides mode is active. Manage your slides on the right →<br />
+                      Each slide can have its own heading, subtext, CTA, and background image.
+                    </p>
+                  )}
+                </div>
               </div>
             </FormField>
-            {content.homepage.hero.mediaType === 'video' && (
-              <FormField label="Video URL (MP4)">
-                <Input
-                  type="text"
-                  placeholder="https://example.com/video.mp4"
-                  value={content.homepage.hero.videoUrl || ''}
-                  onChange={(e) => updateNestedContent('homepage', 'hero', 'videoUrl', e.target.value)}
-                />
-              </FormField>
-            )}
             <FormField label="Heading (Title)">
               <Input
                 type="text"
@@ -244,28 +342,112 @@ export default function AdminContentPage() {
               <p className="text-xs text-brand-secondary">Manage images for the hero slider.</p>
             </div>
             
-            {(content.homepage.hero.slides || []).map((slide: any, index: number) => (
-              <div key={index} className="p-4 border border-brand-divider space-y-4 relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const newSlides = [...(content.homepage.hero.slides || [])];
-                    newSlides.splice(index, 1);
-                    updateNestedContent('homepage', 'hero', 'slides', newSlides);
-                  }}
-                  className="absolute top-2 right-2 text-red-500 hover:text-red-700 text-xs font-bold uppercase tracking-widest"
-                >
-                  Remove
-                </button>
-                <FormField label={`Slide ${index + 1} Image URL`}>
+            {(content.homepage.hero.slides || []).map((slide: any, index: number) => {
+              const slidesTotal = content.homepage.hero.slides?.length || 0;
+              return (
+              <div key={index} className="p-4 border border-brand-divider space-y-4 bg-white">
+                {/* Slide header with reorder + delete */}
+                <div className="flex items-center justify-between pb-3 border-b border-brand-divider">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-[10px] bg-brand-black text-white px-2 py-1">
+                      SLIDE {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <span className="text-sm font-display text-brand-black">{slide.heading || 'Untitled slide'}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => reorderArray(['homepage', 'hero', 'slides'], index, index - 1)}
+                      className="w-8 h-8 border border-brand-divider flex items-center justify-center hover:bg-brand-bg disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move up"
+                    >▲</button>
+                    <button
+                      type="button"
+                      disabled={index === slidesTotal - 1}
+                      onClick={() => reorderArray(['homepage', 'hero', 'slides'], index, index + 1)}
+                      className="w-8 h-8 border border-brand-divider flex items-center justify-center hover:bg-brand-bg disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move down"
+                    >▼</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!confirm(`Remove slide "${slide.heading || index + 1}"?`)) return;
+                        const newSlides = [...(content.homepage.hero.slides || [])];
+                        newSlides.splice(index, 1);
+                        updateNestedContent('homepage', 'hero', 'slides', newSlides);
+                      }}
+                      className="ml-2 px-3 h-8 border border-red-200 text-red-600 text-[10px] uppercase tracking-widest font-bold hover:bg-red-50"
+                    >Remove</button>
+                  </div>
+                </div>
+
+                <FormField label={`Slide ${index + 1} — Heading`}>
+                  <Input
+                    type="text"
+                    value={slide.heading || ''}
+                    placeholder="e.g. Presence Before Words"
+                    onChange={(e) => {
+                      const newSlides = [...(content.homepage.hero.slides || [])];
+                      newSlides[index] = { ...newSlides[index], heading: e.target.value };
+                      updateNestedContent('homepage', 'hero', 'slides', newSlides);
+                    }}
+                  />
+                </FormField>
+
+                <FormField label={`Slide ${index + 1} — Subtext`}>
+                  <Input
+                    type="text"
+                    value={slide.subtext || ''}
+                    placeholder="A philosophy of elegance, designed to leave a lasting impression."
+                    onChange={(e) => {
+                      const newSlides = [...(content.homepage.hero.slides || [])];
+                      newSlides[index] = { ...newSlides[index], subtext: e.target.value };
+                      updateNestedContent('homepage', 'hero', 'slides', newSlides);
+                    }}
+                  />
+                </FormField>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField label="CTA Text">
+                    <Input
+                      type="text"
+                      value={slide.cta || ''}
+                      placeholder="Discover the Collection"
+                      onChange={(e) => {
+                        const newSlides = [...(content.homepage.hero.slides || [])];
+                        newSlides[index] = { ...newSlides[index], cta: e.target.value };
+                        updateNestedContent('homepage', 'hero', 'slides', newSlides);
+                      }}
+                    />
+                  </FormField>
+                  <FormField label="CTA Link">
+                    <Input
+                      type="text"
+                      value={slide.link || ''}
+                      placeholder="/collections"
+                      onChange={(e) => {
+                        const newSlides = [...(content.homepage.hero.slides || [])];
+                        newSlides[index] = { ...newSlides[index], link: e.target.value };
+                        updateNestedContent('homepage', 'hero', 'slides', newSlides);
+                      }}
+                    />
+                  </FormField>
+                </div>
+
+                <FormField label={`Slide ${index + 1} Image`}>
                   <ImageUploadInput
                     value={slide.imageUrl || ''}
                     onChange={(val) => updateSlideImage(index, val)}
+                    purpose="Hero banner (full-screen)"
+                    recommendedSize="1920 × 1080"
+                    aspectRatio="16:9"
                   />
                 </FormField>
-                <ImagePreview url={slide.imageUrl || ''} label={`Slide ${index + 1} Preview`} />
+                <ImagePreview url={slide.imageUrl || ''} label={`Slide ${index + 1} Preview`} recommendedSize="1920 × 1080" aspectRatio="16:9" />
               </div>
-            ))}
+              );
+            })}
             
             <button
               type="button"
@@ -323,57 +505,168 @@ export default function AdminContentPage() {
           </FormField>
         </div>
 
-        <div className="space-y-8 pt-8 border-t border-brand-divider mt-8">
-          <h4 className="text-[10px] uppercase tracking-widest font-bold text-brand-black">Collection Items</h4>
-          <div className="grid grid-cols-1 gap-8">
-            {content.homepage.collections.items?.map((item: any, index: number) => (
-              <div key={index} className="p-8 border border-brand-divider bg-brand-bg/50 space-y-8">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-brand-secondary">Item {index + 1}</span>
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  <FormField label="Title">
-                    <Input
-                      type="text"
-                      value={item.title}
-                      onChange={(e) => {
-                        const newItems = [...content.homepage.collections.items];
-                        newItems[index] = { ...item, title: e.target.value };
-                        updateNestedContent('homepage', 'collections', 'items', newItems);
-                      }}
-                    />
-                  </FormField>
-                  <FormField label="Link">
-                    <Input
-                      type="text"
-                      value={item.link}
-                      onChange={(e) => {
-                        const newItems = [...content.homepage.collections.items];
-                        newItems[index] = { ...item, link: e.target.value };
-                        updateNestedContent('homepage', 'collections', 'items', newItems);
-                      }}
-                    />
-                  </FormField>
-                  <div className="lg:col-span-2">
-                    <FormField label="Image URL">
-                      <div className="flex gap-4">
+        <div className="space-y-6 pt-8 border-t border-brand-divider mt-8">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h4 className="text-sm font-bold uppercase tracking-widest text-brand-black">Collection Items</h4>
+              <p className="text-xs text-brand-secondary mt-1">These are the full-screen Maison Collection sections on the homepage. Reorder, edit, or add new.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const newItems = [...(content.homepage.collections.items || [])];
+                newItems.push({
+                  id: `col-${Date.now()}`,
+                  title: 'New Collection',
+                  descriptor: '',
+                  image: '',
+                  link: '/collections',
+                });
+                updateNestedContent('homepage', 'collections', 'items', newItems);
+              }}
+              className="text-[10px] uppercase tracking-widest font-bold border border-brand-black px-4 py-2 hover:bg-brand-black hover:text-white transition-colors"
+            >
+              + Add Collection
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6">
+            {(content.homepage.collections.items || []).map((item: any, index: number) => {
+              const total = content.homepage.collections.items.length;
+              const itemImage = item.image || '';
+              const imageMissing = !itemImage || itemImage === '/placeholder.svg' || itemImage.endsWith('placeholder.svg');
+              return (
+                <div key={item.id || index} className="border border-brand-divider bg-white">
+                  {/* Row header with reorder + delete */}
+                  <div className="flex items-center justify-between px-5 py-3 border-b border-brand-divider bg-brand-bg/50">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-[10px] bg-brand-black text-white px-2 py-1">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <span className="text-sm font-display text-brand-black">{item.title || 'Untitled'}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => reorderArray(['homepage', 'collections', 'items'], index, index - 1)}
+                        className="w-8 h-8 border border-brand-divider flex items-center justify-center hover:bg-brand-bg disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Move up"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        disabled={index === total - 1}
+                        onClick={() => reorderArray(['homepage', 'collections', 'items'], index, index + 1)}
+                        className="w-8 h-8 border border-brand-divider flex items-center justify-center hover:bg-brand-bg disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Move down"
+                      >
+                        ▼
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!confirm(`Remove "${item.title}"?`)) return;
+                          const newItems = [...content.homepage.collections.items];
+                          newItems.splice(index, 1);
+                          updateNestedContent('homepage', 'collections', 'items', newItems);
+                        }}
+                        className="ml-2 px-3 h-8 border border-red-200 text-red-600 text-[10px] uppercase tracking-widest font-bold hover:bg-red-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Row body */}
+                  <div className="p-5 grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-6">
+                    {/* LIVE image preview */}
+                    <div className="aspect-[3/4] border border-brand-divider bg-brand-bg overflow-hidden relative">
+                      {imageMissing ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-3 gap-2 bg-gradient-to-br from-brand-bg to-brand-divider/30">
+                          <ImageIcon size={28} className="text-brand-secondary/50" strokeWidth={1} />
+                          <span className="text-[9px] uppercase tracking-widest font-bold text-brand-secondary">No image</span>
+                          <div className="text-[9px] text-brand-secondary/80 pt-1 border-t border-brand-divider/50 w-full max-w-[140px]">
+                            <p><span className="text-brand-black/60">Rec:</span> <span className="font-mono">1200 × 1600</span></p>
+                            <p><span className="text-brand-black/60">Ratio:</span> <span className="font-mono">3:4</span></p>
+                          </div>
+                        </div>
+                      ) : (
+                        <img
+                          src={itemImage}
+                          alt={item.title}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      )}
+                    </div>
+
+                    {/* Form fields */}
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FormField label="Title">
+                          <Input
+                            type="text"
+                            value={item.title || ''}
+                            placeholder="e.g. 3 Piece Suit"
+                            onChange={(e) => {
+                              const newItems = [...content.homepage.collections.items];
+                              newItems[index] = { ...item, title: e.target.value };
+                              updateNestedContent('homepage', 'collections', 'items', newItems);
+                            }}
+                          />
+                        </FormField>
+                        <FormField label="Link">
+                          <Input
+                            type="text"
+                            value={item.link || ''}
+                            placeholder="/collections/3-piece-suit"
+                            onChange={(e) => {
+                              const newItems = [...content.homepage.collections.items];
+                              newItems[index] = { ...item, link: e.target.value };
+                              updateNestedContent('homepage', 'collections', 'items', newItems);
+                            }}
+                          />
+                        </FormField>
+                      </div>
+                      <FormField label="Descriptor (short tagline)">
+                        <Input
+                          type="text"
+                          value={item.descriptor || ''}
+                          placeholder="e.g. Modern silhouettes in disciplined cuts"
+                          onChange={(e) => {
+                            const newItems = [...content.homepage.collections.items];
+                            newItems[index] = { ...item, descriptor: e.target.value };
+                            updateNestedContent('homepage', 'collections', 'items', newItems);
+                          }}
+                        />
+                      </FormField>
+                      <FormField label="Image">
                         <ImageUploadInput
-                          value={item.image}
+                          value={item.image || ''}
                           onChange={(val) => {
                             const newItems = [...content.homepage.collections.items];
                             newItems[index] = { ...item, image: val };
                             updateNestedContent('homepage', 'collections', 'items', newItems);
                           }}
+                          purpose={`Collection #${index + 1} background`}
+                          recommendedSize="1200 × 1600"
+                          aspectRatio="3:4"
+                          storagePath="collections"
                         />
-                        <div className="w-12 h-12 border border-brand-divider bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
-                          <img src={item.image} alt="" className="w-full h-full object-cover" />
-                        </div>
-                      </div>
-                    </FormField>
+                      </FormField>
+                    </div>
                   </div>
                 </div>
+              );
+            })}
+
+            {(!content.homepage.collections.items || content.homepage.collections.items.length === 0) && (
+              <div className="p-8 border border-dashed border-brand-divider text-center text-sm text-brand-secondary">
+                No collections yet. Click "+ Add Collection" above to create one.
               </div>
-            ))}
+            )}
           </div>
         </div>
       </FormSection>

@@ -1,17 +1,17 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 
-export default defineConfig(({ mode }) => {
-  const env       = loadEnv(mode, '.', '');
-  const buildTime = new Date().toISOString(); 
+// LUXARDO FASHION storefront build -> dist/ (Firebase Hosting, project
+// luxardo-fashion-website). LUXARDO FLOW lives in its own repo/app now.
+export default defineConfig(() => {
+  const buildTime = new Date().toISOString();
 
   return {
     plugins: [react(), tailwindcss()],
 
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       '__BUILD_TIME__': JSON.stringify(buildTime),
     },
 
@@ -27,6 +27,8 @@ export default defineConfig(({ mode }) => {
 
     build: {
       manifest: true,
+      outDir: 'dist',
+      emptyOutDir: true,
 
       rollupOptions: {
         output: {
@@ -34,13 +36,15 @@ export default defineConfig(({ mode }) => {
           chunkFileNames : 'assets/[name].[hash].js',
           assetFileNames : 'assets/[name].[hash][extname]',
 
+          // Only libraries every page needs get their own long-cached files,
+          // so a website update doesn't make returning shoppers re-download
+          // them. Everything else (admin-only libraries like markdown, the
+          // tour, the AI SDK) is split per page by Rollup and never reaches a
+          // shopper who doesn't open that page.
           manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('firebase'))                return 'vendor-firebase';
-              if (id.includes('motion') || id.includes('framer')) return 'vendor-motion';
-              if (id.includes('react-phone-input'))       return 'vendor-phone-input';
-              return 'vendor';
-            }
+            if (!id.includes('node_modules')) return;
+            if (/node_modules\/(@firebase|firebase)\//.test(id)) return 'vendor-firebase';
+            if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) return 'vendor-react';
           },
         },
       },

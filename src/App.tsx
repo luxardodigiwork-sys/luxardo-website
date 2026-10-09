@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import React, { Suspense, lazy, useEffect, useState } from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { BackendPermissions } from "./types";
 import Lenis from "lenis";
 
@@ -9,32 +9,33 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import HomePage from "./pages/HomePage";
 import CollectionsPage from "./pages/CollectionsPage";
 import CollectionDetailPage from "./pages/CollectionDetailPage";
-import PrimePage from "./pages/PrimePage";
-import PrimeMembershipCheckoutPage from "./pages/PrimeMembershipCheckoutPage";
-import PrimeMembershipSuccessPage from "./pages/PrimeMembershipSuccessPage";
-import PrimeMembershipFailedPage from "./pages/PrimeMembershipFailedPage";
-import PrimeDashboardPage from "./pages/PrimeDashboardPage";
-import MembershipTermsPage from "./pages/MembershipTermsPage";
-import CraftsmanshipPage from "./pages/CraftsmanshipPage";
-import OurStoryPage from "./pages/OurStoryPage";
-import WholesalePage from "./pages/WholesalePage";
-import ContactPage from "./pages/ContactPage";
-import FAQPage from "./pages/FAQPage";
-import ShippingPolicyPage from "./pages/ShippingPolicyPage";
-import ReturnsPolicyPage from "./pages/ReturnsPolicyPage";
-import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
-import TermsPage from "./pages/TermsPage";
+const PrimePage = lazy(() => import("./pages/PrimePage"));
+const PrimeMembershipCheckoutPage = lazy(() => import("./pages/PrimeMembershipCheckoutPage"));
+const PrimeMembershipSuccessPage = lazy(() => import("./pages/PrimeMembershipSuccessPage"));
+const PrimeMembershipFailedPage = lazy(() => import("./pages/PrimeMembershipFailedPage"));
+const PrimeDashboardPage = lazy(() => import("./pages/PrimeDashboardPage"));
+const MembershipTermsPage = lazy(() => import("./pages/MembershipTermsPage"));
+const CraftsmanshipPage = lazy(() => import("./pages/CraftsmanshipPage"));
+const OurStoryPage = lazy(() => import("./pages/OurStoryPage"));
+const WholesalePage = lazy(() => import("./pages/WholesalePage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const FAQPage = lazy(() => import("./pages/FAQPage"));
+const ShippingPolicyPage = lazy(() => import("./pages/ShippingPolicyPage"));
+const ReturnsPolicyPage = lazy(() => import("./pages/ReturnsPolicyPage"));
+const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import OrderConfirmationPage from "./pages/OrderConfirmationPage";
-import TrackOrderPage from "./pages/TrackOrderPage";
-import AccountPage from "./pages/AccountPage";
-import OrderDetailsPage from "./pages/OrderDetailsPage";
-import LoginPage from "./pages/LoginPage";
+const TrackOrderPage = lazy(() => import("./pages/TrackOrderPage"));
+const AccountPage = lazy(() => import("./pages/AccountPage"));
+const OrderDetailsPage = lazy(() => import("./pages/OrderDetailsPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
 import ProductPage from "./pages/ProductPage";
-import BespokeRequestPage from "./pages/BespokeRequestPage";
-import StyleConsultationPage from "./pages/StyleConsultationPage";
-import FabricLibraryPage from "./pages/FabricLibraryPage";
+const BespokeRequestPage = lazy(() => import("./pages/BespokeRequestPage"));
+const StyleConsultationPage = lazy(() => import("./pages/StyleConsultationPage"));
+const FabricLibraryPage = lazy(() => import("./pages/FabricLibraryPage"));
 
 import { WishlistProvider } from "./context/WishlistContext";
 import { CountryProvider, useCountry } from "./context/CountryContext";
@@ -47,38 +48,51 @@ function CountryModalBridge() {
   return <FirstVisitModal onSelect={setCountry} />;
 }
 import { CartProvider } from "./context/CartContext";
+import { ProductsProvider } from "./context/ProductsContext";
+import { syncSiteContentFromFirestore, subscribeSiteContent } from "./utils/siteContentSync";
+import { fetchProductsFromFirestore } from "./utils/productsFirestore";
 
 import RegisterPage from "./pages/RegisterPage";
 
-// Admin imports
-import AdminLoginPage from "./pages/admin/AdminLoginPage";
-import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
-import AdminDispatchPage from "./pages/admin/AdminDispatchPage";
-import AdminOrderDetailsPage from "./pages/admin/AdminOrderDetailsPage";
-import AdminProductsPage from "./pages/admin/AdminProductsPage";
-import AdminCollectionsPage from "./pages/admin/AdminCollectionsPage";
-import AdminAddProductPage from "./pages/admin/AdminAddProductPage";
-import AdminEditProductPage from "./pages/admin/AdminEditProductPage";
-import AdminContentPage from "./pages/admin/AdminContentPage";
-import AdminMediaPage from "./pages/admin/AdminMediaPage";
-import AdminPoliciesPage from "./pages/admin/AdminPoliciesPage";
-import AdminPrimeContentPage from "./pages/admin/AdminPrimeContentPage";
-import AdminBespokeRequestsPage from "./pages/admin/AdminBespokeRequestsPage";
-import AdminPrimeMembersPage from "./pages/admin/AdminPrimeMembersPage";
-import AdminBackendManagementPage from "./pages/admin/BackendManagementPage";
-import AdminPartnersPage from "./pages/admin/AdminPartnersPage";
-import AdminContactMessagesPage from "./pages/admin/AdminContactMessagesPage";
-import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
-import DispatchDashboardPage from "./pages/dispatch/DispatchDashboardPage";
-import BackendGatewayPage from "./pages/BackendGatewayPage";
-import DispatchLayout from "./components/dispatch/DispatchLayout";
+// Admin + role login pages (each role has dedicated login route)
+const AdminLoginPage = lazy(() => import("./pages/admin/AdminLoginPage"));
+const OwnerLoginPage = lazy(() => import("./pages/owner/OwnerLoginPage"));
+const DispatchLoginPage = lazy(() => import("./pages/dispatch/DispatchLoginPage"));
+const AccountsLoginPage = lazy(() => import("./pages/accounts/AccountsLoginPage"));
+const AdminDashboardPage = lazy(() => import("./pages/admin/AdminDashboardPage"));
+const AdminDispatchPage = lazy(() => import("./pages/admin/AdminDispatchPage"));
+const AdminOrderDetailsPage = lazy(() => import("./pages/admin/AdminOrderDetailsPage"));
+const AdminProductsPage = lazy(() => import("./pages/admin/AdminProductsPage"));
+const AdminCollectionsPage = lazy(() => import("./pages/admin/AdminCollectionsPage"));
+const AdminAddProductPage = lazy(() => import("./pages/admin/AdminAddProductPage"));
+const AdminEditProductPage = lazy(() => import("./pages/admin/AdminEditProductPage"));
+const AdminContentPage = lazy(() => import("./pages/admin/AdminContentPage"));
+const AdminMediaPage = lazy(() => import("./pages/admin/AdminMediaPage"));
+const AdminPhotoOptimizerPage = lazy(() => import("./pages/admin/AdminPhotoOptimizerPage"));
+const AdminPoliciesPage = lazy(() => import("./pages/admin/AdminPoliciesPage"));
+const AdminPrimeContentPage = lazy(() => import("./pages/admin/AdminPrimeContentPage"));
+const AdminBespokeRequestsPage = lazy(() => import("./pages/admin/AdminBespokeRequestsPage"));
+const AdminPrimeMembersPage = lazy(() => import("./pages/admin/AdminPrimeMembersPage"));
+const AdminBackendManagementPage = lazy(() => import("./pages/admin/BackendManagementPage"));
+const AdminPartnersPage = lazy(() => import("./pages/admin/AdminPartnersPage"));
+const AdminContactMessagesPage = lazy(() => import("./pages/admin/AdminContactMessagesPage"));
+const AdminSettingsPage = lazy(() => import("./pages/admin/AdminSettingsPage"));
+const AdminNewsletterPage = lazy(() => import("./pages/admin/AdminNewsletterPage"));
+const DispatchDashboardPage = lazy(() => import("./pages/dispatch/DispatchDashboardPage"));
+const BackendGatewayPage = lazy(() => import("./pages/BackendGatewayPage"));
+const DispatchLayout = lazy(() => import("./components/dispatch/DispatchLayout"));
 
-import AdminLayout from "./components/admin/AdminLayout";
+const AdminLayout = lazy(() => import("./components/admin/AdminLayout"));
+import { CategoriesProvider } from "./context/CategoriesContext";
+import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
 
-import OwnerLayout from "./components/owner/OwnerLayout";
-import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
-import AnalysisLayout from "./components/analysis/AnalysisLayout";
-import AnalysisDashboardPage from "./pages/analysis/AnalysisDashboardPage";
+const OwnerLayout = lazy(() => import("./components/owner/OwnerLayout"));
+const OwnerDashboardPage = lazy(() => import("./pages/owner/OwnerDashboardPage"));
+const AnalysisLayout = lazy(() => import("./components/analysis/AnalysisLayout"));
+const AnalysisDashboardPage = lazy(() => import("./pages/analysis/AnalysisDashboardPage"));
+
+// V1 Production System
+// Phase 2 — Design → Sample Design → Sample Piece → Production Request
 
 const ProtectedBackendRoute = ({
   role,
@@ -90,6 +104,7 @@ const ProtectedBackendRoute = ({
   children: React.ReactNode;
 }) => {
   const { user, isAuthReady } = useAuth();
+  const location = useLocation();
 
   if (!isAuthReady) {
     return (
@@ -103,19 +118,48 @@ const ProtectedBackendRoute = ({
   const hasRole = user && user.role === role;
   const hasPermission = !permission || user?.permissions?.[permission];
 
+  // 🚀 FIXED: Agar login nahi hai toh /backend par bhejo
   if (!user || (!isSuperAdmin && (!hasRole || !hasPermission))) {
-    return <Navigate to="/backend" replace />;
+    return <Navigate to="/backend" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;
 };
 
-export default function App() {
-  const [isInitializing, setIsInitializing] = useState(true);
-
+/* LUXARDO FLOW (production system) is a separate app and repo
+ * (luxardo-flow). Any old /production link on the website now sends the user
+ * there instead of a broken page. */
+const FLOW_URL = "https://luxardo-flow.web.app";
+function FlowRedirect() {
   useEffect(() => {
-  setIsInitializing(false);
-}, []);
+    window.location.replace(FLOW_URL + window.location.pathname + window.location.search);
+  }, []);
+  return null;
+}
+
+function ProductionRoutes() {
+  return <Route path="/production/*" element={<FlowRedirect />} />;
+}
+
+/* Shown for the split second while a page's code downloads (back-office
+ * screens and less-visited pages are loaded on demand, so a shopper's first
+ * visit only downloads the storefront). */
+function RouteFallback() {
+  return <div className="min-h-[60vh]" aria-busy="true" />;
+}
+
+export default function App() {
+  useEffect(() => {
+
+    syncSiteContentFromFirestore();
+    fetchProductsFromFirestore();
+    
+    const unsubSiteContent = subscribeSiteContent(() => {
+      window.dispatchEvent(new Event('siteContentUpdated'));
+    });
+    
+    return () => unsubSiteContent();
+  }, []);
 
   useEffect(() => {
     if ("scrollRestoration" in history) {
@@ -123,13 +167,13 @@ export default function App() {
     }
 
     const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      duration: 2.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -8 * t)),
       orientation: "vertical",
       gestureOrientation: "vertical",
       smoothWheel: true,
-      wheelMultiplier: 1.2,
-      touchMultiplier: 1.5,
+      wheelMultiplier: 0.8,
+      touchMultiplier: 1.0,
       infinite: false,
     });
 
@@ -147,25 +191,25 @@ export default function App() {
     };
   }, []);
 
-  if (isInitializing) {
-    return (
-      <div className="min-h-screen bg-brand-bg flex flex-col gap-6 items-center justify-center font-display uppercase tracking-widest text-sm text-brand-black">
-        <div className="w-12 h-12 border-t-2 border-r-2 border-brand-black rounded-full animate-spin"></div>
-        <p className="animate-pulse">Loading LUXARDO FASHION...</p>
-      </div>
-    );
-  }
-
   return (
     <AuthProvider>
       <CountryProvider>
         <CountryModalBridge />
+      <ProductsProvider>
+      <CategoriesProvider>
       <CartProvider>
         <WishlistProvider>
+          <Suspense fallback={<RouteFallback />}>
           <Routes>
+            {/* Dedicated login pages — one per role */}
             <Route path="/admin/login" element={<AdminLoginPage />} />
+            <Route path="/owner/login" element={<OwnerLoginPage />} />
+            <Route path="/dispatch/login" element={<DispatchLoginPage />} />
+            <Route path="/accounts/login" element={<AccountsLoginPage />} />
+            <Route path="/analysis/login" element={<Navigate to="/accounts/login" replace />} />
 
             <Route path="/admin">
+              <Route element={<ProtectedAdminRoute />}>
               <Route element={<AdminLayout />}>
                 <Route
                   index
@@ -173,6 +217,8 @@ export default function App() {
                 />
                 <Route path="dashboard" element={<AdminDashboardPage />} />
                 <Route path="dispatch" element={<AdminDispatchPage />} />
+                <Route path="orders" element={<Navigate to="/admin/dispatch" replace />} />
+                <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
                 <Route path="products" element={<AdminProductsPage />} />
                 <Route path="collections" element={<AdminCollectionsPage />} />
                 <Route path="products/new" element={<AdminAddProductPage />} />
@@ -182,6 +228,7 @@ export default function App() {
                 />
                 <Route path="content" element={<AdminContentPage />} />
                 <Route path="media" element={<AdminMediaPage />} />
+                <Route path="photos" element={<AdminPhotoOptimizerPage />} />
                 <Route
                   path="prime-content"
                   element={<AdminPrimeContentPage />}
@@ -201,17 +248,18 @@ export default function App() {
                   element={<AdminContactMessagesPage />}
                 />
                 <Route
+                  path="newsletter"
+                  element={<AdminNewsletterPage />}
+                />
+                <Route
                   path="backend-management"
                   element={<AdminBackendManagementPage />}
                 />
                 <Route path="settings" element={<AdminSettingsPage />} />
               </Route>
+              </Route>
             </Route>
 
-            <Route
-              path="/dispatch/login"
-              element={<Navigate to="/backend" replace />}
-            />
             <Route
               path="/dispatch"
               element={
@@ -231,23 +279,10 @@ export default function App() {
             </Route>
 
             <Route path="/backend" element={<BackendGatewayPage />} />
-            <Route
-              path="/admin-access"
-              caseSensitive={false}
-              element={<Navigate to="/backend" replace />}
-            />
-            <Route
-              path="/ADMIN-ACCESS"
-              element={<Navigate to="/backend" replace />}
-            />
-            <Route
-              path="/analysis/login"
-              element={<Navigate to="/backend" replace />}
-            />
-            <Route
-              path="/owner/login"
-              element={<Navigate to="/backend" replace />}
-            />
+            <Route path="/admin-access" caseSensitive={false} element={<Navigate to="/admin/login" replace />} />
+            <Route path="/ADMIN-ACCESS" element={<Navigate to="/admin/login" replace />} />
+
+
             <Route
               path="/owner"
               element={
@@ -266,6 +301,7 @@ export default function App() {
               <Route path="dashboard" element={<OwnerDashboardPage />} />
               <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
             </Route>
+            
             <Route
               path="/analysis"
               element={
@@ -283,6 +319,9 @@ export default function App() {
               />
               <Route path="dashboard" element={<AnalysisDashboardPage />} />
             </Route>
+
+            {/* ── LUXARDO FLOW moved to its own app — redirect old links ── */}
+            {ProductionRoutes()}
 
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />
@@ -356,6 +395,7 @@ export default function App() {
               <Route path="our-story" element={<OurStoryPage />} />
               <Route path="wholesale" element={<WholesalePage />} />
               <Route path="contact" element={<ContactPage />} />
+              <Route path="about" element={<AboutPage />} />
               <Route path="faq" element={<FAQPage />} />
               <Route
                 path="policies/shipping"
@@ -365,14 +405,10 @@ export default function App() {
               <Route path="policies/privacy" element={<PrivacyPolicyPage />} />
               <Route path="policies/terms" element={<TermsPage />} />
               <Route path="cart" element={<CartPage />} />
-              <Route
-                path="checkout"
-                element={
-                  <ProtectedRoute>
-                    <CheckoutPage />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Guest checkout: CheckoutPage signs the visitor in anonymously
+                  if needed, so buyers from a live stream don't have to create
+                  an account before paying. Logged-in users work as before. */}
+              <Route path="checkout" element={<CheckoutPage />} />
               <Route
                 path="order-confirmation"
                 element={<OrderConfirmationPage />}
@@ -400,8 +436,11 @@ export default function App() {
               <Route path="product/:id" element={<ProductPage />} />
             </Route>
           </Routes>
+          </Suspense>
         </WishlistProvider>
       </CartProvider>
+      </CategoriesProvider>
+      </ProductsProvider>
       </CountryProvider>
     </AuthProvider>
   );

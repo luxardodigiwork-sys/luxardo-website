@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, ArrowRight, Package, Grid, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { storage } from '../utils/localStorage';
 import { COLLECTIONS } from '../constants';
-import { Product } from '../types';
+import { useCategories } from '../context/CategoriesContext';
+import { photo } from '../utils/images';
+import { useProducts } from '../context/ProductsContext';
 
 interface SearchOverlayProps {
   isOpen: boolean;
@@ -21,14 +22,14 @@ const PAGES = [
 ];
 
 export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
+  const { categories } = useCategories();
   const [query, setQuery] = useState('');
-  const [products, setProducts] = useState<Product[]>([]);
+  const { products } = useProducts();
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (isOpen) {
-      setProducts(storage.getProducts());
       setQuery('');
       // Small delay to ensure the element is rendered before focusing
       setTimeout(() => {
@@ -65,9 +66,9 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
     : [];
 
   const filteredCollections = normalizedQuery
-    ? COLLECTIONS.filter(c => 
-        c.fullName.toLowerCase().includes(normalizedQuery) || 
-        c.shortName.toLowerCase().includes(normalizedQuery)
+    ? categories.filter(c =>
+        c.name.toLowerCase().includes(normalizedQuery) ||
+        c.slug.toLowerCase().includes(normalizedQuery)
       ).slice(0, 3)
     : [];
 
@@ -112,7 +113,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                   if (filteredProducts.length > 0) {
                     handleNavigate(`/product/${filteredProducts[0].id}`);
                   } else if (filteredCollections.length > 0) {
-                    handleNavigate(`/collections/${filteredCollections[0].id}`);
+                    handleNavigate(`/collections/${filteredCollections[0].slug}`);
                   } else if (filteredPages.length > 0) {
                     handleNavigate(filteredPages[0].path);
                   }
@@ -166,7 +167,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                               >
                                 <div className="w-16 h-20 bg-brand-divider overflow-hidden flex-shrink-0">
                                   <img 
-                                    src={product.image} 
+                                    {...photo(product.image, 'card')}
                                     alt={product.name}
                                     className="w-full h-full object-cover   transition-all duration-500"
                                     referrerPolicy="no-referrer"
@@ -195,10 +196,10 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                             {filteredCollections.map(collection => (
                               <div 
                                 key={collection.id}
-                                onClick={() => handleNavigate(`/collections/${collection.id}`)}
+                                onClick={() => handleNavigate(`/collections/${collection.slug}`)}
                                 className="group flex items-center justify-between cursor-pointer py-1.5 border-b border-transparent hover:border-brand-divider transition-colors"
                               >
-                                <span className="text-sm font-sans text-brand-black group-hover:text-brand-secondary transition-colors">{collection.fullName}</span>
+                                <span className="text-sm font-sans text-brand-black group-hover:text-brand-secondary transition-colors">{collection.name}</span>
                                 <ArrowRight className="w-3 h-3 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-brand-secondary" />
                               </div>
                             ))}

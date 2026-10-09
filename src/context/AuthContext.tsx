@@ -1,13 +1,24 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { normalizeStaffRole, isLoomHost, privilegedRoleForEmail, isEligiblePrivilegedStaffDoc } from '../utils/loomIdentity';
+import { ResolutionChannel } from '../utils/resolutionChannel';
 
-interface User {
+const MASTER_ADMIN_EMAIL = 'luxardodigiwork@gmail.com';
+// Loom-only localStorage key (no B2C branding; distinct from the B2C key so the
+// two apps never read each other's cached identity).
+const LOOM_USER_KEY = 'LUXARDO_FLOW_user';
+
+export interface User {
   id: string;
   name: string;
   email?: string;
   role: string;
+  staffRole?: string | null; // V1 production role (designer/pm/guard/tailor/store) from staff/{uid} doc
+  /** LUXARDO FLOW only — true until this User completes the mandatory
+   *  first-login password change. Mirrors staff/{uid}.mustChangePassword. */
+  mustChangePassword?: boolean;
   isPrimeMember: boolean;
   permissions?: Record<string, boolean>;
   country?: string;
@@ -34,9 +45,29 @@ interface AuthContextType {
   logout: () => Promise<void>;
   login: (userData: User) => void;
   updateUserPreferences: (preferences: Partial<User>) => void;
-  loginAdmin: (username: string, password: string) => Promise<void>;
+  loginAdmin: (email: string, password: string) => Promise<void>;
   resetPassword: (email: string, resetCode: string, newPassword: string) => Promise<void>;
   upgradeToPrime: () => void;
+  /**
+   * LUXARDO FLOW (Loom) only — awaits the SINGLE authoritative staff-identity
+   * resolution (the same one `onAuthStateChanged` below performs and stores
+   * in `user`) for a given Firebase uid, instead of re-reading staff/{uid}
+   * independently. See RoleLoginPage's `common` verifyRole() branch: a caller
+   * must never do its own redundant getDoc + signOut() on top of this — that
+   * was the auth race (two independent reads of the same doc, one of
+   * which could sign the user back out after the other had already approved
+   * and navigated them in). Resolves to the resolved Loom `User` (or `null`
+   * if not a recognised staff identity) once AuthContext's own resolution for
+   * that uid completes; rejects if it doesn't complete within `timeoutMs`.
+   */
+  waitForResolution: (uid: string, timeoutMs?: number) => Promise<User | null>;
+  /**
+   * LUXARDO FLOW (Loom) only — optimistically patch the resolved Loom user in
+   * place (e.g. mustChangePassword: false right after a successful password
+   * change) without waiting for a full onAuthStateChanged re-resolution. Does
+   * nothing outside the Loom host / when no user is resolved.
+   */
+  updateLoomUser: (patch: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,26 +76,165 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
+  // Loom-only single-resolution channel (see `waitForResolution` in
+  // AuthContextType above, and src/utils/resolutionChannel.ts for the race
+  // this exists to close). settle() is called exactly once, by
+  // onAuthStateChanged below — the one authoritative resolver.
+  const loomResolutionRef = useRef(new ResolutionChannel<User | null>());
+  const waitForResolution = (uid: string, timeoutMs?: number) =>
+    loomResolutionRef.current.wait(uid, timeoutMs);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
-          const customerDoc = await getDoc(doc(db, 'customers', firebaseUser.uid));
+          // ══════════════════════════════════════════════════════════════
+          // LUXARDO FLOW (Loom) identity resolution.
+          //
+          // On the Loom project (luxardo-flow) the client can ONLY read
+          // staff/{uid} — there is no readable customers/{uid} (the mirror is
+          // denied by firestore.loom.rules). Resolving identity here, from
+          // staff/{uid} + the two privileged identifiers only, avoids the
+          // permission-denied throw that previously aborted sign-in.
+          // ══════════════════════════════════════════════════════════════
+          if (isLoomHost()) {
+            let loomUser: User | null = null;
+
+            const privRole = privilegedRoleForEmail(firebaseUser.email);
+            try {
+              const staffDoc = await getDoc(doc(db, 'staff', firebaseUser.uid));
+              const s = staffDoc.exists() ? staffDoc.data() : null;
+
+              if (privRole) {
+                // Super Admin / Admin: the Gmail identifier tells us WHICH
+                // privileged identity is signing in, but it is NOT sufficient
+                // on its own — this must still resolve through an ACTIVE
+                // staff/{uid} doc carrying a matching admin-tier role, exactly
+                // like every other identity. A privileged email with no doc
+                // (or a deactivated/mismatched one) fails closed to null, the
+                // same as an unrecognised account — it is never trusted by
+                // email alone. (Real authorization was always staff/{uid}-only
+                // server-side via requireStaff(); this brings the CLIENT's
+                // resolution in line with that, instead of it trusting email.)
+                if (isEligiblePrivilegedStaffDoc(privRole, s?.role, s?.active)) {
+                  loomUser = {
+                    id: firebaseUser.uid,
+                    name: s.displayName || s.name || firebaseUser.displayName || (privRole === 'super_admin' ? 'Super Admin' : 'Admin'),
+                    email: s.email || firebaseUser.email || '',
+                    role: privRole,
+                    staffRole: privRole,
+                    isPrimeMember: false,
+                    mustChangePassword: !!s.mustChangePassword,
+                  };
+                }
+              } else if (s) {
+                const role = normalizeStaffRole(s.role); // null → fail closed
+                if (role && s.active !== false) {
+                  loomUser = {
+                    id: firebaseUser.uid,
+                    name: s.displayName || s.name || firebaseUser.displayName || 'Staff',
+                    email: s.email || firebaseUser.email || '',
+                    role,          // customers-style role mirrors the staff role
+                    staffRole: role,
+                    isPrimeMember: false,
+                    mustChangePassword: !!s.mustChangePassword,
+                  };
+                }
+              }
+            } catch (e) {
+              console.error('[LUXARDO FLOW] staff/{uid} read failed:', e);
+            }
+
+            if (loomUser) {
+              setUser(loomUser);
+              try { localStorage.setItem(LOOM_USER_KEY, JSON.stringify(loomUser)); } catch {}
+            } else {
+              // Authenticated but no recognised staff identity → fail closed.
+              setUser(null);
+              try { localStorage.removeItem(LOOM_USER_KEY); } catch {}
+            }
+            // Hand the SAME resolution to anyone awaiting it (RoleLoginPage's
+            // common login) instead of letting them re-read staff/{uid} on
+            // their own — that redundant second read was the race that could
+            // sign a just-approved session back out.
+            loomResolutionRef.current.settle(firebaseUser.uid, loomUser);
+            return; // finally{} still runs setIsAuthReady(true)
+          }
+
+          // 🔐 AUTO-PROVISION ADMIN: If master email logs in but no customer doc, create one with role:admin
+          const isMasterAdmin = firebaseUser.email?.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+          const customerRef = doc(db, 'customers', firebaseUser.uid);
+          let customerDoc = await getDoc(customerRef);
+
+          if (!customerDoc.exists() && isMasterAdmin) {
+            console.log('[AuthContext] Master admin login — auto-provisioning customer doc with role:admin');
+            const adminData = {
+              id: firebaseUser.uid,
+              name: 'Admin',
+              email: firebaseUser.email,
+              role: 'admin',
+              isPrimeMember: false,
+              createdAt: new Date().toISOString(),
+              permissions: {
+                products: true, orders: true, content: true, media: true,
+                customers: true, dispatch: true, settings: true,
+              },
+            };
+            await setDoc(customerRef, adminData);
+            customerDoc = await getDoc(customerRef);
+          } else if (customerDoc.exists() && isMasterAdmin) {
+            // Force-promote master admin every login (handles previously-created customer docs with wrong role)
+            const existing = customerDoc.data();
+            if (existing.role !== 'admin' && existing.role !== 'super_admin') {
+              console.log('[AuthContext] Master admin doc had role:' + existing.role + ' — promoting to admin');
+              await setDoc(customerRef, {
+                role: 'admin',
+                permissions: {
+                  products: true, orders: true, content: true, media: true,
+                  customers: true, dispatch: true, settings: true,
+                },
+                updatedAt: new Date().toISOString(),
+              }, { merge: true });
+              customerDoc = await getDoc(customerRef);
+            }
+          }
 
           if (customerDoc.exists()) {
             const data = customerDoc.data();
+
+            // ── V1 production staff identity ──────────────────────────────
+            // Read staff/{uid} to get the production role (designer/pm/guard/tailor/store).
+            // This is additive — does not modify the existing customer flow.
+            // A legacy / unknown role (e.g. "grade") normalises to null and
+            // therefore fails closed.
+            let staffRole: string | null = null;
+            try {
+              const staffRef = doc(db, 'staff', firebaseUser.uid);
+              const staffDoc = await getDoc(staffRef);
+              if (staffDoc.exists()) {
+                const s = staffDoc.data();
+                if (s.active !== false) staffRole = normalizeStaffRole(s.role);
+              }
+            } catch (e) {
+              // Non-fatal: staff doc may not exist for non-production users
+            }
+            // Admin / super_admin customers are implicit production staff
+            // (mirrors functions/src/staffAuth.ts requireStaff fallback) so the
+            // master admin can reach /production even without a staff/{uid} doc.
+            if (!staffRole) {
+              const custRole = String(data.role || '').toLowerCase();
+              if (custRole === 'admin' || custRole === 'super_admin') staffRole = custRole;
+            }
+
             const userData: User = {
               id: firebaseUser.uid,
-              name: data.firstName
-                ? `${data.firstName} ${data.lastName || ''}`.trim()
-                : data.name || 'User',
+              name: data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : data.name || 'User',
               email: data.email || firebaseUser.email || '',
               role: data.role || 'customer',
+              staffRole,
               isPrimeMember: data.isPrimeMember || false,
               phone: data.phone || firebaseUser.phoneNumber || '',
-              country: data.country,
-              language: data.language,
-              currency: data.currency,
+              country: data.country, language: data.language, currency: data.currency,
               createdAt: data.createdAt,
               membershipActivation: data.membershipActivation,
               membershipExpiry: data.membershipExpiry,
@@ -73,68 +243,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               primePrivileges: data.primePrivileges,
               notes: data.notes,
             };
-
             setUser(userData);
             localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(userData));
             localStorage.removeItem('LUXARDO FASHION_logged_out');
           } else {
-            const cached = localStorage.getItem('LUXARDO FASHION_user');
-            if (cached) {
-              try {
-                const parsedUser = JSON.parse(cached);
-                if (parsedUser?.id === firebaseUser.uid) {
-                  setUser(parsedUser);
-                } else {
-                  localStorage.removeItem('LUXARDO FASHION_user');
-                  setUser(null);
+            // ── No customers/{uid} — resolve from staff/{uid} ───────────────
+            // On the Loom project (luxardo-flow) staff are provisioned with a
+            // staff/{uid} doc; a customers/{uid} mirror is written alongside by
+            // staffCreate, but older records / bootstrap accounts may only have
+            // the staff doc. Resolve the Loom identity directly from it.
+            let staffUser: User | null = null;
+            try {
+              const staffDoc = await getDoc(doc(db, 'staff', firebaseUser.uid));
+              if (staffDoc.exists()) {
+                const s = staffDoc.data();
+                const role = normalizeStaffRole(s.role); // null for legacy/unknown → fail closed
+                if (role && s.active !== false) {
+                  staffUser = {
+                    id: firebaseUser.uid,
+                    name: s.displayName || s.name || firebaseUser.displayName || 'Staff',
+                    email: s.email || firebaseUser.email || '',
+                    role,          // customers-style role mirrors the staff role
+                    staffRole: role,
+                    isPrimeMember: false,
+                    phone: firebaseUser.phoneNumber || '',
+                  };
                 }
-              } catch {
-                localStorage.removeItem('LUXARDO FASHION_user');
-                setUser(null);
               }
-            } else {
-              setUser(null);
+            } catch (e) {
+              // Non-fatal: fall through to the generic customer fallback
             }
+
+            const resolved: User = staffUser ?? {
+              id: firebaseUser.uid,
+              name: firebaseUser.displayName || 'User',
+              email: firebaseUser.email || '',
+              role: 'customer',
+              staffRole: null,
+              isPrimeMember: false,
+              phone: firebaseUser.phoneNumber || '',
+            };
+            setUser(resolved);
+            localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(resolved));
           }
         } else {
-          const cached = localStorage.getItem('LUXARDO FASHION_user');
-          const wasLoggedOut = localStorage.getItem('LUXARDO FASHION_logged_out');
-
-          if (cached && !wasLoggedOut) {
-            try {
-              const parsedUser = JSON.parse(cached);
-              const adminRoles = ['admin', 'super_admin', 'dispatch', 'owner', 'analysis'];
-              if (parsedUser?.id && adminRoles.includes(parsedUser.role)) {
-                setUser(parsedUser);
-              } else {
-                localStorage.removeItem('LUXARDO FASHION_user');
-                setUser(null);
-              }
-            } catch {
-              localStorage.removeItem('LUXARDO FASHION_user');
-              setUser(null);
-            }
-          } else {
-            setUser(null);
-          }
+          setUser(null);
+          localStorage.removeItem('LUXARDO FASHION_user');
         }
       } catch (err) {
         console.error('Auth state change error:', err);
-        try {
-          const cached = localStorage.getItem('LUXARDO FASHION_user');
-          if (cached) {
-            const parsedUser = JSON.parse(cached);
-            if (parsedUser?.id) setUser(parsedUser);
-          }
-        } catch {
-          setUser(null);
-        }
       } finally {
         setIsAuthReady(true);
       }
     });
-
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      // Don't leave any in-flight waitForResolution() caller hanging until its
+      // own timeout if the provider itself unmounts.
+      loomResolutionRef.current.dispose(null);
+    };
   }, []);
 
   const login = (userData: User) => {
@@ -143,93 +310,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('LUXARDO FASHION_logged_out');
   };
 
+  const updateLoomUser = (patch: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...patch };
+      try { localStorage.setItem(LOOM_USER_KEY, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
   const logout = async () => {
-    try {
-      if (auth.currentUser) {
-        await signOut(auth);
-      }
-    } catch (err) {
-      console.error('Firebase sign out error:', err);
-    } finally {
-      setUser(null);
-      localStorage.removeItem('LUXARDO FASHION_user');
-      localStorage.setItem('LUXARDO FASHION_logged_out', 'true');
-      try {
-        sessionStorage.removeItem('LUXARDO FASHION_cart');
-        localStorage.removeItem('LUXARDO FASHION_temp_preferences');
-        localStorage.removeItem('LUXARDO FASHION_temp_wishlist');
-      } catch {}
-    }
+    try { if (auth.currentUser) await signOut(auth); } catch (err) {}
+    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch (err) {}
+    setUser(null);
+    localStorage.removeItem('LUXARDO FASHION_user');
+    try { localStorage.removeItem(LOOM_USER_KEY); } catch {}
+    localStorage.setItem('LUXARDO FASHION_logged_out', 'true');
   };
 
   const updateUserPreferences = (preferences: Partial<User>) => {
     if (!user) return;
-
-    const updatedUser = { ...user, ...preferences };
-    setUser(updatedUser);
-    localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(updatedUser));
-
+    const updated = { ...user, ...preferences };
+    setUser(updated);
+    localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(updated));
     if (auth.currentUser && user.role === 'customer') {
-      const updateData: Record<string, any> = {};
-      if (preferences.country !== undefined) updateData.country = preferences.country;
-      if (preferences.language !== undefined) updateData.language = preferences.language;
-      if (preferences.currency !== undefined) updateData.currency = preferences.currency;
-      if (preferences.isPrimeMember !== undefined) updateData.isPrimeMember = preferences.isPrimeMember;
-      if (preferences.membershipActivation !== undefined) updateData.membershipActivation = preferences.membershipActivation;
-      if (preferences.membershipExpiry !== undefined) updateData.membershipExpiry = preferences.membershipExpiry;
-      if (preferences.primePrivileges !== undefined) updateData.primePrivileges = preferences.primePrivileges;
-
-      if (Object.keys(updateData).length > 0) {
-        updateData.lastUpdated = new Date().toISOString();
-        setDoc(doc(db, 'customers', auth.currentUser.uid), updateData, { merge: true })
-          .catch((err) => console.error('Failed to sync preferences to Firestore:', err));
-      }
+      const updateData: Record<string, any> = { lastUpdated: new Date().toISOString() };
+      Object.keys(preferences).forEach(k => {
+        if ((preferences as any)[k] !== undefined) updateData[k] = (preferences as any)[k];
+      });
+      setDoc(doc(db, 'customers', auth.currentUser.uid), updateData, { merge: true })
+        .catch(e => console.error('Sync error:', e));
     }
   };
 
-  const loginAdmin = async (username: string, password: string) => {
-    console.log('Admin login:', username);
-    const adminUser: User = {
-      id: 'admin',
-      name: 'Admin',
-      email: username,
-      role: 'admin',
+  const loginAdmin = async (email: string, password: string) => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Invalid credentials or unauthorized access');
+    const userData: User = {
+      id: String(data.user.id),
+      name: data.user.full_name || data.user.email,
+      email: data.user.email,
+      role: data.user.role,
+      staffRole: null, // SQLite JWT login — no production staff role
       isPrimeMember: false,
+      permissions: data.user.permissions || {},
+      forcePasswordReset: data.user.force_password_reset === 1,
     };
-    login(adminUser);
+    login(userData);
   };
 
   const resetPassword = async (email: string, resetCode: string, newPassword: string) => {
-    console.log('Reset password for', email, resetCode, newPassword);
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code: resetCode, newPassword }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to reset password');
   };
 
   const upgradeToPrime = () => {
-    if (user) {
-      updateUserPreferences({ isPrimeMember: true });
-    }
+    if (user) updateUserPreferences({ isPrimeMember: true });
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoggedIn: !!user,
-        isAuthReady,
-        logout,
-        login,
-        updateUserPreferences,
-        loginAdmin,
-        resetPassword,
-        upgradeToPrime,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user, isLoggedIn: !!user, isAuthReady, logout, login,
+      updateUserPreferences, loginAdmin, resetPassword, upgradeToPrime,
+      waitForResolution, updateLoomUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 }

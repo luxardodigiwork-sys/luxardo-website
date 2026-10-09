@@ -1,31 +1,67 @@
-name: Deploy LUXARDO FASHION to Firebase
+# LUXARDO FASHION website — the ONE way the website goes online.
+#
+#   Pull request into main  ->  build + test, then a PREVIEW link
+#                               (posted on the pull request; 7 days).
+#                               luxardofashion.com is not touched.
+#   Merge / push to main    ->  build + test, then LIVE on luxardofashion.com.
+#
+# No .bat files, no deploying from a laptop, no other hosting. The public
+# Firebase config and tracking IDs are in the code (src/firebase.ts,
+# src/config/site.ts), so the build needs no extra secrets.
+#
+# Needs one repo secret: FIREBASE_SERVICE_ACCOUNT (Hosting deploy access).
+# Backend (Cloud Functions) and Firestore rules are deployed separately —
+# see DEPLOY.md.
+name: Website deploy
+
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: website-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
       - run: npm ci
       - name: Build
         run: npm run build
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
-      - name: Deploy to Firebase
+      - name: Sanity check the build
+        run: |
+          test -f dist/index.html
+          ! grep -q '__BUILD_TIME__' dist/index.html
+          grep -q 'luxardo-fashion-website' dist/assets/*.js
+          echo "Build OK"
+
+      - name: Preview link (pull requests)
+        if: github.event_name == 'pull_request'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: luxardo-fashion-website
+          expires: 7d
+
+      - name: Go live (main)
+        if: github.event_name != 'pull_request'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: luxardo-fashion-website
           channelId: live
-          projectId: LUXARDO FASHION-fashion-website

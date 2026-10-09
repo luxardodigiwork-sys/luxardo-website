@@ -11,7 +11,11 @@ export default function Logo({ className = '', dark = false }: LogoProps) {
       src="/logo.png"
       alt="LUXARDO FASHION"
       className={className}
-      style={dark ? { filter: 'brightness(0) invert(1)' } : {}}
+      style={
+        dark
+          ? { filter: 'brightness(0) invert(1)' }
+          : { filter: 'brightness(0)' }
+      }
     />
   );
 }

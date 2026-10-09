@@ -6,11 +6,14 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currency';
 import { storage } from '../utils/localStorage';
 import { Order } from '../types';
+import { photo } from '../utils/images';
+import { useProducts } from '../context/ProductsContext';
 
 export default function OrderDetailsPage() {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { allProducts } = useProducts();
   const [order, setOrder] = useState<any>(null);
   const [isInvoiceSent, setIsInvoiceSent] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -63,7 +66,7 @@ export default function OrderDetailsPage() {
         items: foundOrder.items.map(item => ({
           ...item,
           price: formatCurrency(item.price),
-          image: storage.getProducts().find(p => p.id === item.productId)?.image,
+          image: allProducts.find(p => p.id === item.productId)?.image,
           format: 'Ready-to-Stitch Box'
         })),
         contactInfo: {
@@ -129,7 +132,7 @@ export default function OrderDetailsPage() {
               {order.items.map((item: any, idx: number) => (
                 <div key={idx} className="flex gap-6 pb-6 border-b border-brand-divider last:border-0 last:pb-0">
                   <div className="w-24 h-32 bg-brand-bg overflow-hidden flex-shrink-0">
-                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <img {...photo(item.image, 'card')} alt={item.name} loading="lazy" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <div className="flex-1 flex flex-col justify-between">
                     <div>

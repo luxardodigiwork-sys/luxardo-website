@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import type { Product } from '../types';
+import React, { useState, useEffect } from 'react';
 import { useOutletContext, Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Country } from '../types';
-import { storage } from '../utils/localStorage';
+import { useProducts } from '../context/ProductsContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronDown, 
@@ -19,9 +20,40 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currency';
 import { db, auth } from '../firebase';
+import { trackViewItem } from '../utils/analytics';
+import { useCategories } from '../context/CategoriesContext';
+import { photo } from '../utils/images';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
+/**
+ * Wrapper: products stream in from Firestore after first paint, so a direct
+ * link (e.g. shared from Instagram) used to render before the list arrived
+ * and crash on `products[0].image`. Wait for the product, and show a proper
+ * "not found" instead of silently showing a different product.
+ */
 export default function ProductPage() {
+  const { id } = useParams<{ id: string }>();
+  const { products, isLoading } = useProducts();
+  const product = products.find(p => p.id === id || p.slug === id);
+  if (!product) {
+    return (
+      <div className="section-padding min-h-[60vh] flex flex-col items-center justify-center text-center gap-4">
+        {isLoading ? (
+          <p className="text-brand-secondary">Loading…</p>
+        ) : (
+          <>
+            <h1 className="font-display text-3xl">Product not found</h1>
+            <p className="text-brand-secondary">This product may have been removed or the link is incorrect.</p>
+            <Link to="/collections" className="underline">Browse collections</Link>
+          </>
+        )}
+      </div>
+    );
+  }
+  return <ProductView key={product.id} product={product} />;
+}
+
+function ProductView({ product }: { product: Product }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,9 +61,7 @@ export default function ProductPage() {
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const { addToCart } = useCart();
   const { isLoggedIn } = useAuth();
-  
-  const products = storage.getProducts();
-  const product = products.find(p => p.id === id) || products[0];
+  const { products } = useProducts();
 
   const [openSection, setOpenSection] = useState<string | null>('description');
   const [isAdding, setIsAdding] = useState(false);
@@ -41,6 +71,14 @@ export default function ProductPage() {
   const [sizeError, setSizeError] = useState(false);
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
   const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
+
+  // One ViewContent / view_item per product opened (ProductView is keyed by id).
+  useEffect(() => {
+    trackViewItem({ id: product.id, name: product.name, price: Number(product.price) || 0, category: (product as any).category });
+  }, [product.id]);
+
+  const { categoryForProduct } = useCategories();
+  const productCollection = categoryForProduct(product);
 
   const galleryImages = [
     product.image,
@@ -113,7 +151,6 @@ export default function ProductPage() {
         console.error('Error sharing:', err);
       }
     } else {
-      // Fallback for browsers that don't support Web Share API
       navigator.clipboard.writeText(window.location.href);
       alert("Link copied to clipboard!");
     }
@@ -154,7 +191,7 @@ export default function ProductPage() {
       if (hasSubscribed) {
         await deleteDoc(docRef);
         setHasSubscribed(false);
-        setNotificationMessage("You have been unsubscribed from low stock notifications.");
+        setNotificationMessage("You have been unsubscribed from notifications.");
       } else {
         await setDoc(docRef, {
           userId: auth.currentUser.uid,
@@ -165,7 +202,7 @@ export default function ProductPage() {
           notified: false
         });
         setHasSubscribed(true);
-        setNotificationMessage("You will be notified when stock drops below 5.");
+        setNotificationMessage("You will be notified when this item is restocked.");
       }
       setTimeout(() => setNotificationMessage(null), 3000);
     } catch (error) {
@@ -191,20 +228,22 @@ export default function ProductPage() {
     setTimeout(() => setAddedMessage(null), 2000);
   };
 
-  // Sizes based on reference image
-  const sizes = ['38', '40', '42', '44', '46', '48', '50', '52', '54', '56', '58', '60'];
+  // Smart Sizes: Checks product data first, falls back to a clean curated list instead of 13 sizes
+  const sizes = (product as any).sizes && (product as any).sizes.length > 0 
+    ? (product as any).sizes 
+    : ['38', '40', '42', '44', '46'];
 
   return (
     <div className="bg-white min-h-screen">
-      {/* Breadcrumbs */}
-      <div className="px-4 md:px-8 py-4 text-[11px] font-sans uppercase tracking-widest text-black border-b border-gray-200">
-        <Link to="/" className="hover:opacity-70 underline decoration-1 underline-offset-4">Home</Link>
-        <span className="mx-2 text-gray-400">/</span>
-        <Link to="/collections" className="hover:opacity-70 underline decoration-1 underline-offset-4">Shop</Link>
-        <span className="mx-2 text-gray-400">/</span>
-        <Link to="/collections" className="hover:opacity-70 underline decoration-1 underline-offset-4">{product.category}</Link>
-        <span className="mx-2 text-gray-400">/</span>
-        <span className="text-gray-500">{product.name}</span>
+      {/* Breadcrumbs - Improved UI */}
+      <div className="px-4 md:px-8 py-4 text-[11px] font-sans uppercase tracking-[0.2em] font-semibold text-neutral-400 border-b border-gray-100 flex items-center gap-3">
+        <Link to="/" className="hover:text-black transition-colors">Home</Link>
+        <span>›</span>
+        <Link to="/collections" className="hover:text-black transition-colors">Shop</Link>
+        <span>›</span>
+        <Link to={`/collections/${productCollection?.slug || ''}`} className="hover:text-black transition-colors">{productCollection?.name || product.category}</Link>
+        <span>›</span>
+        <span className="text-black">{product.name}</span>
       </div>
 
       <div className="w-full">
@@ -220,7 +259,7 @@ export default function ProductPage() {
                   onClick={() => setSpecificImage(idx)}
                   className={`aspect-[3/4] border transition-all ${currentIndex === idx ? 'border-black opacity-100' : 'border-transparent opacity-50 hover:opacity-100'}`}
                 >
-                  <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <img {...photo(img, 'card')} alt="" loading="lazy" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 </button>
               ))}
             </div>
@@ -230,7 +269,8 @@ export default function ProductPage() {
               <AnimatePresence initial={false} custom={direction}>
                 <motion.img
                   key={currentIndex}
-                  src={galleryImages[currentIndex]}
+                  {...photo(galleryImages[currentIndex], 'full')}
+                  fetchPriority="high"
                   custom={direction}
                   variants={variants}
                   initial="enter"
@@ -270,37 +310,45 @@ export default function ProductPage() {
             <div className="sticky top-12 space-y-10">
               
               {/* Header */}
-              <div className="space-y-5">
-                <p className="text-[12px] font-sans uppercase tracking-widest text-gray-500 font-bold">READY-TO-STITCH FABRIC</p>
+              <div className="space-y-4">
+                <p className="text-[11px] font-sans uppercase tracking-[0.2em] text-gray-400 font-bold">READY-TO-STITCH FABRIC</p>
                 <h1 className="text-3xl md:text-4xl lg:text-5xl font-sans uppercase tracking-widest text-black leading-tight">
                   {product.name}
                 </h1>
-                <p className="text-xl lg:text-2xl font-sans text-black">
-                  {formatCurrency(product.price)}
-                </p>
-                <p className="text-[13px] font-sans text-gray-500">
-                  Tax included. <span className="underline cursor-pointer hover:text-black">Shipping</span> calculated at checkout.
-                </p>
+                
+                {/* A hardcoded 5-star "128 Reviews" badge was shown on every
+                    product with no real reviews behind it — removed before
+                    launch (fake reviews mislead customers and break consumer
+                    e-commerce rules). Add back only with real review data. */}
+
+                <div className="pt-2">
+                  <p className="text-2xl font-sans text-black">
+                    {formatCurrency(product.price)}
+                  </p>
+                  <p className="text-[12px] font-sans text-gray-500 mt-1">
+                    Tax included. <span className="underline cursor-pointer hover:text-black">Shipping</span> calculated at checkout.
+                  </p>
+                </div>
               </div>
 
               {/* Size Selection */}
               <div className="space-y-5">
                 <div className="flex justify-between items-center">
-                  <p className="text-[13px] font-sans uppercase tracking-widest font-bold text-black">SIZE: {selectedSize || ''}</p>
+                  <p className="text-[11px] font-sans uppercase tracking-[0.2em] font-bold text-black">SIZE: {selectedSize || ''}</p>
                   {sizeError && <p className="text-[11px] font-sans text-red-500 font-bold animate-pulse">PLEASE SELECT A SIZE</p>}
                 </div>
-                <div className="grid grid-cols-6 gap-y-4 gap-x-3">
-                  {sizes.map((size) => (
+                <div className="grid grid-cols-5 gap-y-4 gap-x-3">
+                  {sizes.map((size: string) => (
                     <button
                       key={size}
                       onClick={() => {
                         setSelectedSize(size);
                         setSizeError(false);
                       }}
-                      className={`text-[13px] font-sans py-3 text-center transition-colors ${
+                      className={`text-[13px] font-sans py-3 text-center transition-colors border ${
                         selectedSize === size 
-                          ? 'border-b-2 border-black text-black font-bold' 
-                          : 'text-gray-500 hover:text-black border-b-2 border-transparent'
+                          ? 'border-black bg-black text-white font-bold' 
+                          : 'border-gray-200 text-gray-600 hover:border-black hover:text-black'
                       }`}
                     >
                       {size}
@@ -310,96 +358,94 @@ export default function ProductPage() {
                 <div className="flex justify-between items-center mt-6">
                   <button 
                     onClick={() => setIsSizeChartOpen(true)}
-                    className="text-[13px] font-sans text-brand-black hover:text-brand-secondary transition-colors underline decoration-1 underline-offset-4"
+                    className="text-[12px] font-sans text-gray-500 hover:text-black transition-colors underline decoration-1 underline-offset-4"
                   >
                     What is my size?
                   </button>
-                  <span className="text-[11px] font-sans text-brand-secondary font-medium">
-                    Available Stock: {product.stock !== undefined ? product.stock : 10}
+                  <span className={`text-[11px] font-sans font-medium uppercase tracking-widest ${product.stock && product.stock < 5 ? 'text-red-500' : 'text-emerald-600'}`}>
+                    {product.stock !== undefined ? `${product.stock} IN STOCK` : 'AVAILABLE'}
                   </span>
                 </div>
               </div>
 
               {/* Quantity Selection */}
-              <div className="space-y-5">
-                <p className="text-[13px] font-sans uppercase tracking-widest font-bold text-black">QUANTITY</p>
-                <div className="flex items-center border border-brand-divider bg-brand-white w-fit">
+              <div className="space-y-4">
+                <p className="text-[11px] font-sans uppercase tracking-[0.2em] font-bold text-black">QUANTITY</p>
+                <div className="flex items-center border border-gray-200 w-fit">
                   <button 
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="p-3 hover:bg-brand-divider transition-colors"
+                    className="p-3 hover:bg-gray-50 transition-colors"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
-                  <span className="w-12 text-center font-sans font-medium text-lg">{quantity}</span>
+                  <span className="w-12 text-center font-sans font-medium text-sm">{quantity}</span>
                   <button 
                     onClick={() => setQuantity(Math.min(quantity + 1, product.stock !== undefined ? product.stock : 10))}
-                    className="p-3 hover:bg-brand-divider transition-colors"
+                    className="p-3 hover:bg-gray-50 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="space-y-6 pt-6">
-                <div className="bg-gray-50 p-4 flex items-start gap-4">
-                  <Info className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
-                  <p className="text-[13px] font-sans text-gray-600 leading-relaxed">
-                    <strong>Ready-to-Stitch:</strong> You are purchasing a premium unstitched fabric set. Tailoring is required.
-                  </p>
-                </div>
-                <div className="flex gap-4">
+              {/* Actions - Fixed H6 & H10 */}
+              <div className="space-y-4 pt-4">
+                <div className="flex gap-3">
+                  {/* High-Converting Dark Button */}
                   <button 
                     onClick={handleAddToCart}
                     disabled={isAdding}
-                    className="btn-primary flex-1 py-5"
+                    className="flex-1 bg-black text-white py-4 text-[13px] font-sans uppercase tracking-[0.2em] font-bold hover:bg-neutral-800 transition-colors disabled:opacity-70"
                   >
-                    {isAdding ? 'ADDING...' : `ADD ${quantity} TO CART`}
+                    {isAdding ? 'ADDING...' : `ADD TO CART`}
                   </button>
                   <button 
                     onClick={handleWishlistToggle}
-                    className="p-5 border border-brand-divider rounded-full hover:border-brand-black transition-colors flex items-center justify-center shrink-0"
+                    className="px-5 border border-gray-200 hover:border-black transition-colors flex items-center justify-center shrink-0"
                     title="Wishlist"
                   >
                     <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-black text-black' : 'text-black stroke-[1.5]'}`} />
                   </button>
                   <button 
                     onClick={handleShare}
-                    className="p-5 border border-brand-divider rounded-full hover:border-brand-black transition-colors flex items-center justify-center shrink-0"
+                    className="px-5 border border-gray-200 hover:border-black transition-colors flex items-center justify-center shrink-0"
                     title="Share"
                   >
                     <Share2 className="w-5 h-5 text-black stroke-[1.5]" />
                   </button>
                 </div>
                 
-                <div className="space-y-2">
-                  <button
-                    onClick={handleNotifyLowStock}
-                    disabled={isNotifying}
-                    className={`btn-outline w-full py-4 ${
-                      hasSubscribed 
-                        ? 'border-emerald-500 text-emerald-600 bg-emerald-50 hover:bg-emerald-50 hover:border-emerald-500' 
-                        : ''
-                    }`}
-                  >
-                    <Bell size={16} className={hasSubscribed ? 'fill-emerald-600' : ''} />
-                    {isNotifying ? 'PROCESSING...' : hasSubscribed ? 'NOTIFICATIONS ENABLED' : 'NOTIFY ME ON LOW STOCK'}
-                  </button>
-                  {notificationMessage && (
-                    <p className="text-[11px] font-sans text-center text-brand-secondary animate-in fade-in slide-in-from-top-1">
-                      {notificationMessage}
-                    </p>
-                  )}
-                  {addedMessage && (
-                    <p className="text-[11px] font-sans text-center text-emerald-600 font-bold animate-in fade-in slide-in-from-top-1">
-                      ✓ {addedMessage}
-                    </p>
-                  )}
+                {/* Fixed Notify Copy */}
+                <div>
+                  {/* "Notify when out of stock" was shown on every in-stock product and
+                      customers' requests were rejected by the database rules, so it is
+                      hidden until a working back-in-stock flow exists. */}
+                  
+                  {/* Messages */}
+                  <div className="h-6 mt-2 flex items-center justify-center">
+                    {notificationMessage && (
+                      <p className="text-[11px] font-sans text-gray-500 animate-in fade-in">
+                        {notificationMessage}
+                      </p>
+                    )}
+                    {addedMessage && (
+                      <p className="text-[11px] font-sans text-emerald-600 font-bold animate-in fade-in">
+                        ✓ {addedMessage}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 flex items-start gap-3 mt-4 border border-gray-100">
+                  <Info className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                  <p className="text-[12px] font-sans text-gray-600 leading-relaxed">
+                    <strong>Ready-to-Stitch:</strong> Delivered as a premium unstitched fabric set. Tailoring is required.
+                  </p>
                 </div>
               </div>
 
-              <div className="pt-10 border-t border-gray-100">
-                <p className="text-[12px] font-sans text-gray-400 mb-8">58129_502_06.42</p>
+              <div className="pt-8 border-t border-gray-100">
+                <p className="text-[11px] font-sans text-gray-400 mb-6 uppercase tracking-widest">SKU: {product.id || '58129_502'}</p>
 
                 {/* Accordions */}
                 <div className="border-t border-gray-200">
@@ -416,8 +462,8 @@ export default function ProductPage() {
                         onClick={() => toggleSection(section.id)}
                         className="w-full py-5 flex justify-between items-center text-left hover:opacity-70 transition-opacity"
                       >
-                        <span className="text-[14px] font-sans font-bold text-black">{section.title}</span>
-                        {openSection === section.id ? <Minus className="w-5 h-5 text-black" /> : <Plus className="w-5 h-5 text-black" />}
+                        <span className="text-[13px] font-sans font-bold uppercase tracking-widest text-black">{section.title}</span>
+                        {openSection === section.id ? <Minus className="w-4 h-4 text-black" /> : <Plus className="w-4 h-4 text-black" />}
                       </button>
                       <AnimatePresence>
                         {openSection === section.id && (
@@ -427,7 +473,7 @@ export default function ProductPage() {
                             exit={{ height: 0, opacity: 0 }}
                             className="overflow-hidden"
                           >
-                            <div className="pb-5 font-sans text-gray-700 text-[14px] leading-relaxed whitespace-pre-wrap">
+                            <div className="pb-5 font-sans text-gray-600 text-[13px] leading-relaxed whitespace-pre-wrap">
                               {section.content}
                             </div>
                           </motion.div>
@@ -445,22 +491,26 @@ export default function ProductPage() {
         {/* Related Products Section */}
         <div className="mt-16 border-t border-gray-200 pt-16 px-4 md:px-8 pb-24">
           <div className="text-center space-y-4 mb-12">
-            <h3 className="text-2xl font-sans uppercase tracking-widest text-black">You May Also Like</h3>
+            <h3 className="text-xl md:text-2xl font-sans uppercase tracking-widest text-black font-bold">You May Also Like</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {products.filter(p => p.id !== product.id).slice(0, 4).map(relatedProduct => (
               <Link to={`/product/${relatedProduct.id}`} key={relatedProduct.id} className="group cursor-pointer">
-                <div className="aspect-[3/4] overflow-hidden bg-[#F5F5F5] mb-4">
+                <div className="aspect-[3/4] overflow-hidden bg-[#F5F5F5] mb-4 relative">
                   <img 
-                    src={relatedProduct.image} 
+                    {...photo(relatedProduct.image, 'card')}
                     alt={relatedProduct.name} 
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
                     referrerPolicy="no-referrer"
                   />
+                  {/* Subtle hover overlay */}
+                  <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
                 <div className="text-center space-y-1">
-                  <h4 className="text-sm font-sans uppercase tracking-widest text-black">{relatedProduct.name}</h4>
-                  <p className="text-sm font-sans text-gray-500">
+                  <h4 className="text-[12px] font-sans uppercase tracking-[0.2em] text-black font-bold">{relatedProduct.name}</h4>
+                  <p className="text-[13px] font-sans text-gray-500">
                     {formatCurrency(relatedProduct.price)}
                   </p>
                 </div>

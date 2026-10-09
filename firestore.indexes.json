@@ -1,0 +1,126 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "designVersions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "designId", "order": "ASCENDING" },
+        { "fieldPath": "versionNo", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sampleDesigns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "catalogDesignId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "samplePieces",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "designId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productionRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "designId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pieces",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "designId", "order": "ASCENDING" },
+        { "fieldPath": "stage", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pieces",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "prId", "order": "ASCENDING" },
+        { "fieldPath": "stage", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pieces",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "assignedKarigars", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "stage", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pieces",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "designId", "order": "ASCENDING" },
+        { "fieldPath": "kind", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pieceWorkSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pieceId", "order": "ASCENDING" },
+        { "fieldPath": "startedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pieceWorkSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "karigarId", "order": "ASCENDING" },
+        { "fieldPath": "startedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pieceMovementHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pieceId", "order": "ASCENDING" },
+        { "fieldPath": "at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "auditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entity", "order": "ASCENDING" },
+        { "fieldPath": "entityId", "order": "ASCENDING" },
+        { "fieldPath": "ts", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "auditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "actorUid", "order": "ASCENDING" },
+        { "fieldPath": "ts", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalogueDesigns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productionRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
