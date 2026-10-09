@@ -68,6 +68,7 @@ const AdminAddProductPage = lazy(() => import("./pages/admin/AdminAddProductPage
 const AdminEditProductPage = lazy(() => import("./pages/admin/AdminEditProductPage"));
 const AdminContentPage = lazy(() => import("./pages/admin/AdminContentPage"));
 const AdminMediaPage = lazy(() => import("./pages/admin/AdminMediaPage"));
+const AdminPhotoOptimizerPage = lazy(() => import("./pages/admin/AdminPhotoOptimizerPage"));
 const AdminPoliciesPage = lazy(() => import("./pages/admin/AdminPoliciesPage"));
 const AdminPrimeContentPage = lazy(() => import("./pages/admin/AdminPrimeContentPage"));
 const AdminBespokeRequestsPage = lazy(() => import("./pages/admin/AdminBespokeRequestsPage"));
@@ -227,6 +228,7 @@ export default function App() {
                 />
                 <Route path="content" element={<AdminContentPage />} />
                 <Route path="media" element={<AdminMediaPage />} />
+                <Route path="photos" element={<AdminPhotoOptimizerPage />} />
                 <Route
                   path="prime-content"
                   element={<AdminPrimeContentPage />}

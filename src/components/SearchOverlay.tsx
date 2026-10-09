@@ -4,6 +4,7 @@ import { Search, X, ArrowRight, Package, Grid, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { COLLECTIONS } from '../constants';
 import { useCategories } from '../context/CategoriesContext';
+import { photo } from '../utils/images';
 import { useProducts } from '../context/ProductsContext';
 
 interface SearchOverlayProps {
@@ -166,7 +167,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                               >
                                 <div className="w-16 h-20 bg-brand-divider overflow-hidden flex-shrink-0">
                                   <img 
-                                    src={product.image} 
+                                    {...photo(product.image, 'card')}
                                     alt={product.name}
                                     className="w-full h-full object-cover   transition-all duration-500"
                                     referrerPolicy="no-referrer"

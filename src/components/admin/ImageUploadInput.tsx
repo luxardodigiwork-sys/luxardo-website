@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { compressForWeb } from '../../utils/imageCompress';
 import { storage as firebaseStorage } from '../../firebase';
 
 interface ImageUploadInputProps {
@@ -48,30 +49,8 @@ export const ImageUploadInput = ({
 
   const processImage = async (file: File): Promise<File> => {
     if (quality === 'original') return file;
-    const maxEdge = MAX_EDGE[quality] || 2000;
-    // createImageBitmap honours the photo's EXIF rotation, so phone photos
-    // don't come out sideways.
-    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as any);
-    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
-    const w = Math.round(bitmap.width * scale);
-    const h = Math.round(bitmap.height * scale);
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return file;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(bitmap, 0, 0, w, h);
-    bitmap.close?.();
-    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/webp', 0.85));
-    // Very old browsers can't encode WebP and silently return PNG — fall back to JPEG.
-    const out = blob && blob.type === 'image/webp'
-      ? blob
-      : await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.85));
-    if (!out || out.size >= file.size) return file;
-    const base = file.name.replace(/\.[^.]+$/, '');
-    const ext = out.type === 'image/webp' ? 'webp' : 'jpg';
-    return new File([out], `${base}.${ext}`, { type: out.type });
+    const out = await compressForWeb(file, { maxEdge: MAX_EDGE[quality] || 2000 });
+    return out.size < file.size ? out : file;
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {

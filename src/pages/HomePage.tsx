@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { db } from '../firebase';
 import { collection, addDoc, getDocs } from 'firebase/firestore';
 import { useCategories } from '../context/CategoriesContext';
+import { photo } from '../utils/images';
 import { subscribeSiteContent } from '../utils/siteContentSync';
 
 const isMissingImage = (src?: string) => !src || src === '/placeholder.svg' || src.endsWith('placeholder.svg') || src.startsWith('data:');
@@ -52,7 +53,7 @@ function HomeOurStorySection({ siteContent }: { siteContent: any }) {
                     <span className="text-[12rem] font-display text-white/[0.05] leading-none select-none">{String(activeStoryStep + 1).padStart(2, '0')}</span>
                   </motion.div>
                 ) : (
-                  <motion.img key={activeStoryStep} src={currentStep.image} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} transition={{ duration: 0.6 }} className="absolute inset-0 w-full h-full object-cover" />
+                  <motion.img key={activeStoryStep} {...photo(currentStep.image, 'full')} loading="lazy" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} transition={{ duration: 0.6 }} className="absolute inset-0 w-full h-full object-cover" />
                 )}
               </AnimatePresence>
               <div className="absolute inset-0 border border-brand-black/5 pointer-events-none" />
@@ -84,7 +85,7 @@ function HomeOurStorySection({ siteContent }: { siteContent: any }) {
                   <span className="text-[6rem] font-display text-white/[0.05] leading-none select-none">{String(activeStoryStep + 1).padStart(2, '0')}</span>
                 </motion.div>
               ) : (
-                <motion.img key={`img-mobile-${activeStoryStep}`} src={currentStep.image} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 w-full h-full object-cover p-4" />
+                <motion.img key={`img-mobile-${activeStoryStep}`} {...photo(currentStep.image, 'full')} loading="lazy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 w-full h-full object-cover p-4" />
               )}
             </AnimatePresence>
           </div>
@@ -259,7 +260,8 @@ export default function HomePage() {
               className="absolute inset-0"
             >
               <img
-                src={heroSlides[currentSlide].imageUrl}
+                {...photo(heroSlides[currentSlide].imageUrl, 'hero')}
+                fetchPriority="high"
                 alt={heroSlides[currentSlide].heading || 'LUXARDO'}
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
@@ -329,7 +331,7 @@ export default function HomePage() {
                 </div>
               ) : (
                 <>
-                  <motion.img initial={{ scale: 1.15 }} whileInView={{ scale: 1 }} transition={{ duration: 2, ease: 'easeOut' }} viewport={{ once: true, amount: 0.1 }} src={collection.heroImageUrl} alt={collection.name} className="absolute inset-0 w-full h-full object-cover" />
+                  <motion.img initial={{ scale: 1.15 }} whileInView={{ scale: 1 }} transition={{ duration: 2, ease: 'easeOut' }} viewport={{ once: true, amount: 0.1 }} {...photo(collection.heroImageUrl, 'hero')} loading="lazy" alt={collection.name} className="absolute inset-0 w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-b from-brand-black/40 via-brand-black/60 to-brand-black/90 md:bg-gradient-to-br md:from-brand-black/70 md:via-brand-black/30 md:to-brand-black/70" />
                 </>
               )}

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Product } from '../types';
 import { Heart } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
+import { photo } from '../utils/images';
 import { formatCurrency } from '../utils/currency';
 
 const isMissingImage = (src?: string) =>
@@ -39,7 +40,7 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
           {hasImage ? (
             <>
               <img
-                src={mainImage}
+                {...photo(mainImage, 'card')}
                 alt={product.name}
                 loading="lazy"
                 decoding="async"
@@ -50,7 +51,7 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
               />
               {secondaryImage && !isMissingImage(secondaryImage) && (
                 <img
-                  src={secondaryImage}
+                  {...photo(secondaryImage, 'card')}
                   alt={`${product.name} alternate view`}
                   loading="lazy"
                   className="absolute inset-0 w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-[1200ms] ease-out"

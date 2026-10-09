@@ -29,6 +29,7 @@ export default function AdminLayout() {
       title: 'Content',
       items: [
         { path: '/admin/media', label: 'Media', icon: ImageIcon },
+        { path: '/admin/photos', label: 'Photo Optimizer', icon: ImageIcon },
         { path: '/admin/content', label: 'Site Content', icon: FileText },
         { path: '/admin/prime-content', label: 'Prime Content', icon: Crown },
         { path: '/admin/policies', label: 'Policies', icon: Shield },

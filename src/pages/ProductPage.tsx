@@ -22,6 +22,7 @@ import { formatCurrency } from '../utils/currency';
 import { db, auth } from '../firebase';
 import { trackViewItem } from '../utils/analytics';
 import { useCategories } from '../context/CategoriesContext';
+import { photo } from '../utils/images';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
 /**
@@ -258,7 +259,7 @@ function ProductView({ product }: { product: Product }) {
                   onClick={() => setSpecificImage(idx)}
                   className={`aspect-[3/4] border transition-all ${currentIndex === idx ? 'border-black opacity-100' : 'border-transparent opacity-50 hover:opacity-100'}`}
                 >
-                  <img src={img} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <img {...photo(img, 'card')} alt="" loading="lazy" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 </button>
               ))}
             </div>
@@ -268,7 +269,8 @@ function ProductView({ product }: { product: Product }) {
               <AnimatePresence initial={false} custom={direction}>
                 <motion.img
                   key={currentIndex}
-                  src={galleryImages[currentIndex]}
+                  {...photo(galleryImages[currentIndex], 'full')}
+                  fetchPriority="high"
                   custom={direction}
                   variants={variants}
                   initial="enter"
@@ -496,7 +498,7 @@ function ProductView({ product }: { product: Product }) {
               <Link to={`/product/${relatedProduct.id}`} key={relatedProduct.id} className="group cursor-pointer">
                 <div className="aspect-[3/4] overflow-hidden bg-[#F5F5F5] mb-4 relative">
                   <img 
-                    src={relatedProduct.image} 
+                    {...photo(relatedProduct.image, 'card')}
                     alt={relatedProduct.name} 
                     loading="lazy"
                     decoding="async"

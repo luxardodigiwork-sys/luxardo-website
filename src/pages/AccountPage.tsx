@@ -16,6 +16,7 @@ import {
 
 import { db, auth } from '../firebase';
 
+import { photo } from '../utils/images';
 import {
   User,
   Package,
@@ -355,7 +356,7 @@ export default function AccountPage() {
                               className="flex items-center gap-6"
                             >
                               <img
-                                src={item.image}
+                                {...photo(item.image, 'card')}
                                 alt={item.name}
                                 className="w-20 h-24 object-cover"
                               />
@@ -417,7 +418,7 @@ export default function AccountPage() {
                           <X size={18} />
                         </button>
                         <img
-                          src={item.image}
+                          {...photo(item.image, 'card')}
                           alt={item.name}
                           className="w-full aspect-[3/4] object-cover"
                         />

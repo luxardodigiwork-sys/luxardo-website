@@ -6,6 +6,7 @@ import { ProductCard } from '../components/ProductCard';
 import { Country } from '../types';
 import { motion } from 'motion/react';
 import { SlidersHorizontal } from 'lucide-react';
+import { photo } from '../utils/images';
 import { useProducts } from '../context/ProductsContext';
 
 export default function CollectionDetailPage() {
@@ -38,7 +39,8 @@ export default function CollectionDetailPage() {
       {/* Category Banner */}
       <section className="relative h-[50vh] overflow-hidden bg-brand-black">
         <img 
-          src={collection?.bannerImageUrl || collection?.heroImageUrl || "/placeholder.svg"}
+          {...photo(collection?.bannerImageUrl || collection?.heroImageUrl || "/placeholder.svg", 'hero')}
+          fetchPriority="high"
           alt={collection?.name || ''}
           decoding="async" 
           className="absolute inset-0 w-full h-full object-cover"
