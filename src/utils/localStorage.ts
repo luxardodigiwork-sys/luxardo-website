@@ -210,59 +210,22 @@ const INITIAL_BACKEND_USERS: BackendUser[] = [
 
 export const storage = {
   // Products
+  /** Last product list received from Firestore (cache for instant first
+   *  paint and cart restore). Never substitutes built-in demo products —
+   *  doing that used to show fake products to shoppers and empty their cart
+   *  on reload whenever no product's category was spelled "Casual"/"Jodhpuri". */
   getProducts: (): Product[] => {
-    const data = localStorage.getItem(KEYS.PRODUCTS);
-    
-    // Force re-seed if categories have changed to the new refined ones
-    const currentProducts: Product[] = data ? JSON.parse(data) : [];
-    const hasNewCategories = currentProducts.some(p => 
-      ['Jodhpuri', 'Casual'].includes(p.category)
-    );
-
-    if (!data || !hasNewCategories) {
-      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(PRODUCTS));
-      return PRODUCTS;
+    try {
+      const data = localStorage.getItem(KEYS.PRODUCTS);
+      const list = data ? JSON.parse(data) : [];
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
     }
-    
-    // Ensure images array exists for dual image hover effect
-    let needsUpdate = false;
-    
-    // Deduplicate products by id
-    let uniqueProducts = currentProducts;
-    const uniqueIds = new Set();
-    const deduplicated = [];
-    for (const p of currentProducts) {
-      if (!uniqueIds.has(p.id)) {
-        uniqueIds.add(p.id);
-        deduplicated.push(p);
-      }
-    }
-    
-    if (deduplicated.length !== currentProducts.length) {
-      needsUpdate = true;
-      uniqueProducts = deduplicated;
-    }
-
-    const updatedProducts = uniqueProducts.map(p => {
-      if (!p.images || p.images.length === 0) {
-        const defaultProduct = PRODUCTS.find(dp => dp.id === p.id);
-        if (defaultProduct && defaultProduct.images) {
-          needsUpdate = true;
-          return { ...p, images: defaultProduct.images };
-        }
-      }
-      return p;
-    });
-
-    if (needsUpdate) {
-      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(updatedProducts));
-      return updatedProducts;
-    }
-
-    return updatedProducts;
   },
+
   saveProducts: (products: Product[]) => {
-    localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(products));
+    try { localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(products)); } catch {}
   },
 
   // Orders

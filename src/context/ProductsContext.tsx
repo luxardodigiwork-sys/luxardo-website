@@ -4,7 +4,10 @@ import { subscribeProducts } from '../utils/productsFirestore';
 import { storage } from '../utils/localStorage';
 
 interface ProductsContextType {
+  /** Products shoppers may see (excludes ones saved as hidden/draft). */
   products: Product[];
+  /** Every product including hidden ones — for admin screens. */
+  allProducts: Product[];
   isLoading: boolean;
   error: string | null;
 }
@@ -54,8 +57,13 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const visibleProducts = React.useMemo(
+    () => products.filter((p) => p.visibility !== 'hidden'),
+    [products],
+  );
+
   return (
-    <ProductsContext.Provider value={{ products, isLoading, error }}>
+    <ProductsContext.Provider value={{ products: visibleProducts, allProducts: products, isLoading, error }}>
       {children}
     </ProductsContext.Provider>
   );

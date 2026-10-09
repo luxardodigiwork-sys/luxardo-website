@@ -12,7 +12,7 @@ export default function OrderDetailsPage() {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { products: allProducts } = useProducts();
+  const { allProducts } = useProducts();
   const [order, setOrder] = useState<any>(null);
   const [isInvoiceSent, setIsInvoiceSent] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);

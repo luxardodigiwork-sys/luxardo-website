@@ -24,7 +24,7 @@ interface DashboardOrderSnapshot {
 
 export default function AdminDashboardPage() {
   const { isAuthReady } = useAuth();
-  const { products } = useProducts();
+  const { allProducts: products } = useProducts();
   
   // Real-time state setup
   const [orders, setOrders] = useState<any[]>([]);

@@ -2,11 +2,23 @@ import React, { useEffect } from 'react';
 import { SectionHeader } from '../components/SectionHeader';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle } from 'lucide-react';
+import { trackPurchase } from '../utils/analytics';
 
 export default function OrderConfirmationPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const order = location.state?.order;
+
+  // Purchase / purchase — once per order (trackPurchase ignores repeats, e.g. a page refresh).
+  // For online payments this page is only reached after Razorpay confirmed the payment.
+  useEffect(() => {
+    if (!order?.id) return;
+    const items = (order.items || []).map((i: any) => ({
+      id: i.productId || i.id, name: i.name || i.title, price: Number(i.price) || 0,
+      quantity: Number(i.quantity) || 1, size: i.size,
+    }));
+    trackPurchase(order.id, Number(order.totalAmount) || 0, items, order.paymentMethod);
+  }, [order?.id]);
 
   // Redirect home if someone opens this page directly
   useEffect(() => {

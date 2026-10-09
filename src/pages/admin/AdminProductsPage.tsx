@@ -8,7 +8,7 @@ import { useProducts } from '../../context/ProductsContext';
 import { saveProductToFirestore, deleteProductFromFirestore } from '../../utils/productsFirestore';
 
 export default function AdminProductsPage() {
-  const { products, isLoading } = useProducts();
+  const { allProducts: products, isLoading } = useProducts();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterCollection, setFilterCollection] = useState('all');

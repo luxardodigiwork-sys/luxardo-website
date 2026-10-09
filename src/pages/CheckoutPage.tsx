@@ -8,6 +8,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { formatCurrency } from "../utils/currency";
 import { SectionHeader } from "../components/SectionHeader";
+import { trackBeginCheckout } from "../utils/analytics";
 import { isCODEligible, BUSINESS_CONFIG } from "../constants/businessConfig";
 
 type PaymentMethod = "razorpay" | "cod";
@@ -63,6 +64,16 @@ export default function CheckoutPage() {
   const [formErrors, setFormErrors] = useState<Partial<CustomerForm>>({});
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("razorpay");
   const [pincodeLookup, setPincodeLookup] = useState<{ status: 'idle' | 'loading' | 'ok' | 'err'; msg?: string }>({ status: 'idle' });
+
+  // begin_checkout / InitiateCheckout once per visit to this page, as soon as the cart is known.
+  const checkoutTracked = React.useRef(false);
+  useEffect(() => {
+    if (checkoutTracked.current || cartItems.length === 0) return;
+    checkoutTracked.current = true;
+    trackBeginCheckout(cartItems.map((i) => ({
+      id: i.product.id, name: i.product.name, price: Number(i.product.price) || 0, quantity: i.quantity, size: i.size,
+    })));
+  }, [cartItems]);
 
   // Task #10 — Country whitelist: only India for now
   const ALLOWED_COUNTRY = "India";
@@ -178,10 +189,6 @@ export default function CheckoutPage() {
   };
 
   const handleRazorpayOrder = async () => {
-    const keyId = import.meta.env.VITE_RAZORPAY_KEY_ID;
-    if (!keyId) {
-      throw new Error("Razorpay not configured. Set VITE_RAZORPAY_KEY_ID in .env and rebuild.");
-    }
     const scriptOk = await loadRazorpayScript();
     if (!scriptOk) {
       throw new Error("Razorpay SDK failed to load. Check your network and try again.");
@@ -192,6 +199,10 @@ export default function CheckoutPage() {
     const result: any = await createOrder({ items: cartLines(), address: addressPayload() });
     const { orderId, razorpayOrderId, amount, currency } = result.data || {};
     if (!orderId || !razorpayOrderId) throw new Error("Failed to start payment");
+    // Key id comes from the server (same Razorpay account as the secret).
+    // VITE_RAZORPAY_KEY_ID is only a fallback for an older backend.
+    const keyId = result.data?.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID;
+    if (!keyId) throw new Error("Online payment is not available right now. Please choose Cash on Delivery or contact us on WhatsApp.");
 
     // 2. Open Razorpay Checkout for the SERVER amount.
     return new Promise<void>((resolve, reject) => {

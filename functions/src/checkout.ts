@@ -187,7 +187,7 @@ export async function markOrderPaid(orderRef: admin.firestore.DocumentReference,
 /* ═══════════════════════════════════════════════════════════════════
  * createRazorpayOrder
  * Input : { items: [{productId, size, quantity}], address: {...} }
- * Output: { orderId, razorpayOrderId, amount, currency }
+ * Output: { orderId, razorpayOrderId, amount, currency, keyId }
  * ═══════════════════════════════════════════════════════════════════ */
 export const createRazorpayOrderV2 = onCall(
   { secrets: [RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET] },
@@ -226,7 +226,12 @@ export const createRazorpayOrderV2 = onCall(
       awaitingPayment: true,
       razorpay: { orderId: rzpOrder.id, amount: rzpOrder.amount, currency: rzpOrder.currency },
     });
-    return { orderId: orderRef.id, razorpayOrderId: rzpOrder.id, amount: rzpOrder.amount, currency: rzpOrder.currency };
+    // The public key id comes from the same secret as the key secret, so the
+    // website can never open checkout with a test key while the server uses a
+    // live one (or the other way round). Nothing to configure in the website.
+    const keyId = process.env.FUNCTIONS_EMULATOR === "true" && process.env.RAZORPAY_MOCK === "1"
+      ? "rzp_test_mock" : RAZORPAY_KEY_ID.value();
+    return { orderId: orderRef.id, razorpayOrderId: rzpOrder.id, amount: rzpOrder.amount, currency: rzpOrder.currency, keyId };
   }
 );
 

@@ -1,5 +1,5 @@
 import type { Product } from '../types';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOutletContext, Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Country } from '../types';
 import { useProducts } from '../context/ProductsContext';
@@ -20,6 +20,8 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currency';
 import { db, auth } from '../firebase';
+import { trackViewItem } from '../utils/analytics';
+import { useCategories } from '../context/CategoriesContext';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
 /**
@@ -68,6 +70,14 @@ function ProductView({ product }: { product: Product }) {
   const [sizeError, setSizeError] = useState(false);
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
   const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
+
+  // One ViewContent / view_item per product opened (ProductView is keyed by id).
+  useEffect(() => {
+    trackViewItem({ id: product.id, name: product.name, price: Number(product.price) || 0, category: (product as any).category });
+  }, [product.id]);
+
+  const { categoryForProduct } = useCategories();
+  const productCollection = categoryForProduct(product);
 
   const galleryImages = [
     product.image,
@@ -230,7 +240,7 @@ function ProductView({ product }: { product: Product }) {
         <span>›</span>
         <Link to="/collections" className="hover:text-black transition-colors">Shop</Link>
         <span>›</span>
-        <Link to={`/collections/${product.category?.toLowerCase()}`} className="hover:text-black transition-colors">{product.category}</Link>
+        <Link to={`/collections/${productCollection?.slug || ''}`} className="hover:text-black transition-colors">{productCollection?.name || product.category}</Link>
         <span>›</span>
         <span className="text-black">{product.name}</span>
       </div>
@@ -248,7 +258,7 @@ function ProductView({ product }: { product: Product }) {
                   onClick={() => setSpecificImage(idx)}
                   className={`aspect-[3/4] border transition-all ${currentIndex === idx ? 'border-black opacity-100' : 'border-transparent opacity-50 hover:opacity-100'}`}
                 >
-                  <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <img src={img} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 </button>
               ))}
             </div>
@@ -405,18 +415,9 @@ function ProductView({ product }: { product: Product }) {
                 
                 {/* Fixed Notify Copy */}
                 <div>
-                  <button
-                    onClick={handleNotifyLowStock}
-                    disabled={isNotifying}
-                    className={`w-full py-4 text-[11px] font-sans uppercase tracking-[0.2em] font-bold border transition-colors ${
-                      hasSubscribed 
-                        ? 'border-emerald-500 text-emerald-600 bg-emerald-50' 
-                        : 'border-black text-black hover:bg-black hover:text-white'
-                    }`}
-                  >
-                    <Bell size={14} className={`inline-block mr-2 ${hasSubscribed ? 'fill-emerald-600' : ''}`} />
-                    {isNotifying ? 'PROCESSING...' : hasSubscribed ? 'NOTIFICATIONS ENABLED' : 'NOTIFY WHEN OUT OF STOCK'}
-                  </button>
+                  {/* "Notify when out of stock" was shown on every in-stock product and
+                      customers' requests were rejected by the database rules, so it is
+                      hidden until a working back-in-stock flow exists. */}
                   
                   {/* Messages */}
                   <div className="h-6 mt-2 flex items-center justify-center">
@@ -497,6 +498,8 @@ function ProductView({ product }: { product: Product }) {
                   <img 
                     src={relatedProduct.image} 
                     alt={relatedProduct.name} 
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
                     referrerPolicy="no-referrer"
                   />

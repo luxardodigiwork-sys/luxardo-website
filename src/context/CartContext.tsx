@@ -6,6 +6,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product } from '../types';
 import { storage } from '../utils/localStorage';
 import { firebaseStorage } from '../utils/firebaseStorage';
+import { trackAddToCart } from '../utils/analytics';
+import { useProducts } from './ProductsContext';
 import { auth } from '../firebase';
 
 interface CartItem {
@@ -19,6 +21,7 @@ interface SavedCartItem {
   productId: string;
   quantity: number;
   size?: string;
+  snapshot?: Partial<Product>;
 }
 
 interface CartContextType {
@@ -40,6 +43,13 @@ const saveCartToStorage = async (items: CartItem[]) => {
       productId: item.product.id,
       quantity: item.quantity,
       size: item.size,
+      // Small copy of the product so the cart survives a reload even before
+      // the product list has loaded. Prices are always re-checked by the server.
+      snapshot: {
+        id: item.product.id, name: item.product.name, price: item.product.price,
+        image: item.product.image, category: (item.product as any).category,
+        stock: (item.product as any).stock,
+      },
     }));
     
     // Always keep a local copy: the cart is read on page load before Firebase
@@ -113,7 +123,8 @@ const loadCartFromStorage = async (): Promise<CartItem[]> => {
     const restored: CartItem[] = [];
 
     for (const saved of parsed as SavedCartItem[]) {
-      const product = allProducts.find(p => p.id === saved.productId);
+      const product = allProducts.find(p => p.id === saved.productId)
+        || (saved.snapshot?.id ? (saved.snapshot as Product) : undefined);
       if (product) {
         restored.push({
           product,
@@ -150,6 +161,21 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initCart();
   }, []);
 
+  // Keep cart lines in step with the live product list (new price, name, photo).
+  const { allProducts: liveProducts } = useProducts();
+  useEffect(() => {
+    if (!liveProducts.length) return;
+    setCartItems(prev => {
+      let changed = false;
+      const next = prev.map(item => {
+        const fresh = liveProducts.find(p => p.id === item.product.id);
+        if (fresh && fresh !== item.product) { changed = true; return { ...item, product: fresh }; }
+        return item;
+      });
+      return changed ? next : prev;
+    });
+  }, [liveProducts]);
+
   // Save cart to Firebase whenever it changes (after initial load)
   useEffect(() => {
     if (!isLoading) {
@@ -158,6 +184,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [cartItems, isLoading]);
 
   const addToCart = (product: Product, quantity: number = 1, size?: string) => {
+    trackAddToCart({ id: product.id, name: product.name, price: Number(product.price) || 0, quantity, size, category: (product as any).category });
     setCartItems(prev => {
       const existing = prev.find(
         item => item.product.id === product.id && item.size === size
