@@ -112,7 +112,7 @@ test('orders: admin may update fulfilment fields of PAID orders but never money/
 });
 test('orders: cancellation/refund flags are server-only - neither customers nor the admin UI can set them', async () => {
   await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'orders/c1'), { ...baseOrder('cust1'), status: 'processing', paymentStatus: 'paid' }));
-  for (const bad of [{ cancellationRequest: { status: 'requested' } }, { needsRefund: true }, { needsRefund: false }, { statusReason: 'cancelled_by_customer' }]) {
+  for (const bad of [{ cancellationRequest: { status: 'requested' } }, { returnRequest: { status: 'requested' } }, { needsRefund: true }, { needsRefund: false }, { statusReason: 'cancelled_by_customer' }]) {
     await assertFails(updateDoc(doc(customer().firestore(), 'orders/c1'), bad));
     await assertFails(updateDoc(doc(admin().firestore(), 'orders/c1'), bad));
   }

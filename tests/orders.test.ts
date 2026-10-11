@@ -9,7 +9,7 @@ import type { RazorpayLike } from '../functions/src/orders';
 const unwrap = <T,>(m: T): T => (m as any).default ?? m;
 const { applyCapturedPayment, createCheckoutOrder, recordPaymentFailure, releaseExpiredOrders, releaseOrderStock, verifyAndApplyPayment } = unwrap(ordersNs);
 const { OrderError, validateShippingAddress } = unwrap(coreNs);
-const { requestCancellation } = unwrap(ordersNs);
+const { requestCancellation, requestReturn } = unwrap(ordersNs);
 import * as webhookNs from '../functions/src/webhook';
 import * as emailsNs from '../functions/src/emails';
 import { createHmac } from 'node:crypto';
@@ -373,4 +373,48 @@ test('mail builder escapes HTML, skips invalid addresses', () => {
   assert.equal(docs.length, 0);
   const c = buildCustomerEmail('o1', { userName: '<script>x</script>', items: [{ name: '<img onerror=1>', quantity: 1, price: 10 }], totalAmount: 10 });
   assert.doesNotMatch(c.html, /<script>|<img/);
+});
+
+// ---------- idempotent checkout ----------
+test('same user + same requestId returns the SAME order: one order, one reservation, one Razorpay order', async () => {
+  const rz = fakeRazorpay();
+  const mk = () => createCheckoutOrder(db, rz, { uid: 'u1', lines: [{ productId: 'a', quantity: 2, size: '40' }], address, shipping: NO_RULE, requestId: 'req-12345678' });
+  const [r1, r2] = await Promise.all([mk(), mk()]);
+  const again = await mk();
+  assert.equal(r1.orderId, r2.orderId); assert.equal(r1.orderId, again.orderId);
+  assert.equal(r1.razorpayOrderId, again.razorpayOrderId);
+  assert.equal((await db.collection('orders').get()).size, 1);
+  assert.equal(await stockOf('a'), 3);          // reserved once (5 - 2)
+  assert.equal(rz.created.length, 1);           // one payment order
+});
+test('different users cannot collide on a requestId; a processed order is not resumed', async () => {
+  const rz = fakeRazorpay();
+  const a = await createCheckoutOrder(db, rz, { uid: 'u1', lines: [{ productId: 'a', quantity: 1, size: '40' }], address, shipping: NO_RULE, requestId: 'shared-key-1' });
+  const b = await createCheckoutOrder(db, rz, { uid: 'u2', lines: [{ productId: 'a', quantity: 1, size: '40' }], address, shipping: NO_RULE, requestId: 'shared-key-1' });
+  assert.notEqual(a.orderId, b.orderId);
+  await applyCapturedPayment(db, { orderId: a.orderId, payment: captured({ razorpayOrderId: a.razorpayOrderId, amountPaise: a.amountPaise }) });
+  await assert.rejects(createCheckoutOrder(db, rz, { uid: 'u1', lines: [{ productId: 'a', quantity: 1, size: '40' }], address, shipping: NO_RULE, requestId: 'shared-key-1' }), /already been processed/);
+  // a malformed key is ignored (normal, non-idempotent order), never trusted as a document id
+  const odd = await createCheckoutOrder(db, rz, { uid: 'u1', lines: [{ productId: 'a', quantity: 1, size: '40' }], address, shipping: NO_RULE, requestId: 'bad/key!' });
+  assert.ok(!odd.orderId.includes('bad'));
+});
+
+// ---------- returns ----------
+test('return request: owner only, delivered + within 7 days, once; no refund flag, stock untouched', async () => {
+  const res = await buy(fakeRazorpay(), [{ productId: 'a', quantity: 1, size: '40' }]);
+  const o0 = await orderOf(res.orderId);
+  await applyCapturedPayment(db, { orderId: res.orderId, payment: captured(o0 as any) });
+  const ref = db.collection('orders').doc(res.orderId);
+  const t = new Date('2026-10-11T10:00:00.000Z');
+  await assert.rejects(requestReturn(db, { uid: 'u1', orderId: res.orderId, now: t }), /only after your order has been delivered/);
+  await ref.update({ status: 'delivered', statusHistory: [{ status: 'delivered', timestamp: t.toISOString() }] });
+  await assert.rejects(requestReturn(db, { uid: 'someone-else', orderId: res.orderId, now: t }), /Order not found/);
+  const late = new Date(t.getTime() + 8 * 86_400_000);
+  await assert.rejects(requestReturn(db, { uid: 'u1', orderId: res.orderId, now: late }), /within 7 days of delivery/);
+  const stockBefore = await stockOf('a');
+  assert.deepEqual(await requestReturn(db, { uid: 'u1', orderId: res.orderId, reason: 'wrong colour', now: new Date(t.getTime() + 2 * 86_400_000) }), { outcome: 'requested' });
+  const after = await orderOf(res.orderId) as any;
+  assert.equal(after.returnRequest.status, 'requested'); assert.equal(after.returnRequest.reason, 'wrong colour');
+  assert.notEqual(after.needsRefund, true); assert.equal(after.status, 'delivered'); assert.equal(await stockOf('a'), stockBefore);
+  await assert.rejects(requestReturn(db, { uid: 'u1', orderId: res.orderId, now: t }), /already been requested/);
 });

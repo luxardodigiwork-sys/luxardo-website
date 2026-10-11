@@ -264,13 +264,20 @@ export default function AdminOrderDetailsPage() {
             </p>
           </div>
 
-          {(order.cancellationRequest || order.needsRefund) && (
+          {(order.cancellationRequest || order.returnRequest || order.needsRefund) && (
             <div className="border border-amber-300 bg-amber-50 p-5 space-y-2 text-sm text-amber-900">
               {order.cancellationRequest && (
                 <p>
                   <strong>Cancellation requested</strong> by the customer on {new Date(order.cancellationRequest.requestedAt).toLocaleString('en-IN')}
                   {order.cancellationRequest.reason ? `: "${order.cancellationRequest.reason}"` : '.'}
                   {' '}To approve, set the status to Cancelled (stock is restored) and refund the payment in the Razorpay dashboard. Nothing is refunded automatically.
+                </p>
+              )}
+              {order.returnRequest && (
+                <p>
+                  <strong>Return requested</strong> on {new Date(order.returnRequest.requestedAt).toLocaleString('en-IN')}
+                  {order.returnRequest.reason ? `: "${order.returnRequest.reason}"` : '.'}
+                  {' '}Review the goods, then set the status to Returned and refund manually in the Razorpay dashboard (target within 7 days). Nothing is refunded automatically.
                 </p>
               )}
               {order.needsRefund && (

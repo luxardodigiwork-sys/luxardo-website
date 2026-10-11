@@ -128,6 +128,7 @@ export interface Order {
   razorpayPaymentId?: string;
   /** Set by the payment backend when a customer asks to cancel a paid order; staff approve and refund manually. */
   cancellationRequest?: { requestedAt: string; reason?: string; status: "requested" };
+  returnRequest?: { requestedAt: string; reason?: string; status: "requested"; deliveredAt?: string };
   /** A cancelled order that was paid and still needs a manual refund. */
   needsRefund?: boolean;
   statusReason?: string;

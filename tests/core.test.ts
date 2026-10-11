@@ -8,7 +8,7 @@ const core: typeof coreNs = (coreNs as any).default ?? coreNs;
 const {
   ALLOWED_SIZES, OrderError, assertPaymentMatchesOrder, assertPhoneAuth, computeOrderTotals,
   validateShippingAddress, verifyPaymentSignature, verifyWebhookSignature, MAX_LINES,
-  computeShippingPaise, evaluateCancellation, DEFAULT_SHIPPING, FREE_SHIPPING_THRESHOLD_PAISE, SHIPPING_FEE_BELOW_THRESHOLD_PAISE,
+  computeShippingPaise, evaluateCancellation, evaluateReturn, RETURN_WINDOW_DAYS, DEFAULT_SHIPPING, FREE_SHIPPING_THRESHOLD_PAISE, SHIPPING_FEE_BELOW_THRESHOLD_PAISE,
 } = core;
 
 // Arithmetic tests below are about prices/quantities, not the shipping rule, so they opt out of it explicitly.
@@ -184,4 +184,23 @@ test('cancellation: unsafe states are refused (packed, shipped, delivered, held,
   assert.equal(evaluateCancellation({ status: 'pending', paymentStatus: 'failed', createdAt: T0.toISOString() }, hoursAfter(1)).allowed, false);
   assert.equal(evaluateCancellation({ status: 'processing', paymentStatus: 'pending', createdAt: T0.toISOString() }, hoursAfter(1)).allowed, false);
   assert.equal(evaluateCancellation(paidOrder({ paidAt: 'garbage', createdAt: 'garbage' }), hoursAfter(1)).allowed, false);
+});
+
+// ---------- returns: 7 days from DELIVERY ----------
+const DELIVERED = new Date('2026-10-11T10:00:00.000Z');
+const deliveredOrder = (extra: any = {}) => ({ status: 'delivered', paymentStatus: 'paid', statusHistory: [{ status: 'shipped', timestamp: '2026-10-09T10:00:00.000Z' }, { status: 'delivered', timestamp: DELIVERED.toISOString() }], ...extra });
+const daysAfterDelivery = (d: number) => new Date(DELIVERED.getTime() + d * 86_400_000);
+test('returns: allowed within 7 days of delivery, refused after (boundary exact)', () => {
+  assert.equal(RETURN_WINDOW_DAYS, 7);
+  assert.equal(evaluateReturn(deliveredOrder(), daysAfterDelivery(0.5)).allowed, true);
+  assert.equal(evaluateReturn(deliveredOrder(), daysAfterDelivery(7)).allowed, true);
+  const late = evaluateReturn(deliveredOrder(), new Date(daysAfterDelivery(7).getTime() + 1));
+  assert.equal(late.allowed, false); assert.match(late.reason!, /within 7 days of delivery/);
+});
+test('returns: not before delivery, not unpaid, not twice, needs a delivery timestamp', () => {
+  assert.equal(evaluateReturn(deliveredOrder({ status: 'shipped' }), daysAfterDelivery(1)).allowed, false);
+  assert.equal(evaluateReturn(deliveredOrder({ paymentStatus: 'pending' }), daysAfterDelivery(1)).allowed, false);
+  assert.equal(evaluateReturn(deliveredOrder({ returnRequest: { status: 'requested' } }), daysAfterDelivery(1)).allowed, false);
+  assert.equal(evaluateReturn(deliveredOrder({ statusHistory: [] }), daysAfterDelivery(1)).allowed, false);
+  assert.equal(evaluateReturn(deliveredOrder({ statusHistory: [{ status: 'delivered', timestamp: 'garbage' }] }), daysAfterDelivery(1)).allowed, false);
 });

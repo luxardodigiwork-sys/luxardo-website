@@ -90,6 +90,8 @@ export default function CheckoutPage() {
     return Object.keys(errors).length === 0;
   };
 
+  // One retry key per checkout attempt: a double-click or retry returns the SAME order instead of creating a second one.
+  const requestIdRef = React.useRef<{ sig: string; id: string }>({ sig: '', id: '' });
   const handlePay = async () => {
     if (cartItems.length === 0) {
       setError("Your cart is empty. Add items before checkout.");
@@ -114,6 +116,11 @@ export default function CheckoutPage() {
     setIsSubmitting(true);
     setError(null);
     try {
+      // Same cart + same address => same key (retry/double-click safe). Any change => a fresh key and a fresh order.
+      const sig = JSON.stringify([cartItems.map((i) => [i.product.id, i.quantity, i.size]), form]);
+      if (requestIdRef.current.sig !== sig) {
+        requestIdRef.current = { sig, id: (crypto.randomUUID?.() ?? `${Date.now()}${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '') };
+      }
       await auth.currentUser?.getIdToken(true); // make sure the token carries the verified phone number
       // Only ids, quantities and sizes are sent. The server prices the order and reserves stock.
       const checkout = await createCheckoutOrder(
@@ -123,6 +130,7 @@ export default function CheckoutPage() {
           addressLine1: form.addressLine1.trim(), addressLine2: form.addressLine2.trim(),
           city: form.city.trim(), state: form.state, postalCode: form.postalCode.trim(),
         },
+        requestIdRef.current.id,
       );
       await loadRazorpay();
 

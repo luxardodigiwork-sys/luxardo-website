@@ -20,7 +20,7 @@ import {
 } from "./core";
 import {
   RazorpayLike, createCheckoutOrder, releaseExpiredOrders,
-  releaseOrderStock, requestCancellation, verifyAndApplyPayment,
+  releaseOrderStock, requestCancellation, requestReturn, verifyAndApplyPayment,
 } from "./orders";
 
 admin.initializeApp();
@@ -56,6 +56,7 @@ export const createCheckoutOrderFn = onCall({ region: REGION, secrets: [RAZORPAY
       phone: (request.auth!.token as any).phone_number,
       lines: request.data?.items, // ids/quantities/sizes only; prices are never read from the client
       address,
+      requestId: request.data?.requestId,
     });
     return {
       orderId: created.orderId,
@@ -116,6 +117,18 @@ export const requestCancellationFn = onCall({ region: REGION }, async (request) 
     const orderId = request.data?.orderId;
     if (typeof orderId !== "string" || !orderId) throw new OrderError("invalid-argument", "Missing order id.");
     return await requestCancellation(db, { uid, orderId, reason: request.data?.reason });
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+/** Customer return request: within 7 days of delivery. Staff review; no refund is automatic. */
+export const requestReturnFn = onCall({ region: REGION }, async (request) => {
+  try {
+    const uid = assertPhoneAuth(request.auth as any);
+    const orderId = request.data?.orderId;
+    if (typeof orderId !== "string" || !orderId) throw new OrderError("invalid-argument", "Missing order id.");
+    return await requestReturn(db, { uid, orderId, reason: request.data?.reason });
   } catch (err) {
     throw toHttpsError(err);
   }

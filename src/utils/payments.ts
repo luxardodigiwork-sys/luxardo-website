@@ -14,8 +14,8 @@ export interface RazorpaySuccess {
 }
 
 /** Client sends ONLY product ids, quantities, sizes and the address. Prices are computed server-side. */
-export const createCheckoutOrder = (items: CheckoutLine[], address: CheckoutAddress) =>
-  httpsCallable<{ items: CheckoutLine[]; address: CheckoutAddress }, CreatedCheckout>(functions, 'createCheckoutOrderFn')({ items, address })
+export const createCheckoutOrder = (items: CheckoutLine[], address: CheckoutAddress, requestId?: string) =>
+  httpsCallable<{ items: CheckoutLine[]; address: CheckoutAddress; requestId?: string }, CreatedCheckout>(functions, 'createCheckoutOrderFn')({ items, address, requestId })
     .then((r) => r.data);
 
 export const verifyPayment = (orderId: string, res: RazorpaySuccess) =>
@@ -25,6 +25,11 @@ export const verifyPayment = (orderId: string, res: RazorpaySuccess) =>
 /** Cancel an unpaid order now, or file a cancellation request for a paid one (staff approve and refund; nothing is automatic). */
 export const requestOrderCancellation = (orderId: string, reason?: string) =>
   httpsCallable<{ orderId: string; reason?: string }, { outcome: 'cancelled' | 'requested' }>(functions, 'requestCancellationFn')({ orderId, reason })
+    .then((r) => r.data);
+
+/** Ask to return a delivered order (within 7 days of delivery). Staff review it; no refund is automatic. */
+export const requestOrderReturn = (orderId: string, reason?: string) =>
+  httpsCallable<{ orderId: string; reason?: string }, { outcome: 'requested' }>(functions, 'requestReturnFn')({ orderId, reason })
     .then((r) => r.data);
 
 let scriptPromise: Promise<void> | null = null;

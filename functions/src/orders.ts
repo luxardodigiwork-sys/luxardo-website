@@ -15,7 +15,7 @@ import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import {
   CURRENCY, MAX_PENDING_ORDERS_PER_USER, PAYMENT_WINDOW_MINUTES, OrderError,
-  ProductRecord, RazorpayPayment, ShippingAddress, ShippingConfig, DEFAULT_SHIPPING, assertPaymentMatchesOrder, computeOrderTotals, evaluateCancellation,
+  ProductRecord, RazorpayPayment, ShippingAddress, ShippingConfig, DEFAULT_SHIPPING, assertPaymentMatchesOrder, computeOrderTotals, evaluateCancellation, evaluateReturn,
 } from "./core";
 import { MAIL_COLLECTION, buildMailDocs } from "./emails";
 
@@ -32,6 +32,8 @@ export interface CreateOrderInput {
   now?: Date;
   /** Shipping rule; defaults to the confirmed business rule. Overridable for tests only. */
   shipping?: ShippingConfig;
+  /** Client-generated retry key. The same key from the same user always maps to the same order (no duplicate orders on double-click/retry). */
+  requestId?: string;
 }
 
 export interface CreatedOrder {
@@ -53,6 +55,14 @@ function toProduct(id: string, data: FirebaseFirestore.DocumentData | undefined)
 export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, input: CreateOrderInput): Promise<CreatedOrder> {
   const now = input.now ?? new Date();
 
+  const requestId = typeof input.requestId === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(input.requestId) ? input.requestId : undefined;
+  const orderRef = requestId ? db.collection("orders").doc(`${input.uid}_${requestId}`) : db.collection("orders").doc();
+
+  if (requestId) {
+    const prior = await orderRef.get();
+    if (prior.exists) return resumeExistingOrder(rzp, orderRef, prior.data()!);
+  }
+
   // Anti-hoarding: cap concurrent unpaid orders per user.
   const open = await db.collection("orders").where("userId", "==", input.uid).where("paymentStatus", "==", "pending").get();
   const stillOpen = open.docs.filter((d) => d.data().status === "pending" && (d.data().expiresAt as string) > now.toISOString());
@@ -65,9 +75,13 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
     ? Array.from(new Set(lines.map((l) => l?.productId).filter((v): v is string => typeof v === "string" && !!v && !v.includes("/"))))
     : [];
 
-  const orderRef = db.collection("orders").doc();
-
+  let raced: FirebaseFirestore.DocumentData | undefined;
   const totals = await db.runTransaction(async (tx) => {
+    raced = undefined;
+    if (requestId) {
+      const again = await tx.get(orderRef); // a concurrent identical request may have created it meanwhile
+      if (again.exists) { raced = again.data(); return null; }
+    }
     const snaps = await Promise.all(ids.map((id) => tx.get(productRef(db, id))));
     const productsById: Record<string, ProductRecord | undefined> = {};
     snaps.forEach((s, i) => { productsById[ids[i]] = toProduct(ids[i], s.data()); });
@@ -112,6 +126,8 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
     return t;
   });
 
+  if (!totals) return resumeExistingOrder(rzp, orderRef, raced!);
+
   try {
     const rz = await rzp.orders.create({
       amount: totals.totalPaise,
@@ -126,6 +142,20 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
     await releaseOrderStock(db, orderRef.id, "payment_provider_error").catch(() => undefined);
     throw err;
   }
+}
+
+/** Same user + same requestId: hand back the existing order instead of creating (and charging for) a second one. */
+async function resumeExistingOrder(rzp: RazorpayLike, ref: FirebaseFirestore.DocumentReference, o: FirebaseFirestore.DocumentData): Promise<CreatedOrder> {
+  if (o.status !== "pending" || o.paymentStatus !== "pending") {
+    throw new OrderError("failed-precondition", "This order has already been processed. Please refresh and check your orders.");
+  }
+  let razorpayOrderId = o.razorpayOrderId as string | null;
+  if (!razorpayOrderId) { // an earlier attempt reserved stock but died before the payment order was created
+    const rz = await rzp.orders.create({ amount: o.amountPaise, currency: o.currency, receipt: ref.id, notes: { orderId: ref.id, uid: o.userId } });
+    razorpayOrderId = rz.id;
+    await ref.update({ razorpayOrderId });
+  }
+  return { orderId: ref.id, razorpayOrderId: razorpayOrderId as string, amountPaise: o.amountPaise, currency: o.currency, total: o.amountPaise / 100 };
 }
 
 /** Restores reserved stock exactly once and moves the order to `nextStatus`. Safe to call repeatedly. */
@@ -315,5 +345,22 @@ export async function requestCancellation(db: Firestore, input: { uid: string; o
     }
     tx.update(ref, { stockReleased: true, status: "cancelled", statusReason: "cancelled_by_customer", cancelledAt: now.toISOString() });
     return { outcome: "cancelled" };
+  });
+}
+
+export interface ReturnOutcome { outcome: "requested" }
+
+/** Records a customer's return request (within 7 days of delivery). Staff review it; no refund is ever automatic. */
+export async function requestReturn(db: Firestore, input: { uid: string; orderId: string; reason?: string; now?: Date }): Promise<ReturnOutcome> {
+  const now = input.now ?? new Date();
+  const ref = db.collection("orders").doc(input.orderId);
+  return db.runTransaction(async (tx): Promise<ReturnOutcome> => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data()!.userId !== input.uid) throw new OrderError("not-found", "Order not found.");
+    const verdict = evaluateReturn(snap.data()!, now);
+    if (!verdict.allowed) throw new OrderError("failed-precondition", verdict.reason || "This order cannot be returned online.");
+    const reason = typeof input.reason === "string" ? input.reason.trim().slice(0, 500) : "";
+    tx.update(snap.ref, { returnRequest: { requestedAt: now.toISOString(), reason, status: "requested", deliveredAt: verdict.deliveredAt } });
+    return { outcome: "requested" };
   });
 }

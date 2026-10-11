@@ -531,3 +531,26 @@ test('firebaserc has no default project (CLI needs an explicit --project) and on
   assert.match(rc.projects.production, /^REPLACE_WITH_/);
   assert.doesNotMatch(read('firebase.json'), /"bucket"/);
 });
+
+// ---------- returns parity + checkout idempotency + dead admin code ----------
+import * as retClientNs from '../src/utils/returns';
+import * as coreRetNs from '../functions/src/core';
+test('returns: client and server implementations agree on every case', () => {
+  const c: any = (retClientNs as any).default ?? retClientNs;
+  const sv: any = (coreRetNs as any).default ?? coreRetNs;
+  const T = new Date('2026-10-11T10:00:00.000Z');
+  const o = (extra: any = {}) => ({ status: 'delivered', paymentStatus: 'paid', statusHistory: [{ status: 'delivered', timestamp: T.toISOString() }], ...extra });
+  const cases: Array<[any, number]> = [[o(), 0.1], [o(), 7], [o(), 7.0001], [o({ status: 'shipped' }), 1], [o({ paymentStatus: 'pending' }), 1], [o({ returnRequest: {} }), 1], [o({ statusHistory: [] }), 1]];
+  for (const [order, days] of cases) {
+    const now = new Date(T.getTime() + days * 86_400_000);
+    assert.deepEqual(c.evaluateReturn(order, now), sv.evaluateReturn(order, now));
+  }
+  assert.equal(c.RETURN_WINDOW_DAYS, sv.RETURN_WINDOW_DAYS);
+});
+test('checkout sends a retry key; return UI and callable are wired; no dummy local admin', () => {
+  assert.match(read('src/pages/CheckoutPage.tsx'), /requestIdRef/);
+  assert.match(read('src/utils/payments.ts'), /requestReturnFn/);
+  assert.match(read('src/pages/OrderDetailsPage.tsx'), /requestOrderReturn/);
+  assert.match(read('functions/src/index.ts'), /export const requestReturnFn/);
+  assert.doesNotMatch(read('src/utils/localStorage.ts'), /DUMMY_ADMIN|isAdminLoggedIn|loginAdmin/);
+});

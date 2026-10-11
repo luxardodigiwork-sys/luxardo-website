@@ -22,7 +22,6 @@ const KEYS = {
   PRIME_CONTENT: 'LUXARDO FASHION_prime_content',
   POLICIES: 'LUXARDO FASHION_policies',
   DASHBOARD_STATS: 'LUXARDO FASHION_dashboard_stats',
-  DUMMY_ADMIN: 'LUXARDO FASHION_dummy_admin',
   MEDIA: 'LUXARDO FASHION_media',
   BACKEND_USERS: 'LUXARDO FASHION_backend_users',
   BACKEND_SETTINGS: 'LUXARDO FASHION_backend_settings',
@@ -283,17 +282,6 @@ export const storage = {
       activeMembers,
       recentOrders: orders.slice(0, 5)
     };
-  },
-
-  // Auth
-  isAdminLoggedIn: () => {
-    return localStorage.getItem(KEYS.DUMMY_ADMIN) === 'true';
-  },
-  loginAdmin: () => {
-    localStorage.setItem(KEYS.DUMMY_ADMIN, 'true');
-  },
-  logoutAdmin: () => {
-    localStorage.removeItem(KEYS.DUMMY_ADMIN);
   },
 
   // Saved Address

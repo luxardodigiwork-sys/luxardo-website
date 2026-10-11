@@ -5,7 +5,8 @@ import { ChevronLeft, Package, MapPin, CreditCard, Truck, CheckCircle2, Circle }
 import { useAuth } from '../context/AuthContext';
 import { formatINR } from '../utils/currency';
 import { evaluateCancellation } from '../utils/cancellation';
-import { requestOrderCancellation } from '../utils/payments';
+import { evaluateReturn, RETURN_WINDOW_DAYS } from '../utils/returns';
+import { requestOrderCancellation, requestOrderReturn } from '../utils/payments';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Order } from '../types';
@@ -17,6 +18,21 @@ export default function OrderDetailsPage() {
   const [order, setOrder] = useState<any>(null);
   const [cancelState, setCancelState] = useState<'idle' | 'confirm' | 'working' | 'done_cancelled' | 'done_requested' | 'error'>('idle');
   const [cancelError, setCancelError] = useState('');
+  const [returnState, setReturnState] = useState<'idle' | 'confirm' | 'working' | 'done' | 'error'>('idle');
+  const [returnReason, setReturnReason] = useState('');
+  const [returnError, setReturnError] = useState('');
+
+  const handleReturn = async () => {
+    setReturnState('working');
+    setReturnError('');
+    try {
+      await requestOrderReturn(order.id, returnReason);
+      setReturnState('done');
+    } catch (err: any) {
+      setReturnError(err?.message || 'Could not send your return request.');
+      setReturnState('error');
+    }
+  };
 
   const handleCancel = async () => {
     setCancelState('working');
@@ -260,6 +276,35 @@ export default function OrderDetailsPage() {
                     <button type="button" onClick={() => setCancelState('confirm')} className="btn-outline w-full py-4">
                       {verdict.mode === 'cancel_unpaid' ? 'Cancel order' : 'Request cancellation'}
                     </button>
+                  )}
+                </div>
+              );
+            })()}
+            {(() => {
+              if (order.status !== 'delivered' && !order.returnRequest) return null;
+              if (returnState === 'done' || order.returnRequest) {
+                return (
+                  <p className="text-sm font-sans text-brand-black">
+                    Your return request has been received. We will review it and contact you with the next steps. A refund, if approved, is targeted within 7 days and is not automatic.
+                  </p>
+                );
+              }
+              const rv = evaluateReturn({ ...order, paymentStatus: order.rawPaymentStatus });
+              if (!rv.allowed) return <p className="text-xs font-sans text-brand-secondary">{rv.reason}</p>;
+              return (
+                <div className="space-y-3">
+                  {returnState === 'idle' ? (
+                    <button type="button" onClick={() => setReturnState('confirm')} className="btn-outline w-full py-4">Request a return</button>
+                  ) : (
+                    <>
+                      <p className="text-sm font-sans text-brand-black">Returns are accepted within {RETURN_WINDOW_DAYS} days of delivery and are subject to review. Tell us briefly what went wrong (optional).</p>
+                      <textarea value={returnReason} maxLength={500} onChange={(e) => setReturnReason(e.target.value)} className="w-full border border-brand-divider p-3 text-sm" rows={3} />
+                      {returnError && <p className="text-xs text-red-700">{returnError}</p>}
+                      <div className="flex gap-3">
+                        <button type="button" disabled={returnState === 'working'} onClick={handleReturn} className="btn-primary px-6 py-3 disabled:opacity-50">{returnState === 'working' ? 'Sending...' : 'Send return request'}</button>
+                        <button type="button" disabled={returnState === 'working'} onClick={() => setReturnState('idle')} className="btn-outline px-6 py-3">Not now</button>
+                      </div>
+                    </>
                   )}
                 </div>
               );
