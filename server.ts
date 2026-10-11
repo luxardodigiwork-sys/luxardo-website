@@ -12,7 +12,12 @@ import { GoogleGenAI } from "@google/genai";
 const app = express();
 const PUBLIC_PORT = Number(process.env.PUBLIC_PORT || 3000);
 const ADMIN_PORT = Number(process.env.ADMIN_PORT || 24678);
-const JWT_SECRET = process.env.JWT_SECRET || "LUXARDO FASHION-super-secret-key-2026";
+// No default secret: a known default would let anyone forge admin tokens.
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  (process.env.NODE_ENV === "production"
+    ? (() => { throw new Error("JWT_SECRET must be set in production."); })()
+    : crypto.randomBytes(48).toString("hex")); // dev only: random per process
 
 const adminRoutePrefixes = [
   "/admin",
@@ -127,13 +132,14 @@ db.exec(`
 
 // Seed default admin and permissions if not exists
 const seedData = () => {
-  const adminEmail = "LUXARDO FASHIONdigiwork@gmail.com";
-  const adminPassword = "7976672811";
+  // No credentials are committed. Provide SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD (env) to create the first super admin.
+  const adminEmail = process.env.SEED_ADMIN_EMAIL || "";
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || "";
 
   const stmt = db.prepare("SELECT * FROM users WHERE role = ?");
   const admin = stmt.get("super_admin");
 
-  if (!admin) {
+  if (!admin && adminEmail && adminPassword) {
     const hash = bcrypt.hashSync(adminPassword, 10);
     const insert = db.prepare(
       "INSERT INTO users (email, password_hash, role, full_name) VALUES (?, ?, ?, ?)",
@@ -177,12 +183,17 @@ const seedData = () => {
   });
 
   // Seed default backend users for each role
-  const defaultPassword = "311001";
-  const rolesWithUsers = [
-    { role: "owner", email: "owner_311001" },
-    { role: "dispatch", email: "dispatch_311001" },
-    { role: "analysis", email: "analysis_311001" },
-  ];
+  // Test users are created only when explicitly enabled outside production; password comes from the environment.
+  const seedTestUsers =
+    process.env.SEED_TEST_USERS === "true" && process.env.NODE_ENV !== "production" && !!process.env.SEED_TEST_PASSWORD;
+  const defaultPassword = process.env.SEED_TEST_PASSWORD || "";
+  const rolesWithUsers = seedTestUsers
+    ? [
+        { role: "owner", email: "owner_test" },
+        { role: "dispatch", email: "dispatch_test" },
+        { role: "analysis", email: "analysis_test" },
+      ]
+    : [];
 
   const userStmt = db.prepare("SELECT * FROM users WHERE email = ?");
   const insertUser = db.prepare(
@@ -191,9 +202,11 @@ const seedData = () => {
 
   // Seed default customer user
   const customerEmail = "testuser@LUXARDO FASHION.com";
-  const customerPassword = "311001";
+  const customerPassword = defaultPassword;
   const existingCustomer = userStmt.get(customerEmail) as any;
-  if (!existingCustomer) {
+  if (!seedTestUsers) {
+    // test users disabled
+  } else if (!existingCustomer) {
     const hash = bcrypt.hashSync(customerPassword, 10);
     insertUser.run(
       customerEmail,
@@ -909,7 +922,13 @@ Answer questions clearly and concisely in Hindi or English as requested by the u
 
 // --- Settings API ---
 app.get("/api/settings/:key", authenticate, (req: any, res) => {
+  if (!["super_admin", "admin", "owner"].includes(req.user.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   const { key } = req.params;
+  if (/razorpay|secret|payment/i.test(key)) {
+    return res.status(404).json({ error: "Not found" }); // payment secrets are never served
+  }
   const setting = db
     .prepare("SELECT value FROM settings WHERE key = ?")
     .get(key) as any;
@@ -925,6 +944,9 @@ app.post("/api/settings/:key", authenticate, (req: any, res) => {
     return res.status(403).json({ error: "Forbidden" });
   }
   const { key } = req.params;
+  if (/razorpay|secret|payment/i.test(key)) {
+    return res.status(400).json({ error: "Payment settings cannot be stored here." });
+  }
   const { value } = req.body;
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run(
     key,
@@ -933,131 +955,19 @@ app.post("/api/settings/:key", authenticate, (req: any, res) => {
   res.json({ success: true });
 });
 
-// --- Razorpay API ---
-import Razorpay from "razorpay";
-
-app.post("/api/payment/create-order", async (req: any, res) => {
-  try {
-    const { amount } = req.body; // amount in INR
-    const setting = db
-      .prepare("SELECT value FROM settings WHERE key = ?")
-      .get("razorpay_settings") as any;
-    const rpSettings = setting ? JSON.parse(setting.value) : null;
-
-    if (!rpSettings || !rpSettings.keyId || !rpSettings.secretKey) {
-      return res.status(500).json({ error: "Razorpay is not configured" });
-    }
-
-    const razorpay = new Razorpay({
-      key_id: rpSettings.keyId,
-      key_secret: rpSettings.secretKey,
-    });
-
-    const options = {
-      amount: Math.round(amount * 100), // amount in smallest currency unit
-      currency: "INR",
-      receipt: `receipt_${Date.now()}`,
-    };
-
-    const order = await razorpay.orders.create(options);
-    res.json({ order, keyId: rpSettings.keyId });
-  } catch (error) {
-    console.error("Razorpay create order error:", error);
-    res.status(500).json({ error: "Failed to create payment order" });
-  }
-});
-
-app.post("/api/payment/verify", async (req: any, res) => {
-  try {
-    const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      orderData,
-    } = req.body;
-    const setting = db
-      .prepare("SELECT value FROM settings WHERE key = ?")
-      .get("razorpay_settings") as any;
-    const rpSettings = setting ? JSON.parse(setting.value) : null;
-
-    if (!rpSettings || !rpSettings.secretKey) {
-      return res.status(500).json({ error: "Razorpay is not configured" });
-    }
-
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSignature = crypto
-      .createHmac("sha256", rpSettings.secretKey)
-      .update(body.toString())
-      .digest("hex");
-
-    if (expectedSignature === razorpay_signature) {
-      // Payment verified successfully
-
-      // Generate Order ID
-      const orderId = `LUX${new Date().getFullYear()}${Math.floor(1000 + Math.random() * 9000)}`;
-
-      // Create order object
-      const newOrder = {
-        id: orderId,
-        userId: orderData.userId,
-        userName: orderData.userName,
-        userEmail: orderData.userEmail,
-        totalAmount: orderData.totalAmount,
-        status: "placed",
-        verificationStatus: "dispatch_ready", // Unlock dispatch workflow
-        paymentStatus: "confirmed",
-        paymentMethod: "razorpay",
-        paymentId: razorpay_payment_id,
-        trackingId: null,
-        courierStatus: "pending",
-        createdAt: new Date().toISOString(),
-        items: orderData.items,
-        shippingAddress: orderData.shippingAddress,
-      };
-
-      // Save to database
-      const insertOrder = db.prepare(`
-        INSERT INTO orders (
-          id, user_id, user_name, user_email, total_amount, status, 
-          verification_status, payment_status, payment_method, payment_id, 
-          items, shipping_address, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      insertOrder.run(
-        newOrder.id,
-        newOrder.userId,
-        newOrder.userName,
-        newOrder.userEmail,
-        newOrder.totalAmount,
-        newOrder.status,
-        newOrder.verificationStatus,
-        newOrder.paymentStatus,
-        newOrder.paymentMethod,
-        newOrder.paymentId,
-        JSON.stringify(newOrder.items),
-        JSON.stringify(newOrder.shippingAddress),
-        newOrder.createdAt,
-      );
-
-      res.json({
-        success: true,
-        paymentId: razorpay_payment_id,
-        order: newOrder,
-      });
-    } else {
-      res.status(400).json({ success: false, error: "Invalid signature" });
-    }
-  } catch (error) {
-    console.error("Razorpay verify error:", error);
-    res
-      .status(500)
-      .json({ error: "Failed to verify payment and create order" });
-  }
+// --- Razorpay (RETIRED) ---
+// Payments are handled by the Firebase Functions backend (functions/src), which prices orders from
+// Firestore and verifies signatures server-side. The previous endpoints here trusted client-supplied
+// amounts and order data and read the Razorpay secret from the database; they are disabled.
+app.all(["/api/payment/create-order", "/api/payment/verify"], (_req, res) => {
+  res.status(410).json({ error: "This payment endpoint has been retired." });
 });
 
 // --- DTDC API (Mock) ---
-app.post("/api/dtdc/create-shipment", async (req: any, res) => {
+app.post("/api/dtdc/create-shipment", authenticate, async (req: any, res) => {
+  if (!["super_admin", "admin", "dispatch", "owner"].includes(req.user.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   try {
     const { orderId, shipmentData } = req.body;
 

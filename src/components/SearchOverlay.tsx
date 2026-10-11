@@ -1,8 +1,10 @@
+import { formatINR } from '../utils/currency';
+import { PRIME_AVAILABLE } from '../constants/features';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, ArrowRight, Package, Grid, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { storage } from '../utils/localStorage';
+import { useProducts } from '../context/ProductsContext';
 import { COLLECTIONS } from '../constants';
 import { Product } from '../types';
 
@@ -14,7 +16,7 @@ interface SearchOverlayProps {
 const PAGES = [
   { title: 'Home', path: '/', type: 'page' },
   { title: 'All Collections', path: '/collections', type: 'page' },
-  { title: 'Prime Membership', path: '/prime-membership', type: 'page' },
+  ...(PRIME_AVAILABLE ? [{ title: 'Prime Membership', path: '/prime-membership', type: 'page' }] : []),
   { title: 'Craftsmanship', path: '/craftsmanship', type: 'page' },
   { title: 'Our Story', path: '/our-story', type: 'page' },
   { title: 'Contact', path: '/contact', type: 'page' },
@@ -22,13 +24,12 @@ const PAGES = [
 
 export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
   const [query, setQuery] = useState('');
-  const [products, setProducts] = useState<Product[]>([]);
+  const { storefrontProducts: products } = useProducts();
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (isOpen) {
-      setProducts(storage.getProducts());
       setQuery('');
       // Small delay to ensure the element is rendered before focusing
       setTimeout(() => {
@@ -175,7 +176,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                                 <div className="flex flex-col justify-center">
                                   <p className="text-[9px] uppercase tracking-[0.2em] font-bold text-brand-secondary mb-1">{product.category}</p>
                                   <h4 className="text-sm font-sans font-medium text-brand-black group-hover:text-brand-secondary transition-colors line-clamp-2 leading-tight">{product.name}</h4>
-                                  <p className="text-xs font-sans text-brand-secondary mt-1.5">₹{product.price.toLocaleString('en-IN')}</p>
+                                  <p className="text-xs font-sans text-brand-secondary mt-1.5">{formatINR(product.price)}</p>
                                 </div>
                               </div>
                             ))}

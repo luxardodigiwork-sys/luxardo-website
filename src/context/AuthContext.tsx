@@ -30,105 +30,100 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isLoggedIn: boolean;
+  /** True only when Firestore rules confirm the signed-in account is an admin (server-trusted). */
+  isAdmin: boolean;
   isAuthReady: boolean;
   logout: () => Promise<void>;
   login: (userData: User) => void;
   updateUserPreferences: (preferences: Partial<User>) => void;
-  loginAdmin: (username: string, password: string) => Promise<void>;
-  resetPassword: (email: string, resetCode: string, newPassword: string) => Promise<void>;
   upgradeToPrime: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Asks Firestore whether the current account is an admin. The `adminCheck`
+ * collection is readable only when firestore.rules `isAdmin()` is true, so a
+ * successful read (even of a missing doc) is a server-enforced answer.
+ * Any error, including permission-denied, means "not admin".
+ */
+async function probeIsAdmin(): Promise<boolean> {
+  try {
+    await getDoc(doc(db, 'adminCheck', 'probe'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
+    // Drop any privileged identity cached by earlier versions of the app.
+    try {
+      localStorage.removeItem('LUXARDO FASHION_user');
+      localStorage.removeItem('LUXARDO FASHION_logged_out');
+    } catch {}
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
-        if (firebaseUser) {
-          const customerDoc = await getDoc(doc(db, 'customers', firebaseUser.uid));
-
-          if (customerDoc.exists()) {
-            const data = customerDoc.data();
-            const userData: User = {
-              id: firebaseUser.uid,
-              name: data.firstName
-                ? `${data.firstName} ${data.lastName || ''}`.trim()
-                : data.name || 'User',
-              email: data.email || firebaseUser.email || '',
-              role: data.role || 'customer',
-              isPrimeMember: data.isPrimeMember || false,
-              phone: data.phone || firebaseUser.phoneNumber || '',
-              country: data.country,
-              language: data.language,
-              currency: data.currency,
-              createdAt: data.createdAt,
-              membershipActivation: data.membershipActivation,
-              membershipExpiry: data.membershipExpiry,
-              forcePasswordReset: data.forcePasswordReset,
-              permissions: data.permissions,
-              primePrivileges: data.primePrivileges,
-              notes: data.notes,
-            };
-
-            setUser(userData);
-            localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(userData));
-            localStorage.removeItem('LUXARDO FASHION_logged_out');
-          } else {
-            const cached = localStorage.getItem('LUXARDO FASHION_user');
-            if (cached) {
-              try {
-                const parsedUser = JSON.parse(cached);
-                if (parsedUser?.id === firebaseUser.uid) {
-                  setUser(parsedUser);
-                } else {
-                  localStorage.removeItem('LUXARDO FASHION_user');
-                  setUser(null);
-                }
-              } catch {
-                localStorage.removeItem('LUXARDO FASHION_user');
-                setUser(null);
-              }
-            } else {
-              setUser(null);
-            }
-          }
-        } else {
-          const cached = localStorage.getItem('LUXARDO FASHION_user');
-          const wasLoggedOut = localStorage.getItem('LUXARDO FASHION_logged_out');
-
-          if (cached && !wasLoggedOut) {
-            try {
-              const parsedUser = JSON.parse(cached);
-              const adminRoles = ['admin', 'super_admin', 'dispatch', 'owner', 'analysis'];
-              if (parsedUser?.id && adminRoles.includes(parsedUser.role)) {
-                setUser(parsedUser);
-              } else {
-                localStorage.removeItem('LUXARDO FASHION_user');
-                setUser(null);
-              }
-            } catch {
-              localStorage.removeItem('LUXARDO FASHION_user');
-              setUser(null);
-            }
-          } else {
-            setUser(null);
-          }
+        if (!firebaseUser) {
+          setUser(null);
+          setIsAdmin(false);
+          return;
         }
+
+        // Anonymous guest sessions (used for checkout) are not logged-in accounts.
+        if (firebaseUser.isAnonymous) {
+          setUser(null);
+          setIsAdmin(false);
+          return;
+        }
+
+        const admin = await probeIsAdmin();
+        setIsAdmin(admin);
+
+        let data: Record<string, any> = {};
+        let hasProfile = false;
+        try {
+          const customerDoc = await getDoc(doc(db, 'customers', firebaseUser.uid));
+          if (customerDoc.exists()) { data = customerDoc.data(); hasProfile = true; }
+        } catch (err) {
+          console.error('Failed to load customer profile:', err);
+        }
+
+        // A brand-new account without a profile stays "not logged in" until it
+        // completes the signup profile step (admins don't need a customer profile).
+        if (!hasProfile && !admin) {
+          setUser(null);
+          return;
+        }
+
+        setUser({
+          id: firebaseUser.uid,
+          name: data.firstName
+            ? `${data.firstName} ${data.lastName || ''}`.trim()
+            : data.name || 'User',
+          email: data.email || firebaseUser.email || '',
+          // Role is derived from the server-enforced probe, never from the editable profile doc.
+          role: admin ? 'admin' : 'customer',
+          isPrimeMember: data.isPrimeMember === true,
+          phone: data.phone || firebaseUser.phoneNumber || '',
+          country: data.country,
+          language: data.language,
+          currency: 'INR', // INR only; any stored display-currency preference is ignored
+          createdAt: data.createdAt,
+          membershipActivation: data.membershipActivation,
+          membershipExpiry: data.membershipExpiry,
+          primePrivileges: data.primePrivileges,
+        });
       } catch (err) {
         console.error('Auth state change error:', err);
-        try {
-          const cached = localStorage.getItem('LUXARDO FASHION_user');
-          if (cached) {
-            const parsedUser = JSON.parse(cached);
-            if (parsedUser?.id) setUser(parsedUser);
-          }
-        } catch {
-          setUser(null);
-        }
+        setUser(null);
+        setIsAdmin(false);
       } finally {
         setIsAuthReady(true);
       }
@@ -137,23 +132,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  /** Refresh local profile state after signup. Privilege fields are always forced to customer defaults. */
   const login = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(userData));
-    localStorage.removeItem('LUXARDO FASHION_logged_out');
+    setUser({ ...userData, role: 'customer', isPrimeMember: false, permissions: undefined, primePrivileges: undefined });
   };
 
   const logout = async () => {
     try {
-      if (auth.currentUser) {
-        await signOut(auth);
-      }
+      if (auth.currentUser) await signOut(auth);
     } catch (err) {
       console.error('Firebase sign out error:', err);
     } finally {
       setUser(null);
-      localStorage.removeItem('LUXARDO FASHION_user');
-      localStorage.setItem('LUXARDO FASHION_logged_out', 'true');
+      setIsAdmin(false);
       try {
         sessionStorage.removeItem('LUXARDO FASHION_cart');
         localStorage.removeItem('LUXARDO FASHION_temp_preferences');
@@ -164,49 +155,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateUserPreferences = (preferences: Partial<User>) => {
     if (!user) return;
+    // Only harmless display preferences are editable by the customer.
+    const allowed: Partial<User> = {};
+    if (preferences.country !== undefined) allowed.country = preferences.country;
+    if (preferences.language !== undefined) allowed.language = preferences.language;
+    if (preferences.currency !== undefined) allowed.currency = preferences.currency;
 
-    const updatedUser = { ...user, ...preferences };
-    setUser(updatedUser);
-    localStorage.setItem('LUXARDO FASHION_user', JSON.stringify(updatedUser));
+    setUser({ ...user, ...allowed });
 
-    if (auth.currentUser && user.role === 'customer') {
-      const updateData: Record<string, any> = {};
-      if (preferences.country !== undefined) updateData.country = preferences.country;
-      if (preferences.language !== undefined) updateData.language = preferences.language;
-      if (preferences.currency !== undefined) updateData.currency = preferences.currency;
-      if (preferences.isPrimeMember !== undefined) updateData.isPrimeMember = preferences.isPrimeMember;
-      if (preferences.membershipActivation !== undefined) updateData.membershipActivation = preferences.membershipActivation;
-      if (preferences.membershipExpiry !== undefined) updateData.membershipExpiry = preferences.membershipExpiry;
-      if (preferences.primePrivileges !== undefined) updateData.primePrivileges = preferences.primePrivileges;
-
-      if (Object.keys(updateData).length > 0) {
-        updateData.lastUpdated = new Date().toISOString();
-        setDoc(doc(db, 'customers', auth.currentUser.uid), updateData, { merge: true })
-          .catch((err) => console.error('Failed to sync preferences to Firestore:', err));
-      }
+    if (auth.currentUser && !auth.currentUser.isAnonymous && Object.keys(allowed).length > 0) {
+      setDoc(
+        doc(db, 'customers', auth.currentUser.uid),
+        { ...allowed, lastUpdated: new Date().toISOString() },
+        { merge: true },
+      ).catch((err) => console.error('Failed to sync preferences to Firestore:', err));
     }
   };
 
-  const loginAdmin = async (username: string, password: string) => {
-    console.log('Admin login:', username);
-    const adminUser: User = {
-      id: 'admin',
-      name: 'Admin',
-      email: username,
-      role: 'admin',
-      isPrimeMember: false,
-    };
-    login(adminUser);
-  };
-
-  const resetPassword = async (email: string, resetCode: string, newPassword: string) => {
-    console.log('Reset password for', email, resetCode, newPassword);
-  };
-
+  /** Prime status can only be granted by the server after verified payment; the client cannot self-upgrade. */
   const upgradeToPrime = () => {
-    if (user) {
-      updateUserPreferences({ isPrimeMember: true });
-    }
+    console.warn('Prime membership is granted by the server after payment verification.');
   };
 
   return (
@@ -214,12 +182,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isLoggedIn: !!user,
+        isAdmin,
         isAuthReady,
         logout,
         login,
         updateUserPreferences,
-        loginAdmin,
-        resetPassword,
         upgradeToPrime,
       }}
     >

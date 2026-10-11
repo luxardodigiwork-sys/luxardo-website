@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { PRIME_AVAILABLE } from '../constants/features';
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, animate, useInView, useMotionValueEvent } from 'motion/react';
 import { useOutletContext, Link, useNavigate } from 'react-router-dom';
 import { Globe, Sparkles, PenTool, BadgeCheck, Package } from 'lucide-react';
@@ -514,27 +515,30 @@ export default function HomePage() {
       {/* 5. LUXARDO FASHION experience (direct vs prime) */}
       <section className="py-16 md:py-32 bg-brand-bg border-y border-brand-divider">
         <div className="max-w-[1800px] mx-auto px-4 md:px-8">
+          {PRIME_AVAILABLE && (
           <div className="text-center mb-12 md:mb-20 space-y-4">
             <p className="text-[10px] uppercase tracking-[0.4em] font-bold text-brand-secondary">The Experience</p>
             <h2 className="text-3xl md:text-5xl font-display tracking-tight">Choose Your Journey</h2>
           </div>
+          )}
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border border-brand-divider">
-            <div className="p-8 md:p-20 border-b md:border-b-0 md:border-r border-brand-divider bg-brand-white">
+          <div className={`grid grid-cols-1 ${PRIME_AVAILABLE ? 'md:grid-cols-2' : ''} gap-0 border border-brand-divider`}>
+            <div className={`p-8 md:p-20 bg-brand-white ${PRIME_AVAILABLE ? "border-b md:border-b-0 md:border-r border-brand-divider" : ""}`}>
               <h3 className="text-2xl md:text-3xl font-display mb-4 md:mb-6">Direct Collection</h3>
               <p className="text-sm md:text-base text-brand-secondary font-light leading-relaxed mb-8 md:mb-12">
-                Access our curated seasonal collections. Ready to wear, crafted with the same attention to detail and premium fabrics that define the LUXARDO FASHION name.
+                Access our curated seasonal collections. Ready-to-Stitch fabric, selected with the same attention to detail and premium quality that define the LUXARDO FASHION name. Stitching is not included.
               </p>
               <ul className="space-y-3 md:space-y-4 mb-8 md:mb-12 text-xs md:text-sm font-sans text-brand-black">
                 <li className="flex items-center gap-4"><span className="w-1.5 h-1.5 bg-brand-black rounded-full" /> Standard sizing</li>
                 <li className="flex items-center gap-4"><span className="w-1.5 h-1.5 bg-brand-black rounded-full" /> Seasonal collections</li>
-                <li className="flex items-center gap-4"><span className="w-1.5 h-1.5 bg-brand-black rounded-full" /> Global shipping</li>
+                <li className="flex items-center gap-4"><span className="w-1.5 h-1.5 bg-brand-black rounded-full" /> Free shipping on orders of ₹7,499 or more (₹199 below)</li>
               </ul>
               <Link to="/collections" className="inline-block text-[10px] uppercase tracking-[0.3em] font-bold text-brand-black border-b border-brand-black pb-1 hover:pr-4 transition-all duration-500">
                 Shop Collections
               </Link>
             </div>
             
+            {PRIME_AVAILABLE && (
             <div className="p-8 md:p-20 bg-brand-black text-brand-white">
               <h3 className="text-2xl md:text-3xl font-display mb-4 md:mb-6 text-brand-white">Prime Membership</h3>
               <p className="text-sm md:text-base text-brand-white/70 font-light leading-relaxed mb-8 md:mb-12">
@@ -550,6 +554,7 @@ export default function HomePage() {
                 Discover Prime
               </Link>
             </div>
+            )}
           </div>
         </div>
       </section>

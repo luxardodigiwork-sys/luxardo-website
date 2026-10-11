@@ -3,8 +3,11 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ChevronLeft, Package, MapPin, CreditCard, Truck, CheckCircle2, Circle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency } from '../utils/currency';
-import { storage } from '../utils/localStorage';
+import { formatINR } from '../utils/currency';
+import { evaluateCancellation } from '../utils/cancellation';
+import { requestOrderCancellation } from '../utils/payments';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import { Order } from '../types';
 
 export default function OrderDetailsPage() {
@@ -12,31 +15,19 @@ export default function OrderDetailsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [order, setOrder] = useState<any>(null);
-  const [isInvoiceSent, setIsInvoiceSent] = useState(false);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelState, setCancelState] = useState<'idle' | 'confirm' | 'working' | 'done_cancelled' | 'done_requested' | 'error'>('idle');
+  const [cancelError, setCancelError] = useState('');
 
-  const handleResendInvoice = () => {
-    setIsInvoiceSent(true);
-    setTimeout(() => {
-      setIsInvoiceSent(false);
-    }, 5000);
-  };
-
-  const handleCancelOrder = () => {
-    if (!order) return;
-    const allOrders = storage.getOrders();
-    const updatedOrders = allOrders.map(o => 
-      o.id === order.id ? { ...o, status: 'cancelled' as const } : o
-    );
-    storage.saveOrders(updatedOrders);
-    setOrder({
-      ...order,
-      status: 'cancelled',
-      cancellationDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      cancellationReason: 'Customer requested cancellation',
-      refundNote: 'Refund will be processed to the original payment method within 3-5 business days.'
-    });
-    setShowCancelConfirm(false);
+  const handleCancel = async () => {
+    setCancelState('working');
+    setCancelError('');
+    try {
+      const res = await requestOrderCancellation(order.id);
+      setCancelState(res.outcome === 'cancelled' ? 'done_cancelled' : 'done_requested');
+    } catch (err: any) {
+      setCancelError(err?.message || 'Could not cancel this order online.');
+      setCancelState('error');
+    }
   };
 
   useEffect(() => {
@@ -45,38 +36,47 @@ export default function OrderDetailsPage() {
       return;
     }
 
-    const allOrders = storage.getOrders();
-    const foundOrder = allOrders.find(o => o.id === orderId);
-    
-    if (foundOrder) {
-      // Transform order data to match the component's expected format if necessary
-      const transformedOrder = {
-        ...foundOrder,
-        date: new Date(foundOrder.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        paymentStatus: 'Paid',
-        total: formatCurrency(foundOrder.totalAmount),
-        subtotal: formatCurrency(foundOrder.totalAmount), // Simplified
-        shipping: formatCurrency(0),
-        tax: formatCurrency(0),
-        paymentMethod: 'Razorpay/Stripe',
-        paymentReference: 'REF-' + foundOrder.id,
-        items: foundOrder.items.map(item => ({
-          ...item,
-          price: formatCurrency(item.price),
-          image: storage.getProducts().find(p => p.id === item.productId)?.image,
-          format: 'Ready-to-Stitch Box'
-        })),
-        contactInfo: {
-          email: foundOrder.shippingAddress?.email || foundOrder.userEmail,
-          phone: foundOrder.shippingAddress?.phone || '+91 98765 43210'
-        },
-        deliveryMethod: 'Standard Delivery',
-        trackingNumber: null
-      };
-      setOrder(transformedOrder);
-    } else {
-      navigate('/account?tab=orders');
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        // Firestore is the only order source; rules let a customer read just their own orders.
+        const snap = await getDoc(doc(db, 'orders', orderId as string));
+        if (cancelled) return;
+        if (!snap.exists() || snap.data().userId !== user.id) { navigate('/account?tab=orders'); return; }
+        const o: any = { id: snap.id, ...snap.data() };
+        const paid = o.paymentStatus === 'paid' || o.paymentStatus === 'confirmed';
+        setOrder({
+          ...o,
+          date: new Date(o.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          rawPaymentStatus: o.paymentStatus, // the label below replaces paymentStatus for display
+          paymentStatus: paid ? 'Paid' : o.paymentStatus === 'failed' ? 'Failed' : o.paymentStatus === 'refunded' ? 'Refunded' : 'Awaiting payment',
+          total: formatINR(o.totalAmount),
+          subtotal: formatINR(o.subtotalAmount ?? o.totalAmount),
+          shipping: (o.shippingAmount ?? 0) === 0 ? 'Free' : formatINR(o.shippingAmount),
+          // Tax is only shown when the order actually carries a recorded tax amount (GST treatment is unconfirmed).
+          tax: typeof o.taxAmount === 'number' ? formatINR(o.taxAmount) : null,
+          paymentMethod: 'Razorpay (online)',
+          paymentReference: o.razorpayPaymentId || '—',
+          items: (o.items || []).map((item: any) => ({
+            ...item,
+            name: item.name || item.title,
+            price: formatINR(item.price),
+            image: item.image || undefined,
+            format: 'Ready-to-Stitch Fabric',
+          })),
+          contactInfo: {
+            email: o.shippingAddress?.email || o.userEmail,
+            phone: o.shippingAddress?.phone || '',
+          },
+          deliveryMethod: 'Standard Delivery',
+          trackingNumber: o.trackingId || null,
+        });
+      } catch (err) {
+        console.error('Failed to load order:', err);
+        if (!cancelled) navigate('/account?tab=orders');
+      }
+    })();
+    return () => { cancelled = true; };
   }, [orderId, user, navigate]);
 
   if (!user || !order) return null;
@@ -187,10 +187,12 @@ export default function OrderDetailsPage() {
                   <span>Shipping</span>
                   <span className="text-brand-black">{order.shipping}</span>
                 </div>
-                <div className="flex justify-between text-brand-secondary">
-                  <span>Tax</span>
-                  <span className="text-brand-black">{order.tax}</span>
-                </div>
+                {order.tax && (
+                  <div className="flex justify-between text-brand-secondary">
+                    <span>Tax</span>
+                    <span className="text-brand-black">{order.tax}</span>
+                  </div>
+                )}
               </div>
               
               <div className="py-6 border-b border-brand-divider flex justify-between font-medium text-brand-black text-lg">
@@ -214,68 +216,54 @@ export default function OrderDetailsPage() {
           {/* 5. Order Actions */}
           <section className="space-y-6">
             <h2 className="text-[11px] uppercase tracking-widest font-bold text-brand-black">Order Actions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button 
+            <div className="grid grid-cols-1 gap-4">
+              <button
                 onClick={() => navigate('/account?tab=orders')}
                 className="btn-outline w-full py-4"
               >
                 Track Order
               </button>
-              
-              <div className="relative">
-                <button 
-                  onClick={handleResendInvoice}
-                  disabled={isInvoiceSent}
-                  className="btn-primary w-full py-4 text-[11px] uppercase tracking-widest"
-                >
-                  {isInvoiceSent ? 'Invoice Sent' : 'Resend Invoice'}
-                </button>
-                {isInvoiceSent && (
-                  <motion.p 
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="absolute -bottom-6 left-0 right-0 text-[10px] font-sans text-brand-secondary text-center"
-                  >
-                    Invoice has been sent to your registered email.
-                  </motion.p>
-                )}
-              </div>
             </div>
-
-            {['pending', 'confirmed', 'processing'].includes(order.status) && (
-              <div className="pt-4">
-                {!showCancelConfirm ? (
-                  <button 
-                    onClick={() => setShowCancelConfirm(true)}
-                    className="btn-outline w-full py-4 text-brand-secondary border-brand-divider"
-                  >
-                    Cancel Order
-                  </button>
-                ) : (
-                  <motion.div 
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="space-y-4 bg-brand-white p-6 border border-brand-divider rounded-3xl"
-                  >
-                    <p className="text-sm font-sans text-brand-black text-center">Are you sure you want to cancel this order?</p>
-                    <div className="flex gap-4">
-                      <button 
-                        onClick={() => setShowCancelConfirm(false)}
-                        className="btn-outline flex-1 py-3"
-                      >
-                        No, Keep It
-                      </button>
-                      <button 
-                        onClick={handleCancelOrder}
-                        className="btn-primary flex-1 py-3"
-                      >
-                        Yes, Cancel
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-            )}
+            {(() => {
+              const verdict = evaluateCancellation({ ...order, paymentStatus: order.rawPaymentStatus });
+              if (cancelState === 'done_cancelled') {
+                return <p className="text-sm font-sans text-brand-black">Your order has been cancelled.</p>;
+              }
+              if (cancelState === 'done_requested' || order.cancellationRequest) {
+                return (
+                  <p className="text-sm font-sans text-brand-black">
+                    Your cancellation request has been received. We will review it and, if it is approved, refund the payment to the original payment method. The request is not a confirmed cancellation until we approve it.
+                  </p>
+                );
+              }
+              if (!verdict.allowed) {
+                return <p className="text-xs font-sans text-brand-secondary">{verdict.reason} To change an order, please contact our support team with your order number.</p>;
+              }
+              return (
+                <div className="space-y-3">
+                  {cancelState === 'confirm' || cancelState === 'working' || cancelState === 'error' ? (
+                    <>
+                      <p className="text-sm font-sans text-brand-black">
+                        {verdict.mode === 'cancel_unpaid'
+                          ? 'Cancel this unpaid order?'
+                          : 'Request cancellation of this paid order? Cancellation requests are accepted within 24 hours of placing the order and are subject to approval.'}
+                      </p>
+                      {cancelError && <p className="text-xs text-red-700">{cancelError}</p>}
+                      <div className="flex gap-3">
+                        <button type="button" disabled={cancelState === 'working'} onClick={handleCancel} className="btn-primary px-6 py-3 disabled:opacity-50">
+                          {cancelState === 'working' ? 'Sending...' : 'Yes, continue'}
+                        </button>
+                        <button type="button" disabled={cancelState === 'working'} onClick={() => setCancelState('idle')} className="btn-outline px-6 py-3">No, keep my order</button>
+                      </div>
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => setCancelState('confirm')} className="btn-outline w-full py-4">
+                      {verdict.mode === 'cancel_unpaid' ? 'Cancel order' : 'Request cancellation'}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
           </section>
 
           {/* 6. Status Timeline */}

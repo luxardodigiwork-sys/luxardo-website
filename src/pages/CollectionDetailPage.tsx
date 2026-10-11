@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useParams, useOutletContext } from 'react-router-dom';
 import { SectionHeader } from '../components/SectionHeader';
 import { COLLECTIONS } from '../constants';
-import { storage } from '../utils/localStorage';
+import { useProducts } from '../context/ProductsContext';
+import { CatalogueStatus } from '../components/CatalogueStatus';
 import { ProductCard } from '../components/ProductCard';
 import { Country } from '../types';
 import { motion } from 'motion/react';
@@ -14,7 +15,7 @@ export default function CollectionDetailPage() {
   const [sortBy, setSortBy] = useState<'featured' | 'newest' | 'recommended'>('featured');
 
   const collection = COLLECTIONS.find(c => c.id === category);
-  const products = storage.getProducts();
+  const { storefrontProducts: products, state } = useProducts();
   
   let filteredProducts = products.filter(p => p.category === collection?.fullName);
 
@@ -88,9 +89,11 @@ export default function CollectionDetailPage() {
                     />
                   ))}
                 </div>
+              ) : state !== 'ready' ? (
+                <CatalogueStatus state={state} />
               ) : (
                 <div className="py-32 text-center">
-                  <p className="text-xl font-display text-brand-secondary italic">No pieces found in this collection.</p>
+                  <p className="text-xl font-display text-brand-secondary italic">No pieces found in this collection yet.</p>
                   <button className="mt-8 btn-outline" onClick={() => window.history.back()}>Go Back</button>
                 </div>
               )}

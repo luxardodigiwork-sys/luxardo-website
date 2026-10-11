@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { EXPRESS_BACKEND_AVAILABLE } from '../../constants/features';
 import { motion } from 'motion/react';
 import { 
   ShoppingBag, 
@@ -18,18 +19,21 @@ import {
 import { Link } from 'react-router-dom';
 import { storage } from '../../utils/localStorage';
 import { formatCurrency } from '../../utils/currency';
+import { useAdminOrders } from '../../utils/orderStore';
 
 export default function OwnerDashboardPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [primeMembers, setPrimeMembers] = useState<any[]>([]);
 
+  const { orders: liveOrders } = useAdminOrders();
+
   useEffect(() => {
-    setOrders(storage.getOrders());
+    setOrders(liveOrders);
     const allUsers = storage.getUsers();
     setPrimeMembers(allUsers.filter(u => u.isPrimeMember));
-    fetchUsers();
-  }, []);
+    if (EXPRESS_BACKEND_AVAILABLE) fetchUsers();
+  }, [liveOrders]);
 
   const fetchUsers = async () => {
     try {

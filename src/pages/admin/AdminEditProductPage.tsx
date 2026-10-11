@@ -2,32 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { storage } from '../../utils/localStorage';
+import { productStore } from '../../utils/productStore';
+import { COLLECTION_CATEGORIES } from '../../constants';
+import { useProducts } from '../../context/ProductsContext';
 import { Product } from '../../types';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 
 export default function AdminEditProductPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { products: catalogue, isLoaded } = useProducts();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<Product | null>(null);
   const [newImageUrl, setNewImageUrl] = useState('');
 
-  const categories = [
-    'Premium Tuxedos',
-    'Premium Suits',
-    'Premium Koti Kurta',
-    'Premium Kurta Pajama',
-    'Premium Bomber Jackets'
-  ];
+  // Offer exactly the storefront collection names. A product saved with an older, non-matching category keeps it
+  // (shown below as an extra option) until an admin deliberately picks a collection.
+  const categories = COLLECTION_CATEGORIES;
 
   useEffect(() => {
     const fetchProduct = () => {
-      if (!id) return;
+      if (!id || !isLoaded || formData) return; // load once; later snapshots must not overwrite edits
       try {
-        const products = storage.getProducts();
-        const product = products.find(p => p.id === id);
+        const product = catalogue.find(p => p.id === id);
         if (product) {
           // Ensure all new fields exist
           setFormData({
@@ -36,7 +34,7 @@ export default function AdminEditProductPage() {
             collection: product.collection || '',
             images: product.images || [],
             productStory: product.productStory || '',
-            stock: product.stock !== undefined ? product.stock : 10,
+            stock: product.stock !== undefined ? product.stock : 0,
             lowStockThreshold: product.lowStockThreshold !== undefined ? product.lowStockThreshold : 5,
             visibility: product.visibility || 'public',
             featured: product.featured || false,
@@ -54,7 +52,7 @@ export default function AdminEditProductPage() {
     };
 
     fetchProduct();
-  }, [id, navigate]);
+  }, [id, navigate, catalogue, isLoaded, formData]);
 
   const handleAddImage = () => {
     if (formData && newImageUrl && !(formData.images || []).includes(newImageUrl)) {
@@ -83,25 +81,18 @@ export default function AdminEditProductPage() {
     setIsSaving(true);
 
     try {
-      const products = storage.getProducts();
-      const updatedProducts = products.map(p => 
-        p.id === id ? { 
-          ...formData, 
-          price: Number(formData.price), 
-          stock: Number(formData.stock),
-          visibility: visibilityOverride || formData.visibility,
-          updatedAt: new Date().toISOString()
-        } : p
-      );
-      storage.saveProducts(updatedProducts);
+      await productStore.save({
+        ...formData,
+        id,
+        price: Number(formData.price),
+        stock: Number(formData.stock),
+        visibility: visibilityOverride || formData.visibility,
+        updatedAt: new Date().toISOString()
+      });
       navigate('/admin/products');
     } catch (error: any) {
       console.error('Error updating product:', error);
-      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
-        alert('Storage limit exceeded. The uploaded images are too large. Please use smaller images or image URLs.');
-      } else {
-        alert('Failed to update product.');
-      }
+      alert(error?.message || 'Failed to update product.');
     } finally {
       setIsSaving(false);
     }
@@ -176,6 +167,9 @@ export default function AdminEditProductPage() {
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black"
                 >
+                  {formData.category && !categories.includes(formData.category) && (
+                    <option value={formData.category}>{formData.category} (not in any storefront collection)</option>
+                  )}
                   {categories.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
@@ -443,7 +437,7 @@ export default function AdminEditProductPage() {
                 <input
                   type="number"
                   required
-                  value={formData.stock !== undefined ? formData.stock : 10}
+                  value={formData.stock !== undefined ? formData.stock : 0}
                   onChange={(e) => setFormData({ ...formData, stock: Number(e.target.value) })}
                   className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black"
                 />

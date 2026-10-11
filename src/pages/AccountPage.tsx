@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { PRIME_AVAILABLE } from '../constants/features';
 import { SectionHeader } from '../components/SectionHeader';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { storage } from '../utils/localStorage';
+import { useProducts } from '../context/ProductsContext';
 import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { GoogleAuthProvider, linkWithPopup } from 'firebase/auth';
+import { authErrorMessage } from '../utils/loginFlow';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { formatCurrency } from '../utils/currency';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db, auth } from '../firebase';
 import { 
   User, 
   Package, 
@@ -29,29 +31,40 @@ import {
 } from 'lucide-react';
 
 export default function AccountPage() {
+  useProducts(); // re-render when the live catalogue changes (product images)
   const { user, logout } = useAuth();
   const { addToCart } = useCart();
   const { wishlist, removeFromWishlist } = useWishlist();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'profile');
+  const safeTab = (t: string | null) => (!t || (t === 'membership' && !PRIME_AVAILABLE) ? 'profile' : t);
+  const [activeTab, setActiveTab] = useState(safeTab(searchParams.get('tab')));
+  const [googleLinked, setGoogleLinked] = useState(!!auth.currentUser?.providerData.some((p) => p.providerId === 'google.com'));
+  const [linkMessage, setLinkMessage] = useState('');
+  // Adds Google to THIS account (same uid, same profile and orders). It never creates a second account.
+  const handleLinkGoogle = async () => {
+    setLinkMessage('');
+    try {
+      if (!auth.currentUser) throw new Error('not-signed-in');
+      await linkWithPopup(auth.currentUser, new GoogleAuthProvider());
+      setGoogleLinked(true);
+      setLinkMessage('Google is now linked to your account.');
+    } catch (err) {
+      setLinkMessage(authErrorMessage(err));
+    }
+  };
   const [trackingInput, setTrackingInput] = useState('');
-  const [trackedOrder, setTrackedOrder] = useState<{ id: string; status: string } | null>(null);
   const [globalSettings, setGlobalSettings] = useState(storage.getPrimeGlobalSettings());
 
   // Naya Firebase Fetch Logic
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
 
+  // Tracking is shown only from real order data (Firestore) on the order tracking page, which also
+  // checks the order belongs to the signed-in customer. No order IDs or statuses are hardcoded here.
   const handleTrackOrder = (orderId: string) => {
-    setTrackingInput(orderId);
-    // Mock tracking logic
-    let status = 'Order Placed';
-    if (orderId === 'LX-8291') status = 'Delivered';
-    else if (orderId === 'LX-7102') status = 'Processing';
-    
-    setTrackedOrder({ id: orderId, status });
-    setActiveTab('track-order');
+    const id = orderId.trim();
+    if (id) navigate(`/track-order/${encodeURIComponent(id)}`);
   };
 
   useEffect(() => {
@@ -60,44 +73,8 @@ export default function AccountPage() {
     }
   }, [user, navigate]);
 
-  // Fetch orders from Firestore
   useEffect(() => {
-    const fetchOrders = async () => {
-      if (!user?.id) return;
-      setOrdersLoading(true);
-      try {
-        const uid = auth.currentUser?.uid || user.id;
-        const ordersRef = collection(db, 'orders');
-        const q = query(ordersRef, where('userId', '==', uid));
-        const snapshot = await getDocs(q);
-        const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        fetched.sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        setOrders(fetched);
-
-        // Extract unique addresses from orders for Saved Addresses
-        const addrs: any[] = [];
-        const seen = new Set();
-        fetched.forEach((o: any) => {
-          if (o.shippingAddress) {
-            const key = `${o.shippingAddress.addressLine1}-${o.shippingAddress.postalCode}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              addrs.push(o.shippingAddress);
-            }
-          }
-        });
-        setSavedAddresses(addrs);
-      } catch (err) {
-        console.error('Failed to fetch orders:', err);
-      } finally {
-        setOrdersLoading(false);
-      }
-    };
-    fetchOrders();
-  }, [user]);
-
-  useEffect(() => {
-    const tab = searchParams.get('tab');
+    const tab = safeTab(searchParams.get('tab'));
     if (tab) {
       setActiveTab(tab);
     }
@@ -120,7 +97,7 @@ export default function AccountPage() {
         
         const fetchedOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         // Latest order pehle dikhane ke liye sort karein
-        fetchedOrders.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        fetchedOrders.sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         
         setOrders(fetchedOrders);
       } catch (error) {
@@ -140,7 +117,7 @@ export default function AccountPage() {
     { id: 'orders', label: 'My Orders', icon: <Package size={18} /> },
     { id: 'favorites', label: 'My Favorites', icon: <Heart size={18} /> },
     { id: 'track-order', label: 'Track Order', icon: <MapPin size={18} /> },
-    { id: 'membership', label: 'Membership Status', icon: <Crown size={18} /> },
+    ...(PRIME_AVAILABLE ? [{ id: 'membership', label: 'Membership Status', icon: <Crown size={18} /> }] : []),
     { id: 'addresses', label: 'Saved Addresses', icon: <MapPin size={18} /> },
     { id: 'account-details', label: 'Account Details', icon: <Settings size={18} /> },
   ];
@@ -160,7 +137,7 @@ export default function AccountPage() {
               <h1 className="text-4xl md:text-6xl font-display tracking-tight">
                 Welcome, {user.name.split(' ')[0]}
               </h1>
-              {user.isPrimeMember && (
+              {PRIME_AVAILABLE && user.isPrimeMember && (
                 <span className="px-3 py-1 bg-brand-white text-brand-black text-[10px] uppercase tracking-widest font-bold flex items-center gap-2">
                   <Crown size={12} /> Prime
                 </span>
@@ -222,7 +199,7 @@ export default function AccountPage() {
                         <div>
                           <h4 className="text-xl font-display">{user.name}</h4>
                           <div className="flex items-center gap-2 mt-1">
-                            {user.isPrimeMember ? (
+                            {PRIME_AVAILABLE && user.isPrimeMember ? (
                               <span className="px-2 py-0.5 bg-brand-black text-brand-white text-[10px] uppercase tracking-widest font-bold flex items-center gap-1">
                                 <Crown size={10} /> Prime Member
                               </span>
@@ -522,7 +499,7 @@ export default function AccountPage() {
                   <h3 className="text-3xl font-display">Track Order</h3>
                   <div className="bg-brand-white p-8 border border-brand-divider space-y-6">
                     <p className="font-sans text-brand-secondary">
-                      Enter your order ID or tracking ID to track its current status.
+                      Enter your order ID to see its current status and courier tracking details.
                     </p>
                     <form 
                       onSubmit={(e) => {
@@ -537,7 +514,7 @@ export default function AccountPage() {
                         type="text" 
                         value={trackingInput}
                         onChange={(e) => setTrackingInput(e.target.value)}
-                        placeholder="e.g. LX-8291" 
+                        placeholder="Paste your order ID" 
                         className="flex-1 bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black" 
                       />
                       <button type="submit" className="btn-primary px-8 py-3">
@@ -546,82 +523,6 @@ export default function AccountPage() {
                     </form>
                   </div>
 
-                  {trackedOrder && (
-                    <div className="bg-brand-white p-8 border border-brand-divider space-y-12">
-                      <div className="flex justify-between items-end border-b border-brand-divider pb-6">
-                        <div className="space-y-1">
-                          <p className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Order ID</p>
-                          <p className="font-sans text-brand-black font-bold">#{trackedOrder.id}</p>
-                        </div>
-                        <div className="space-y-1 text-right">
-                          <p className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Current Status</p>
-                          <p className="font-sans text-brand-black">{trackedOrder.status}</p>
-                        </div>
-                      </div>
-
-                      {(() => {
-                        const timelineSteps = [
-                          'Order Placed',
-                          'Confirmed',
-                          'Processing',
-                          'Packed',
-                          'Shipped',
-                          'Out for Delivery',
-                          'Delivered'
-                        ];
-                        const currentStepIndex = timelineSteps.indexOf(trackedOrder.status);
-                        
-                        // If status is not in the timeline (e.g. Cancelled) or tracking not available
-                        if (currentStepIndex === -1) {
-                          return (
-                            <div className="text-center py-8">
-                              <p className="font-sans text-brand-secondary italic">
-                                Tracking details will appear once your order has been dispatched.
-                              </p>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div className="relative">
-                            {/* Timeline Line */}
-                            <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px bg-brand-divider md:-translate-x-1/2"></div>
-                            
-                            <div className="space-y-8 relative">
-                              {timelineSteps.map((step, index) => {
-                                const isCompleted = index <= currentStepIndex;
-                                const isCurrent = index === currentStepIndex;
-                                
-                                return (
-                                  <div key={step} className={`flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-0 ${isCompleted ? 'opacity-100' : 'opacity-40'}`}>
-                                    <div className="md:w-1/2 md:text-right md:pr-12 flex-1 order-2 md:order-1">
-                                      <h4 className={`font-display text-lg ${isCurrent ? 'text-brand-black' : 'text-brand-secondary'}`}>{step}</h4>
-                                      {isCurrent && (
-                                        <p className="text-sm font-sans text-brand-secondary mt-1">
-                                          Your order is currently {step.toLowerCase()}.
-                                        </p>
-                                      )}
-                                    </div>
-                                    
-                                    <div className={`relative z-10 flex items-center justify-center w-8 h-8 bg-brand-white border-2 rounded-full order-1 md:order-2 shrink-0
-                                      ${isCompleted ? 'border-brand-black' : 'border-brand-divider'}
-                                      ${isCurrent ? 'ring-4 ring-brand-black/10' : ''}
-                                    `}>
-                                      {isCompleted && <div className="w-2.5 h-2.5 bg-brand-black rounded-full"></div>}
-                                    </div>
-                                    
-                                    <div className="md:w-1/2 md:pl-12 hidden md:block order-3">
-                                      {/* Empty space for layout balance */}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
                 </motion.div>
               )}
 
@@ -674,39 +575,33 @@ export default function AccountPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                           <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Full Name</label>
-                          <input type="text" defaultValue={user.name} className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black" />
+                          <input type="text" readOnly defaultValue={user.name} className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black" />
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Email Address</label>
-                          <input type="email" defaultValue={user.email} className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black" />
+                          <input type="email" readOnly defaultValue={user.email} className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black" />
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Phone Number</label>
-                          <input type="tel" defaultValue={user.phone} className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black" />
+                          <input type="tel" readOnly defaultValue={user.phone} className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black" />
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Country</label>
-                          <input type="text" defaultValue={user.country} className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black" />
+                          <input type="text" readOnly defaultValue={user.country} className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black" />
                         </div>
                       </div>
-                      <button className="btn-primary px-8 py-3 text-[10px]">Save Changes</button>
+                      <p className="text-xs font-sans text-brand-secondary">Profile editing is not available yet.</p>
                     </div>
 
-                    <div className="bg-brand-white p-8 border border-brand-divider space-y-6">
-                      <h4 className="text-[11px] uppercase tracking-widest font-bold flex items-center gap-2">
-                        <Settings size={16} /> Password & Security
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Current Password</label>
-                          <input type="password" placeholder="••••••••" className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black" />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">New Password</label>
-                          <input type="password" placeholder="••••••••" className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black" />
-                        </div>
-                      </div>
-                      <button className="btn-primary px-8 py-3 text-[10px]">Update Password</button>
+                    <div className="bg-brand-white p-8 border border-brand-divider space-y-4">
+                      <h4 className="text-[11px] uppercase tracking-widest font-bold">Sign-in methods</h4>
+                      <p className="text-sm font-sans text-brand-secondary">Mobile number: {auth.currentUser?.phoneNumber || 'not verified'}</p>
+                      {googleLinked ? (
+                        <p className="text-sm font-sans text-brand-secondary">Google: linked</p>
+                      ) : (
+                        <button type="button" onClick={handleLinkGoogle} className="btn-outline px-6 py-3 text-[10px]">Link Google account</button>
+                      )}
+                      {linkMessage && <p className="text-xs font-sans text-brand-secondary">{linkMessage}</p>}
                     </div>
                   </div>
                 </motion.div>

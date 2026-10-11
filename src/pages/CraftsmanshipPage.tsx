@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PRIME_AVAILABLE } from '../constants/features';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
@@ -73,12 +74,14 @@ export default function CraftsmanshipPage() {
               >
                 {content.cta?.primary || "Explore Collection"}
               </Link>
+              {PRIME_AVAILABLE && (
               <Link 
                 to="/prime-membership" 
                 className="px-8 py-4 border border-brand-black/20 text-brand-black text-[10px] uppercase tracking-[0.3em] font-bold text-center hover:border-brand-black transition-colors"
               >
                 {content.cta?.secondary || "Join Prime"}
               </Link>
+              )}
             </div>
           </motion.div>
         </div>
@@ -177,7 +180,8 @@ export default function CraftsmanshipPage() {
         </motion.div>
       </section>
 
-      {/* 5. PRIME / LIMITED EDITION SECTION */}
+      {/* 5. PRIME / LIMITED EDITION SECTION (hidden until Prime is available) */}
+      {PRIME_AVAILABLE && (
       <section className="py-24 md:py-40 bg-brand-black text-brand-white px-6 md:px-16 lg:px-24">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-12">
           <div className="w-full md:w-1/2">
@@ -204,6 +208,7 @@ export default function CraftsmanshipPage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* 6. IDENTITY STATEMENT & 7. FINAL CTA */}
       <section className="py-32 md:py-48 bg-brand-white text-center px-6">
@@ -222,6 +227,7 @@ export default function CraftsmanshipPage() {
                 {content.cta?.primary} <ArrowRight size={14} className="transform group-hover:translate-x-1 transition-transform" />
               </span>
             </Link>
+            {PRIME_AVAILABLE && (
             <Link 
               to="/prime-membership" 
               className="px-8 py-4 border border-brand-black/20 hover:border-brand-black transition-colors duration-500 flex items-center justify-center"
@@ -230,6 +236,7 @@ export default function CraftsmanshipPage() {
                 {content.cta?.secondary}
               </span>
             </Link>
+            )}
           </div>
         </div>
       </section>

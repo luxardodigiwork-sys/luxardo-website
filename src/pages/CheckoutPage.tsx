@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { collection, addDoc } from "firebase/firestore";
-import { signInAnonymously } from "firebase/auth";
-import { useNavigate } from "react-router-dom";
-import { db, auth } from "../firebase";
+import { useNavigate, useLocation } from "react-router-dom";
+import { auth } from "../firebase";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { formatCurrency } from "../utils/currency";
+import { formatINR } from "../utils/currency";
 import { SectionHeader } from "../components/SectionHeader";
+import { getCheckoutGate, isAuthFailure, paymentErrorMessage } from "../utils/checkoutGate";
+import { createCheckoutOrder, loadRazorpay, verifyPayment, RazorpaySuccess } from "../utils/payments";
+import { SHIPPING_NOTE, TAX_NOTE, FREE_SHIPPING_THRESHOLD_RUPEES } from "../constants/pricing";
+import { getShippingQuote } from "../utils/shipping";
 
 const INDIAN_STATES = [
   "Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh",
@@ -38,6 +40,7 @@ const emptyForm: CustomerForm = {
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { cartItems, cartSubtotal, clearCart } = useCart();
   const { user, isAuthReady } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,9 +48,21 @@ export default function CheckoutPage() {
   const [form, setForm] = useState<CustomerForm>(emptyForm);
   const [formErrors, setFormErrors] = useState<Partial<CustomerForm>>({});
 
+  // Phone-OTP login is required: no guest or anonymous checkout. Re-evaluated whenever auth changes,
+  // so an expired session sends the customer back to login instead of failing at payment time.
+  const quote = getShippingQuote(cartSubtotal);
+  const gate = getCheckoutGate({ isAuthReady, firebaseUser: auth.currentUser });
+  const redirectToLogin = () => navigate("/login", { replace: true, state: { from: location } });
+  useEffect(() => {
+    if (gate === "login") redirectToLogin();
+  }, [gate]);
+
   useEffect(() => {
     if (user?.email) {
-      setForm((prev) => ({ ...prev, email: user.email || "" }));
+      setForm((prev) => ({ ...prev, email: prev.email || user.email || "" }));
+    }
+    if (user?.name && user.name !== "User") {
+      setForm((prev) => ({ ...prev, fullName: prev.fullName || user.name }));
     }
   }, [user]);
 
@@ -75,82 +90,85 @@ export default function CheckoutPage() {
     return Object.keys(errors).length === 0;
   };
 
-  const handlePlaceOrder = async () => {
+  const handlePay = async () => {
     if (cartItems.length === 0) {
       setError("Your cart is empty. Add items before checkout.");
+      return;
+    }
+    if (!quote.canCheckout) {
+      setError(`Orders below ${formatINR(FREE_SHIPPING_THRESHOLD_RUPEES)} cannot be placed online yet. Add ${formatINR(quote.amountToFreeShipping)} more to continue.`);
+      return;
+    }
+    if (getCheckoutGate({ isAuthReady, firebaseUser: auth.currentUser }) !== "ok") {
+      redirectToLogin();
       return;
     }
     if (!validate()) {
       setError("Please fill all required fields correctly.");
       return;
     }
+    if (cartItems.some((i) => !i.size)) {
+      setError("Please choose a size for every item in your cart.");
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
-      // FIXED: Sign in anonymously if no Firebase Auth session exists
-      // This satisfies Firestore rules (request.auth != null) without requiring email login
-      let currentUser = auth.currentUser;
-      if (!currentUser) {
-        const anonResult = await signInAnonymously(auth);
-        currentUser = anonResult.user;
-      }
-
-      const orderItems = cartItems.map((item) => ({
-        productId: item.product.id,
-        title: item.product.title || item.product.name || "Product",
-        quantity: item.quantity,
-        size: item.size || "N/A",
-        price: item.product.price,
-        subtotal: item.product.price * item.quantity,
-      }));
-
-      const orderData = {
-        userId: currentUser.uid,
-        userEmail: currentUser.email || form.email.trim().toLowerCase(),
-        createdAt: new Date().toISOString(),
-        totalAmount: cartSubtotal,
-        status: "pending",
-        paymentStatus: "pending",
-        paymentMethod: "COD",
-        items: orderItems,
-        customer: {
-          fullName: form.fullName.trim(),
-          email: form.email.trim().toLowerCase(),
-          phone: form.phone.trim(),
+      await auth.currentUser?.getIdToken(true); // make sure the token carries the verified phone number
+      // Only ids, quantities and sizes are sent. The server prices the order and reserves stock.
+      const checkout = await createCheckoutOrder(
+        cartItems.map((i) => ({ productId: i.product.id, quantity: i.quantity, size: i.size as string })),
+        {
+          fullName: form.fullName.trim(), email: form.email.trim().toLowerCase(), phone: form.phone.trim(),
+          addressLine1: form.addressLine1.trim(), addressLine2: form.addressLine2.trim(),
+          city: form.city.trim(), state: form.state, postalCode: form.postalCode.trim(),
         },
-        shippingAddress: {
-          fullName: form.fullName.trim(),
-          email: form.email.trim().toLowerCase(),
-          phone: form.phone.trim(),
-          addressLine1: form.addressLine1.trim(),
-          addressLine2: form.addressLine2.trim(),
-          city: form.city.trim(),
-          state: form.state,
-          postalCode: form.postalCode.trim(),
-          country: "India",
-        },
-        courierPartner: "DTDC",
-        trackingId: null,
-      };
+      );
+      await loadRazorpay();
 
-      const docRef = await addDoc(collection(db, "orders"), orderData);
-      clearCart();
-      navigate("/order-confirmation", {
-        replace: true,
-        state: { order: { id: docRef.id, ...orderData } },
+      const rz = new (window as any).Razorpay({
+        key: checkout.keyId,
+        amount: checkout.amount,
+        currency: checkout.currency,
+        order_id: checkout.razorpayOrderId,
+        name: "LUXARDO FASHION",
+        description: "Ready-to-Stitch Fabric",
+        prefill: { name: form.fullName.trim(), email: form.email.trim().toLowerCase(), contact: "+91" + form.phone.trim() },
+        theme: { color: "#000000" },
+        handler: async (response: RazorpaySuccess) => {
+          try {
+            await verifyPayment(checkout.orderId, response);
+            clearCart();
+            navigate(`/order-confirmation?order=${encodeURIComponent(checkout.orderId)}`, { replace: true });
+          } catch (err) {
+            console.error("Payment verification error:", err);
+            if (isAuthFailure(err)) { redirectToLogin(); return; }
+            // The payment may still be confirmed by the webhook: send the customer to the order page.
+            clearCart();
+            navigate(`/order-confirmation?order=${encodeURIComponent(checkout.orderId)}`, { replace: true });
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setIsSubmitting(false);
+            setError("Payment was not completed. Your items are held for 30 minutes - you can try again.");
+          },
+        },
       });
+      rz.on("payment.failed", () => {
+        setIsSubmitting(false);
+        setError("Payment failed. Please try again or use another payment method.");
+      });
+      rz.open();
     } catch (err: any) {
-      console.error("Order error:", err);
-      if (err?.code === "permission-denied") {
-        setError("Permission denied. Please refresh and try again.");
-      } else {
-        setError("Order failed: " + (err?.message || "Unknown error"));
-      }
+      console.error("Checkout error:", err);
+      if (isAuthFailure(err)) { redirectToLogin(); return; }
+      setError(paymentErrorMessage(err));
       setIsSubmitting(false);
     }
   };
 
-  if (!isAuthReady) {
+  if (gate !== "ok") {
     return (
       <div className="section-padding min-h-[70vh] flex items-center justify-center">
         <p className="text-brand-secondary">Loading...</p>
@@ -233,11 +251,11 @@ export default function CheckoutPage() {
                 <div key={item.product.id + "-" + (item.size || "default")} className="rounded-2xl border border-brand-divider p-4">
                   <div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-center">
                     <div>
-                      <p className="font-semibold">{item.product.title || item.product.name}</p>
+                      <p className="font-semibold">{item.product.name}</p>
                       {item.size && <p className="text-sm text-brand-secondary">Size: {item.size}</p>}
                       <p className="text-sm text-brand-secondary">Qty: {item.quantity}</p>
                     </div>
-                    <p className="font-semibold">{formatCurrency(item.product.price * item.quantity)}</p>
+                    <p className="font-semibold">{formatINR(item.product.price * item.quantity)}</p>
                   </div>
                 </div>
               ))}
@@ -248,32 +266,46 @@ export default function CheckoutPage() {
             <div className="sticky top-24 rounded-3xl border border-brand-divider bg-white p-8 space-y-6">
               <div>
                 <h2 className="text-2xl font-display">Order Summary</h2>
-                <p className="text-sm text-brand-secondary mt-1">Review before placing</p>
+                <p className="text-sm text-brand-secondary mt-1">Review before paying. Payments are charged in INR.</p>
               </div>
               <div className="rounded-2xl bg-brand-surface p-5 space-y-3">
                 <div className="flex items-center justify-between text-sm text-brand-secondary">
                   <span>Subtotal ({cartItems.length} items)</span>
-                  <span>{formatCurrency(cartSubtotal)}</span>
+                  <span>{formatINR(cartSubtotal)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm text-brand-secondary">
                   <span>Shipping</span>
-                  <span className="text-green-600 font-medium">Free</span>
+                  {quote.free ? (
+                    <span className="text-green-600 font-medium">Free</span>
+                  ) : quote.shipping === null ? (
+                    <span>Free from {formatINR(FREE_SHIPPING_THRESHOLD_RUPEES)}</span>
+                  ) : (
+                    <span>{formatINR(quote.shipping)}</span>
+                  )}
                 </div>
+                {!quote.free && (
+                  <p className="text-xs text-brand-secondary">
+                    Add {formatINR(quote.amountToFreeShipping)} more for free shipping.
+                    {!quote.canCheckout && ` Orders below ${formatINR(FREE_SHIPPING_THRESHOLD_RUPEES)} cannot be placed online yet.`}
+                  </p>
+                )}
                 <div className="flex items-center justify-between border-t border-brand-divider pt-3 text-lg font-semibold">
                   <span>Total</span>
-                  <span>{formatCurrency(cartSubtotal)}</span>
+                  <span>{quote.total === null ? formatINR(cartSubtotal) : formatINR(quote.total)}</span>
                 </div>
               </div>
               <div className="rounded-2xl border border-brand-divider p-4 text-xs text-brand-secondary space-y-1">
-                <p>• Cash on Delivery (COD)</p>
+                <p>• Secure online payment via Razorpay</p>
+                <p>• {SHIPPING_NOTE}</p>
+                {TAX_NOTE && <p>• {TAX_NOTE}</p>}
                 <p>• Shipped via DTDC courier</p>
-                <p>• Estimated delivery: 5-7 business days</p>
+                <p>• Delivery time depends on your location and the courier</p>
               </div>
               {error && (
                 <div className="rounded-2xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>
               )}
-              <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting} className="btn-primary w-full px-6 py-4 text-base font-semibold disabled:opacity-60">
-                {isSubmitting ? "Placing Order..." : "Place Order"}
+              <button type="button" onClick={handlePay} disabled={isSubmitting || !quote.canCheckout} className="btn-primary w-full px-6 py-4 text-base font-semibold disabled:opacity-60">
+                {isSubmitting ? "Opening secure payment..." : "Pay securely"}
               </button>
               <p className="text-xs text-center text-brand-secondary">
                 By placing your order, you agree to our <a href="/terms" className="underline">Terms</a> and <a href="/shipping-policy" className="underline">Shipping Policy</a>.

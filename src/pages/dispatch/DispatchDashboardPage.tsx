@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { EXPRESS_BACKEND_AVAILABLE } from '../../constants/features';
 import { 
   Package, 
   Search, 
@@ -31,7 +32,7 @@ import {
   Settings
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { storage } from '../../utils/localStorage';
+import { persistOrders, useAdminOrders } from '../../utils/orderStore';
 import { Order } from '../../types';
 import { formatCurrency } from '../../utils/currency';
 import { useAuth } from '../../context/AuthContext';
@@ -72,21 +73,12 @@ export default function DispatchDashboardPage() {
     setSortBy('newest');
   };
 
-  useEffect(() => {
-    const fetchOrders = () => {
-      try {
-        const data = storage.getOrders();
-        // Sort by date descending
-        setOrders(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-      } catch (error) {
-        console.error('Error fetching orders:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const { orders: liveOrders, isLoaded: ordersLoaded } = useAdminOrders();
 
-    fetchOrders();
-  }, []);
+  useEffect(() => {
+    setOrders([...liveOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    setIsLoading(!ordersLoaded);
+  }, [liveOrders, ordersLoaded]);
 
   // Stabilize selectedOrderDetails for useEffect
   const selectedOrderDetailsId = selectedOrderDetails?.id;
@@ -151,7 +143,7 @@ export default function DispatchDashboardPage() {
         }
         return order;
       });
-      storage.saveOrders(updatedOrders);
+      persistOrders(updatedOrders);
       setOrders(updatedOrders);
       
       // Update selectedOrderDetails if it's the one being updated
@@ -198,7 +190,7 @@ export default function DispatchDashboardPage() {
         return order;
       });
 
-      storage.saveOrders(updatedOrders);
+      persistOrders(updatedOrders);
       setOrders(updatedOrders);
       setSelectedOrderIds(new Set());
       alert(`Successfully updated ${selectedOrderIds.size} orders`);
@@ -827,7 +819,7 @@ export default function DispatchDashboardPage() {
                             <Box size={18} />
                           </button>
                         )}
-                        {order.status === 'packed' && (
+                        {EXPRESS_BACKEND_AVAILABLE && order.status === 'packed' && (
                           <button
                             onClick={async () => {
                               if (confirm('Create DTDC Shipment for this order?')) {
@@ -1251,6 +1243,7 @@ export default function DispatchDashboardPage() {
                       >
                         <Box size={16} /> Pack
                       </button>
+                      {EXPRESS_BACKEND_AVAILABLE && (
                       <button
                         onClick={async () => {
                           if (confirm('Create DTDC Shipment for this order?')) {
@@ -1294,6 +1287,7 @@ export default function DispatchDashboardPage() {
                       >
                         <Send size={16} /> DTDC Ship
                       </button>
+                      )}
                       <button
                         onClick={() => {
                           if (confirm('Are you sure you want to mark this order as Delivered?')) {

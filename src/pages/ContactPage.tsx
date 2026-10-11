@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PRIME_AVAILABLE } from '../constants/features';
 import { SectionHeader } from '../components/SectionHeader';
 import { Mail, Phone, MapPin, Instagram, Facebook, Linkedin, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { storage } from '../utils/localStorage';
@@ -196,7 +197,7 @@ export default function ContactPage() {
                 <select name="subject" required defaultValue="" className="w-full bg-transparent border-b border-brand-divider py-4 font-sans focus:outline-none focus:border-brand-black transition-colors appearance-none text-brand-secondary">
                   <option value="" disabled>Select Subject</option>
                   <option value="order">Order Inquiry</option>
-                  <option value="membership">Prime Member</option>
+                  {PRIME_AVAILABLE && <option value="membership">Prime Member</option>}
                   <option value="bespoke">Bespoke Tailoring</option>
                   <option value="other">General Question</option>
                 </select>

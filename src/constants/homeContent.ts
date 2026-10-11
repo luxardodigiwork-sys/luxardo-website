@@ -82,14 +82,8 @@ export const DEFAULT_SITE_CONTENT = {
         },
         {
           step: "06",
-          title: "Presentation Packaging",
-          desc: "The experience concludes with our signature matte black presentation, a final mark of luxury.",
-          img: "https://images.unsplash.com/photo-1607083206968-13611e3d76db?q=80&w=1000&auto=format&fit=crop"
-        },
-        {
-          step: "07",
           title: "Final Dispatch Check",
-          desc: "A final verification of the complete package before it is released for global dispatch.",
+          desc: "A final verification of the complete package before it is released for dispatch.",
           img: "https://images.unsplash.com/photo-1556740734-7f96267b118a?q=80&w=1000&auto=format&fit=crop"
         }
       ]
@@ -233,8 +227,8 @@ export const DEFAULT_SITE_CONTENT = {
       },
       {
         title: "Ready For You",
-        subtitle: "06 / Box Packing",
-        description: "The journey concludes with the ready-to-stitch fabric elegantly folded and secured in our premium box packing, ready to be transformed into your masterpiece.",
+        subtitle: "06 / Ready-to-Stitch",
+        description: "The journey concludes with the ready-to-stitch fabric, ready to be transformed into your masterpiece.",
         image: "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=3840&h=2160&auto=format&fit=crop&sat=-100&con=20",
         imageSize: "4k"
       }

@@ -104,7 +104,7 @@ export default function AdminPoliciesPage() {
   };
 
   const confirmReset = () => {
-    localStorage.removeItem('LUXARDO FASHION_policies');
+    storage.resetPolicies();
     const data = storage.getPolicies();
     setPolicies(data);
     setShowSuccess(true);
@@ -163,6 +163,11 @@ export default function AdminPoliciesPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="mb-10 border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+        Edits made here are saved in this browser only, as a preview. Customers see the policy text built into the
+        website until policy editing is connected to the database.
       </div>
 
       <motion.div 

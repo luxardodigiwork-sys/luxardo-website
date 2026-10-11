@@ -7,6 +7,8 @@ import { Product } from '../types';
 import { storage } from '../utils/localStorage';
 import { firebaseStorage } from '../utils/firebaseStorage';
 import { auth } from '../firebase';
+import { ready as productsReady } from '../utils/productStore';
+import { useProducts } from './ProductsContext';
 
 interface CartItem {
   product: Product;
@@ -62,6 +64,8 @@ const saveCartToStorage = async (items: CartItem[]) => {
 
 // Restore full product objects from saved IDs
 const loadCartFromStorage = async (): Promise<CartItem[]> => {
+  // Wait for the Firestore catalogue so admin-added products can be restored.
+  await productsReady;
   try {
     // Try Firebase first if user is logged in
     if (auth.currentUser) {
@@ -128,6 +132,24 @@ const loadCartFromStorage = async (): Promise<CartItem[]> => {
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { products: catalogue } = useProducts();
+
+  // Keep cart lines in sync with the live catalogue (price/name/image changes by admins).
+  // Display only: the payment backend always re-prices from Firestore.
+  useEffect(() => {
+    setCartItems(prev => {
+      let changed = false;
+      const next = prev.map(item => {
+        const latest = catalogue.find(p => p.id === item.product.id);
+        if (latest && JSON.stringify(latest) !== JSON.stringify(item.product)) {
+          changed = true;
+          return { ...item, product: latest };
+        }
+        return item;
+      });
+      return changed ? next : prev;
+    });
+  }, [catalogue]);
 
   // Load cart from Firebase on mount
   useEffect(() => {

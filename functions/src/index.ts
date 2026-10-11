@@ -1,127 +1,149 @@
-/* eslint-disable */
-import * as functions from "firebase-functions";
+/**
+ * Luxardo Fashion payment backend (Firebase Functions v2).
+ *
+ * Secrets (set with `firebase functions:secrets:set`, never in code):
+ *   RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET
+ * Params (set at deploy time / .env.<project>, not secret):
+ *   RAZORPAY_KEY_ID  - public key id (rzp_test_... / rzp_live_...)
+ *   ADMIN_UIDS       - comma separated Firebase UIDs allowed to call admin functions
+ *
+ * Do NOT deploy until the Firebase project, Razorpay test-mode run and webhook are verified.
+ */
 import * as admin from "firebase-admin";
-import * as crypto from "crypto";
+import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { processWebhook } from "./webhook";
+import { defineSecret, defineString } from "firebase-functions/params";
 import Razorpay from "razorpay";
+import {
+  OrderError, assertPhoneAuth, validateShippingAddress, verifyPaymentSignature,
+} from "./core";
+import {
+  RazorpayLike, createCheckoutOrder, releaseExpiredOrders,
+  releaseOrderStock, requestCancellation, verifyAndApplyPayment,
+} from "./orders";
 
 admin.initializeApp();
+const db = admin.firestore();
 
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || "";
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || "";
-const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || ""; 
+/** Keep in sync with the client (`src/firebase.ts` -> getFunctions(app, REGION)). */
+export const REGION = "asia-south1";
 
-export const createRazorpayOrder = functions.https.onCall(async (request) => {
-  if (!request.auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "User must be authenticated to create a payment order."
-    );
-  }
+const RAZORPAY_KEY_ID = defineString("RAZORPAY_KEY_ID");
+const RAZORPAY_KEY_SECRET = defineSecret("RAZORPAY_KEY_SECRET");
+const RAZORPAY_WEBHOOK_SECRET = defineSecret("RAZORPAY_WEBHOOK_SECRET");
+const ADMIN_UIDS = defineString("ADMIN_UIDS", { default: "" });
+// Optional: shop-owner address for new-paid-order notifications (queued in the `mail` collection).
+const OWNER_NOTIFY_EMAIL = defineString("OWNER_NOTIFY_EMAIL", { default: "" });
 
-  const data = request.data as any;
-  const { amount, currency = "INR", receiptId } = data;
+const razorpayClient = (): RazorpayLike =>
+  new Razorpay({ key_id: RAZORPAY_KEY_ID.value(), key_secret: RAZORPAY_KEY_SECRET.value() }) as unknown as RazorpayLike;
 
-  if (!amount || typeof amount !== "number" || amount <= 0) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "A valid amount is required."
-    );
-  }
+function toHttpsError(err: unknown): HttpsError {
+  if (err instanceof HttpsError) return err;
+  if (err instanceof OrderError) return new HttpsError(err.code === "already-exists" ? "already-exists" : err.code, err.message);
+  console.error("Unexpected error:", err);
+  return new HttpsError("internal", "Something went wrong. Please try again.");
+}
 
+/** Creates a server-priced, stock-reserved order + Razorpay order. Phone-authenticated users only. */
+export const createCheckoutOrderFn = onCall({ region: REGION, secrets: [RAZORPAY_KEY_SECRET] }, async (request) => {
   try {
-    const razorpay = new Razorpay({
-      key_id: RAZORPAY_KEY_ID,
-      key_secret: RAZORPAY_KEY_SECRET,
+    const uid = assertPhoneAuth(request.auth as any);
+    const address = validateShippingAddress(request.data?.address);
+    const created = await createCheckoutOrder(db, razorpayClient(), {
+      uid,
+      phone: (request.auth!.token as any).phone_number,
+      lines: request.data?.items, // ids/quantities/sizes only; prices are never read from the client
+      address,
     });
-
-    const options = {
-      amount: Math.round(amount * 100),
-      currency,
-      receipt: receiptId || `rcpt_${request.auth.uid}_${Date.now()}`,
-      payment_capture: 1,
-    };
-
-    const order = await razorpay.orders.create(options);
-
-    if (receiptId) {
-      await admin.firestore().collection("orders").doc(receiptId).update({
-        razorpayOrderId: order.id,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
-
     return {
-      id: order.id,
-      amount: order.amount,
-      currency: order.currency,
+      orderId: created.orderId,
+      razorpayOrderId: created.razorpayOrderId,
+      amount: created.amountPaise,
+      currency: created.currency,
+      keyId: RAZORPAY_KEY_ID.value(),
     };
-  } catch (error) {
-    console.error("Error creating Razorpay order:", error);
-    throw new functions.https.HttpsError("internal", "Unable to create Razorpay order");
+  } catch (err) {
+    throw toHttpsError(err);
   }
 });
 
-export const verifyRazorpayPayment = functions.https.onRequest(async (req, res) => {
-  if (req.method !== "POST") {
-    res.status(405).send("Method Not Allowed");
-    return;
-  }
-
-  const signature = req.headers["x-razorpay-signature"];
-  if (!signature || typeof signature !== "string") {
-    res.status(401).send("Missing signature.");
-    return;
-  }
-
+/** Called after Razorpay Checkout succeeds: verifies signature, confirms capture with Razorpay, marks paid. */
+export const verifyPaymentFn = onCall({ region: REGION, secrets: [RAZORPAY_KEY_SECRET] }, async (request) => {
   try {
-    const rawBody = (req as any).rawBody || Buffer.from(JSON.stringify(req.body));
-    const expectedSignature = crypto
-      .createHmac("sha256", RAZORPAY_WEBHOOK_SECRET)
-      .update(rawBody)
-      .digest("hex");
-
-    if (!crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(signature))) {
-      res.status(400).send("Invalid signature.");
-      return;
+    const uid = assertPhoneAuth(request.auth as any);
+    const { orderId, razorpay_order_id: rzOrderId, razorpay_payment_id: rzPaymentId, razorpay_signature: signature } = request.data ?? {};
+    if (typeof orderId !== "string" || typeof rzOrderId !== "string" || typeof rzPaymentId !== "string") {
+      throw new OrderError("invalid-argument", "Missing payment details.");
     }
-
-    const event = req.body.event;
-    const paymentEntity = req.body.payload.payment.entity;
-
-    if (event === "payment.captured" || event === "order.paid") {
-      const razorpayOrderId = paymentEntity.order_id;
-      const paymentId = paymentEntity.id;
-
-      // ⚡ SAFETY FIX: razorpayOrderId exist karna chahiye query se pehle
-      if (!razorpayOrderId) {
-        console.error("Critical: razorpayOrderId is missing in webhook payload.");
-        res.status(400).send("Order ID missing.");
-        return;
-      }
-
-      const ordersRef = admin.firestore().collection("orders");
-      const snapshot = await ordersRef
-        .where("razorpayOrderId", "==", razorpayOrderId)
-        .limit(1)
-        .get();
-
-      if (snapshot.empty) {
-        console.error(`Order mismatch: ${razorpayOrderId} not found.`);
-        res.status(404).send("Order not found.");
-        return;
-      }
-
-      const orderDoc = snapshot.docs[0];
-      await orderDoc.ref.update({
-        paymentStatus: "paid", 
-        razorpayPaymentId: paymentId,
-        paymentVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+    if (!verifyPaymentSignature(rzOrderId, rzPaymentId, signature, RAZORPAY_KEY_SECRET.value())) {
+      throw new OrderError("permission-denied", "Payment signature is invalid.");
     }
+    const snap = await db.collection("orders").doc(orderId).get();
+    if (!snap.exists || snap.data()!.userId !== uid || snap.data()!.razorpayOrderId !== rzOrderId) {
+      throw new OrderError("not-found", "Order not found.");
+    }
+    const res = await verifyAndApplyPayment(db, razorpayClient(), { uid, orderId, razorpayPaymentId: rzPaymentId, ownerNotifyEmail: OWNER_NOTIFY_EMAIL.value() || undefined });
+    return { status: res.result };
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
 
-    res.status(200).json({ status: "ok" });
-  } catch (error) {
-    console.error("Fatal failure handling Razorpay webhook:", error);
-    res.status(500).send("Internal Server Error.");
+/** Razorpay webhook: signature-verified, idempotent (event id), amount/currency-checked. */
+export const razorpayWebhook = onRequest({ region: REGION, secrets: [RAZORPAY_WEBHOOK_SECRET, RAZORPAY_KEY_SECRET] }, async (req, res) => {
+  if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
+  const out = await processWebhook(db, {
+    rawBody: (req as any).rawBody,
+    signature: req.headers["x-razorpay-signature"],
+    eventId: req.headers["x-razorpay-event-id"],
+    body: req.body,
+    secret: RAZORPAY_WEBHOOK_SECRET.value(),
+    ownerNotifyEmail: OWNER_NOTIFY_EMAIL.value() || undefined,
+  });
+  if (typeof out.body === "string") res.status(out.status).send(out.body); else res.status(out.status).json(out.body);
+});
+
+/**
+ * Customer cancellation: within 24h of placing the order, while it is still safe (unpaid, or paid and not yet packed).
+ * Unpaid orders are cancelled immediately; paid orders only get a cancellation REQUEST that staff approve and refund.
+ * No refund is issued automatically.
+ */
+export const requestCancellationFn = onCall({ region: REGION }, async (request) => {
+  try {
+    const uid = assertPhoneAuth(request.auth as any);
+    const orderId = request.data?.orderId;
+    if (typeof orderId !== "string" || !orderId) throw new OrderError("invalid-argument", "Missing order id.");
+    return await requestCancellation(db, { uid, orderId, reason: request.data?.reason });
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+/** Releases stock for unpaid orders whose payment window elapsed. */
+export const releaseExpiredOrdersFn = onSchedule({ region: REGION, schedule: "every 10 minutes" }, async () => {
+  const n = await releaseExpiredOrders(db);
+  if (n) console.log(`Released stock for ${n} expired order(s).`);
+});
+
+/** Admin: cancel an order that has not shipped and restore its stock (refunds are done in the Razorpay dashboard). */
+export const cancelOrderFn = onCall({ region: REGION }, async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    const allowed = ADMIN_UIDS.value().split(",").map((s) => s.trim()).filter(Boolean);
+    if (!uid || !(request.auth!.token.admin === true || allowed.includes(uid))) {
+      throw new OrderError("permission-denied", "Admin only.");
+    }
+    const orderId = request.data?.orderId;
+    if (typeof orderId !== "string" || !orderId) throw new OrderError("invalid-argument", "Missing order id.");
+    const snap = await db.collection("orders").doc(orderId).get();
+    if (!snap.exists) throw new OrderError("not-found", "Order not found.");
+    const status = snap.data()!.status;
+    if (["shipped", "delivered"].includes(status)) throw new OrderError("failed-precondition", "A shipped order cannot be cancelled here.");
+    const restored = await releaseOrderStock(db, orderId, "cancelled_by_admin");
+    return { restored };
+  } catch (err) {
+    throw toHttpsError(err);
   }
 });

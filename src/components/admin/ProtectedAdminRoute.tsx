@@ -1,9 +1,17 @@
 import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { auth } from '../../firebase';
 
-export default function ProtectedAdminRoute() {
-  const { user, isAuthReady } = useAuth();
+/**
+ * Guards every back-office area (admin, dispatch, owner, analysis).
+ * Authorization is `isAdmin` from AuthContext, which is derived from a Firestore
+ * read that security rules only permit for admins (UID list / custom claim).
+ * Use as a layout route (renders <Outlet />) or wrap children.
+ */
+export default function ProtectedAdminRoute({ children }: { children?: React.ReactNode }) {
+  const { isAdmin, isAuthReady } = useAuth();
+  const location = useLocation();
 
   if (!isAuthReady) {
     return (
@@ -13,9 +21,13 @@ export default function ProtectedAdminRoute() {
     );
   }
 
-  if (!user || !['super_admin', 'admin'].includes(user.role)) {
-    return <Navigate to="/admin/login" replace />;
+  const signedIn = !!auth.currentUser && !auth.currentUser.isAnonymous;
+  if (!signedIn) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
   }
 
-  return <Outlet />;
+  return <>{children ?? <Outlet />}</>;
 }

@@ -8,6 +8,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Country, Language } from '../types';
 import { COUNTRIES, LANGUAGES, COLLECTIONS } from '../constants';
 import { ALL_COUNTRIES } from '../countries';
+import { PRIME_AVAILABLE } from '../constants/features';
 import Logo from './Logo';
 import { FirstVisitModal } from './FirstVisitModal';
 import { SearchOverlay } from './SearchOverlay';
@@ -312,7 +313,7 @@ export default function Layout() {
     { name: 'CRAFTSMANSHIP', path: '/craftsmanship' },
     { name: 'COLLECTIONS', path: '/collections' },
     { name: 'PARTNER WITH US', path: '/wholesale' },
-    { name: 'PRIME MEMBER', path: '/prime-membership' },
+    ...(PRIME_AVAILABLE ? [{ name: 'PRIME MEMBER', path: '/prime-membership' }] : []),
     { name: 'CONTACT', path: '/contact' }
   ];
 
@@ -652,7 +653,7 @@ export default function Layout() {
             </button>
             <div className={`overflow-hidden transition-all duration-300 md:!max-h-none md:!opacity-100 md:!mt-8 ${openFooterSection === 'maison' ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
               <ul className="space-y-3 md:space-y-4 text-xs md:text-sm font-sans text-brand-white/60">
-                <li><Link to="/prime-membership" className="hover:text-brand-white transition-colors">Prime Member</Link></li>
+                {PRIME_AVAILABLE && <li><Link to="/prime-membership" className="hover:text-brand-white transition-colors">Prime Member</Link></li>}
                 <li><Link to="/craftsmanship" className="hover:text-brand-white transition-colors">Craftsmanship</Link></li>
                 <li><Link to="/our-story" className="hover:text-brand-white transition-colors">Our Story</Link></li>
                 <li><Link to="/contact" className="hover:text-brand-white transition-colors">Contact</Link></li>
@@ -677,7 +678,7 @@ export default function Layout() {
                 <li><Link to="/policies/returns" className="hover:text-brand-white transition-colors">Returns Policy</Link></li>
                 <li><Link to="/policies/privacy" className="hover:text-brand-white transition-colors">Privacy Policy</Link></li>
                 <li><Link to="/policies/terms" className="hover:text-brand-white transition-colors">Terms & Conditions</Link></li>
-                <li><Link to="/policies/membership-terms" className="hover:text-brand-white transition-colors">Membership Terms</Link></li>
+                {PRIME_AVAILABLE && <li><Link to="/policies/membership-terms" className="hover:text-brand-white transition-colors">Membership Terms</Link></li>}
               </ul>
             </div>
           </div>

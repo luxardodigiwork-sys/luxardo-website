@@ -118,13 +118,20 @@ export interface Order {
     | "delivered"
     | "cancelled"
     | "returned"
-    | "failed_delivery";
+    | "failed_delivery"
+    | "on_hold";
   verificationStatus?: "verified" | "packing_ready" | "dispatch_ready";
   paymentStatus?: "pending" | "paid" | "failed" | "refunded" | "confirmed";
   paymentMethod?: "cod" | "prepaid" | "razorpay";
   paymentId?: string;
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
+  /** Set by the payment backend when a customer asks to cancel a paid order; staff approve and refund manually. */
+  cancellationRequest?: { requestedAt: string; reason?: string; status: "requested" };
+  /** A cancelled order that was paid and still needs a manual refund. */
+  needsRefund?: boolean;
+  statusReason?: string;
+  paidAt?: string;
   trackingId?: string;
   trackingUrl?: string;
   courierName?: string;

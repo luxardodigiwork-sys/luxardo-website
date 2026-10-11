@@ -16,10 +16,14 @@
   "firestore": {
     "rules": "firestore.rules"
   },
-  "storage": [
-    {
-      "bucket": "LUXARDO FASHION-website.appspot.com",
-      "rules": "storage.rules"
-    }
-  ]
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "functions": {
+    "source": "functions",
+    "codebase": "default",
+    "predeploy": [
+      "npm --prefix \"$RESOURCE_DIR\" run build"
+    ]
+  }
 }

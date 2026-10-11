@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { storage } from '../../utils/localStorage';
+import { persistOrders, useAdminOrders } from '../../utils/orderStore';
 import { formatCurrency } from '../../utils/currency';
 import { Order, BackendUser } from '../../types';
 
@@ -29,17 +30,13 @@ export default function AdminDispatchPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
 
-  useEffect(() => {
-    const fetchData = () => {
-      const ordersData = storage.getOrders();
-      const usersData = storage.getBackendUsers();
-      setOrders(ordersData);
-      setBackendUsers(usersData.filter(u => u.role === 'dispatch'));
-      setIsLoading(false);
-    };
+  const { orders: liveOrders, isLoaded: ordersLoaded } = useAdminOrders();
 
-    fetchData();
-  }, []);
+  useEffect(() => {
+    setOrders(liveOrders);
+    setBackendUsers(storage.getBackendUsers().filter(u => u.role === 'dispatch'));
+    setIsLoading(!ordersLoaded);
+  }, [liveOrders, ordersLoaded]);
 
   const stats = useMemo(() => {
     const total = orders.length;
@@ -72,7 +69,7 @@ export default function AdminDispatchPage() {
     const updatedOrders = orders.map(order => 
       order.id === orderId ? { ...order, assignedStaffId: staffId, assignedStaffName: staff.fullName } : order
     );
-    storage.saveOrders(updatedOrders);
+    persistOrders(updatedOrders);
     setOrders(updatedOrders);
     setShowAssignModal(false);
     setSelectedOrder(null);
@@ -82,11 +79,16 @@ export default function AdminDispatchPage() {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
+    // Payment state is server-owned: an override can never mark an unpaid order as paid.
+    if (order.paymentStatus !== 'paid' && order.paymentStatus !== 'confirmed') {
+      alert('This order has no verified payment, so it cannot be moved forward.');
+      return;
+    }
     const nextStatus: Order['status'] = order.status === 'pending' ? 'processing' : 'shipped';
     const updatedOrders = orders.map(o => 
-      o.id === orderId ? { ...o, status: nextStatus, paymentStatus: 'confirmed' as const } : o
+      o.id === orderId ? { ...o, status: nextStatus } : o
     );
-    storage.saveOrders(updatedOrders);
+    persistOrders(updatedOrders);
     setOrders(updatedOrders);
     alert(`Order ${orderId} status overridden by Admin.`);
   };

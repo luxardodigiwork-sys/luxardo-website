@@ -3,6 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, ShoppingBag, Package, FileText, Shield, LogOut, Layers, Crown, Image as ImageIcon, Send, Truck, Settings, Users, BarChart3, Wallet, Menu, X, Mail } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import AdminAssistantChatbot from './AdminAssistantChatbot';
+import { EXPRESS_BACKEND_AVAILABLE } from '../../constants/features';
 import { AnimatePresence, motion } from 'motion/react';
 
 export default function AdminLayout() {
@@ -46,7 +47,7 @@ export default function AdminLayout() {
     {
       title: 'System',
       items: [
-        { path: '/admin/backend-management', label: 'Staff & Roles', icon: Shield },
+        ...(EXPRESS_BACKEND_AVAILABLE ? [{ path: '/admin/backend-management', label: 'Staff & Roles', icon: Shield }] : []),
         { path: '/admin/settings', label: 'Settings', icon: Settings },
       ]
     }
@@ -54,7 +55,7 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-brand-bg flex">
-      <AdminAssistantChatbot />
+      {EXPRESS_BACKEND_AVAILABLE && <AdminAssistantChatbot />}
 
       {/* Desktop Sidebar */}
       <aside className="w-64 bg-white border-r border-brand-divider flex-col hidden md:flex h-screen sticky top-0">
