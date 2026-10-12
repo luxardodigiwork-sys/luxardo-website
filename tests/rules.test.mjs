@@ -117,6 +117,24 @@ test('orders: cancellation/refund flags are server-only - neither customers nor 
     await assertFails(updateDoc(doc(admin().firestore(), 'orders/c1'), bad));
   }
 });
+test('orders: staff cannot revive a cancelled / on-hold / stock-released paid order (would oversell the same piece)', async () => {
+  const dead = [
+    ['cancelled', { status: 'cancelled', stockReleased: true }],
+    ['on_hold', { status: 'on_hold', needsRefund: true }],
+    ['processing_but_stock_released', { status: 'processing', stockReleased: true }],
+  ];
+  for (const [id, extra] of dead) {
+    await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), `orders/rev_${id}`), { ...baseOrder('cust1'), paymentStatus: 'paid', ...extra }));
+    for (const next of ['processing', 'packed', 'shipped', 'delivered']) {
+      if (next === extra.status) continue; // unchanged status is not a revival
+      await assertFails(updateDoc(doc(admin().firestore(), `orders/rev_${id}`), { status: next }));
+    }
+  }
+  // the normal forward flow for a live paid order still works
+  await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'orders/live1'), { ...baseOrder('cust1'), paymentStatus: 'paid', status: 'processing', stockReserved: true, stockReleased: false }));
+  await assertSucceeds(updateDoc(doc(admin().firestore(), 'orders/live1'), { status: 'packed' }));
+  await assertSucceeds(updateDoc(doc(admin().firestore(), 'orders/live1'), { status: 'shipped', trackingId: 'T1' }));
+});
 test('orders: admin cannot mark an UNPAID order paid or push it forward', async () => {
   await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'orders/unpaid1'), baseOrder('cust1')));
   const db = admin().firestore();

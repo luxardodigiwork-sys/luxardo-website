@@ -107,9 +107,14 @@ service cloud.firestore {
       allow create: if false;
       allow delete: if false;
       allow read: if isAdmin();
+      // A status change is allowed only for a PAID order that is ALREADY in the fulfilment flow with its stock still
+      // reserved. A cancelled / on-hold / unpaid order can never be revived by staff: its stock was released (or never
+      // reserved), so reviving it would sell the same piece twice. Those cases go through the server functions.
       allow update: if isAdmin() && adminOrderFieldsOnly()
         && (request.resource.data.status == resource.data.status
             || (resource.data.paymentStatus == 'paid'
+                && resource.data.get('stockReleased', false) == false
+                && resource.data.status in ['processing', 'packed', 'shipped', 'delivered', 'returned', 'failed_delivery']
                 && request.resource.data.status in ['processing', 'packed', 'shipped', 'delivered', 'returned', 'failed_delivery']));
     }
 
