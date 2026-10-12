@@ -3,7 +3,7 @@ import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, getDocs, collection, deleteDoc, query, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, getDocs, collection, deleteDoc, query, where, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
 
 const ADMIN_UID = 'jOnrDrh2EYghgU3ebCkWr694aDt1'; // legacy UID allow-list in the rules
@@ -116,6 +116,24 @@ test('orders: cancellation/refund flags are server-only - neither customers nor 
     await assertFails(updateDoc(doc(customer().firestore(), 'orders/c1'), bad));
     await assertFails(updateDoc(doc(admin().firestore(), 'orders/c1'), bad));
   }
+});
+test('products: an admin edit without stock keeps live stock; a stock change is a delta; stock can never go negative', async () => {
+  await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'products/live1'), { name: 'Live', price: 1000, stock: 5, visibility: 'public' }));
+  // a customer reserves 2 while the admin has the edit form open
+  await env.withSecurityRulesDisabled(c => updateDoc(doc(c.firestore(), 'products/live1'), { stock: 3 }));
+  const db = admin().firestore();
+  // admin saves other fields (the way productStore.update does): merge write WITHOUT stock
+  await assertSucceeds(setDoc(doc(db, 'products/live1'), { name: 'Live', price: 1200, visibility: 'hidden' }, { merge: true }));
+  let kept;
+  await env.withSecurityRulesDisabled(async c => { kept = (await getDoc(doc(c.firestore(), 'products/live1'))).data().stock; });
+  assert.equal(kept, 3); // the reservation was NOT undone by the admin edit
+  // staff add 4 units: increment on top of the live 3 => 7 (not an overwrite)
+  await assertSucceeds(setDoc(doc(db, 'products/live1'), { stock: increment(4) }, { merge: true }));
+  let stock;
+  await env.withSecurityRulesDisabled(async c => { stock = (await getDoc(doc(c.firestore(), 'products/live1'))).data().stock; });
+  assert.equal(stock, 7);
+  // removing more than exists is refused by the rules
+  await assertFails(setDoc(doc(db, 'products/live1'), { stock: increment(-100) }, { merge: true }));
 });
 test('orders: staff cannot revive a cancelled / on-hold / stock-released paid order (would oversell the same piece)', async () => {
   const dead = [

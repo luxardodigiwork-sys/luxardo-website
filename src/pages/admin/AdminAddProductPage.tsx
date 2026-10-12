@@ -85,7 +85,7 @@ export default function AdminAddProductPage() {
         updatedAt: new Date().toISOString()
       };
 
-      await productStore.save(newProduct);
+      await productStore.create(newProduct);
       navigate('/admin/products');
     } catch (error: any) {
       console.error('Error saving product:', error);

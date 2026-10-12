@@ -56,20 +56,20 @@ export default function AdminProductsPage() {
       updatedAt: new Date().toISOString()
     };
 
-    run(() => productStore.save(duplicatedProduct));
+    run(() => productStore.create({ ...duplicatedProduct, stock: 0 })); // a copy starts with no stock; staff set it deliberately
   };
 
   const toggleVisibility = (id: string) => {
     const p = products.find(x => x.id === id);
     if (!p) return;
     const visibility: 'public' | 'hidden' = p.visibility === 'hidden' ? 'public' : 'hidden';
-    run(() => productStore.save({ ...p, visibility, updatedAt: new Date().toISOString() }));
+    run(() => productStore.update({ ...p, visibility, updatedAt: new Date().toISOString() }, p.stock));
   };
 
   const toggleFeatured = (id: string) => {
     const p = products.find(x => x.id === id);
     if (!p) return;
-    run(() => productStore.save({ ...p, featured: !p.featured, updatedAt: new Date().toISOString() }));
+    run(() => productStore.update({ ...p, featured: !p.featured, updatedAt: new Date().toISOString() }, p.stock));
   };
 
   const collections = useMemo(() => {

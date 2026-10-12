@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -15,6 +15,7 @@ export default function AdminEditProductPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<Product | null>(null);
+  const loadedStockRef = useRef<number>(0);
   const [newImageUrl, setNewImageUrl] = useState('');
 
   // Offer exactly the storefront collection names. A product saved with an older, non-matching category keeps it
@@ -28,6 +29,7 @@ export default function AdminEditProductPage() {
         const product = catalogue.find(p => p.id === id);
         if (product) {
           // Ensure all new fields exist
+          loadedStockRef.current = product.stock !== undefined ? product.stock : 0; // stock the form started from
           setFormData({
             ...product,
             slug: product.slug || '',
@@ -81,14 +83,15 @@ export default function AdminEditProductPage() {
     setIsSaving(true);
 
     try {
-      await productStore.save({
+      // Stock: only the staff's real change is applied (as a difference), never the stale number loaded with the form.
+      await productStore.update({
         ...formData,
         id,
         price: Number(formData.price),
         stock: Number(formData.stock),
         visibility: visibilityOverride || formData.visibility,
         updatedAt: new Date().toISOString()
-      });
+      }, loadedStockRef.current);
       navigate('/admin/products');
     } catch (error: any) {
       console.error('Error updating product:', error);

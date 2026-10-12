@@ -2,12 +2,14 @@ import {
   collection,
   deleteDoc,
   doc,
+  increment,
   onSnapshot,
   setDoc,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Product } from '../types';
+import { buildProductUpdate } from './productWrite';
 
 /**
  * Firestore-backed product catalogue.
@@ -61,7 +63,8 @@ export function start() {
 async function writeMany(products: Product[]): Promise<void> {
   for (let i = 0; i < products.length; i += 400) {
     const batch = writeBatch(db);
-    products.slice(i, i + 400).forEach((p) => batch.set(doc(db, 'products', p.id), clean(p)));
+    // merge + no stock: these bulk writes (e.g. image sync) must never overwrite live stock
+    products.slice(i, i + 400).forEach((p) => batch.set(doc(db, 'products', p.id), clean(buildProductUpdate(p, undefined).data), { merge: true }));
     await batch.commit();
   }
 }
@@ -72,9 +75,20 @@ export const productStore = {
   getError: (): Error | null => lastError,
   subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
 
-  /** Create or fully replace one product (admin only; enforced by security rules). */
-  async save(product: Product): Promise<void> {
+  /** Create a NEW product (admin only; enforced by security rules). Includes the starting stock. */
+  async create(product: Product): Promise<void> {
     await setDoc(doc(db, 'products', product.id), clean(product));
+  },
+
+  /**
+   * Update an existing product WITHOUT overwriting live stock. `loadedStock` is the stock the admin form started
+   * from; only a real change to it is applied, as an increment, so concurrent reservations/sales are preserved.
+   */
+  async update(product: Product, loadedStock: number | undefined): Promise<void> {
+    const { data, stockDelta } = buildProductUpdate(product, loadedStock);
+    const payload: Record<string, unknown> = clean(data);
+    if (stockDelta !== 0) payload.stock = increment(stockDelta);
+    await setDoc(doc(db, 'products', product.id), payload, { merge: true });
   },
 
   /** Write several products in batches of <= 400. Only the given products are touched. */

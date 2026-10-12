@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as crypto from 'node:crypto';
 import * as coreNs from '../functions/src/core';
+import * as pwNs from '../src/utils/productWrite';
 // functions/ is CommonJS; unwrap the interop default when present.
 const core: typeof coreNs = (coreNs as any).default ?? coreNs;
 const {
@@ -203,4 +204,21 @@ test('returns: not before delivery, not unpaid, not twice, needs a delivery time
   assert.equal(evaluateReturn(deliveredOrder({ returnRequest: { status: 'requested' } }), daysAfterDelivery(1)).allowed, false);
   assert.equal(evaluateReturn(deliveredOrder({ statusHistory: [] }), daysAfterDelivery(1)).allowed, false);
   assert.equal(evaluateReturn(deliveredOrder({ statusHistory: [{ status: 'delivered', timestamp: 'garbage' }] }), daysAfterDelivery(1)).allowed, false);
+});
+
+// ---------- admin product writes never overwrite live stock ----------
+test('product update: stock is never written as an absolute number; only the real staff change becomes a delta', () => {
+  const pw: any = (pwNs as any).default ?? pwNs;
+  const p: any = { id: 'a', name: 'A', price: 1000, stock: 5, visibility: 'public' };
+  // untouched stock field (e.g. toggling visibility): no stock key, delta 0 - even if the live stock has moved since
+  let w = pw.buildProductUpdate({ ...p, visibility: 'hidden' }, 5);
+  assert.equal('stock' in w.data, false); assert.equal(w.stockDelta, 0); assert.equal(w.data.visibility, 'hidden');
+  // staff raise stock from the 5 they saw to 8: +3, applied on top of whatever the live number is
+  w = pw.buildProductUpdate({ ...p, stock: 8 }, 5);
+  assert.equal(w.stockDelta, 3); assert.equal('stock' in w.data, false);
+  // lowering, string input from a form, and junk input
+  assert.equal(pw.buildProductUpdate({ ...p, stock: 2 }, 5).stockDelta, -3);
+  assert.equal(pw.buildProductUpdate({ ...p, stock: '7' }, 5).stockDelta, 2);
+  assert.equal(pw.buildProductUpdate({ ...p, stock: NaN }, 5).stockDelta, 0);
+  assert.equal(pw.buildProductUpdate({ ...p, stock: 4 }, undefined).stockDelta, 4);
 });

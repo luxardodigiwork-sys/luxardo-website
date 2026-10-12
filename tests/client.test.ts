@@ -554,3 +554,12 @@ test('checkout sends a retry key; return UI and callable are wired; no dummy loc
   assert.match(read('functions/src/index.ts'), /export const requestReturnFn/);
   assert.doesNotMatch(read('src/utils/localStorage.ts'), /DUMMY_ADMIN|isAdminLoggedIn|loginAdmin/);
 });
+
+test('admin screens use create/update (no whole-document save that could overwrite stock)', () => {
+  assert.doesNotMatch(read('src/utils/productStore.ts'), /async save\(/);
+  for (const f of ['src/pages/admin/AdminEditProductPage.tsx', 'src/pages/admin/AdminProductsPage.tsx', 'src/pages/admin/AdminAddProductPage.tsx', 'src/utils/localStorage.ts']) {
+    assert.doesNotMatch(read(f), /productStore\.save\(/, f);
+  }
+  assert.match(read('src/pages/admin/AdminEditProductPage.tsx'), /productStore\.update\(/);
+  assert.match(read('src/utils/productStore.ts'), /increment\(stockDelta\)/);
+});
