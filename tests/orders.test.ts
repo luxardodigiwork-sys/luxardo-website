@@ -453,3 +453,93 @@ test('expectedTotalPaise on a retry (same requestId): a changed total is refused
   assert.equal(same.orderId, first.orderId);
   await assert.rejects(createCheckoutOrder(db, rz, { uid: 'u1', lines, address, shipping: NO_RULE, requestId: 'retry-key-1', expectedTotalPaise: 90000 }), /changed/i);
 });
+
+// ---------- cancellation / expiry / payment races ----------
+const ITER = 6;
+const mkPending = async (uid = 'u1') => {
+  await db.collection('products').doc('a').update({ stock: 5 }); // each iteration starts from a clean shelf
+  const res = await buy(fakeRazorpay(), [{ productId: 'a', quantity: 1, size: '40' }], uid);
+  const o = await orderOf(res.orderId) as any;
+  return { id: res.orderId, o, payment: captured(o) };
+};
+
+test('automatic releases never cancel a PAID order (stale-view guard): onlyIfUnpaid', async () => {
+  const { id, payment } = await mkPending();
+  await applyCapturedPayment(db, { orderId: id, payment });
+  const stock = await stockOf('a');
+  assert.equal(await releaseOrderStock(db, id, 'payment_window_elapsed', { onlyIfUnpaid: true }), false);
+  const o = await orderOf(id) as any;
+  assert.equal(o.status, 'processing'); assert.equal(o.paymentStatus, 'paid'); assert.notEqual(o.needsRefund, true);
+  assert.equal(await stockOf('a'), stock);
+  // a staff cancel (no flag) still works on a paid order and flags the refund
+  assert.equal(await releaseOrderStock(db, id, 'cancelled_by_admin'), true);
+  assert.equal((await orderOf(id) as any).needsRefund, true);
+});
+
+test('race: expiry sweep vs payment landing at the same moment never cancels or double-reserves a paid order', async () => {
+  for (let i = 0; i < ITER; i++) {
+    const { id, payment } = await mkPending(`sw${i}`);
+    const before = await stockOf('a');
+    const far = new Date(Date.now() + 120 * 60_000);
+    const r = await Promise.allSettled([applyCapturedPayment(db, { orderId: id, payment }), releaseExpiredOrders(db, far)]);
+    assert.ok(r.every((x) => x.status === 'fulfilled'), `iteration ${i}: ${JSON.stringify(r)}`);
+    const o = await orderOf(id) as any;
+    assert.equal(o.status, 'processing', `iteration ${i}`); assert.equal(o.paymentStatus, 'paid');
+    assert.notEqual(o.needsRefund, true); assert.equal(o.stockReserved, true); assert.equal(o.stockReleased, false);
+    assert.equal(await stockOf('a'), before, `iteration ${i}: stock must equal the single reservation`);
+  }
+});
+
+test('race: admin cancel vs payment: always ends cancelled + paid + refund-flagged, stock restored exactly once', async () => {
+  for (let i = 0; i < ITER; i++) {
+    const { id, payment } = await mkPending(`ad${i}`);
+    const before = await stockOf('a');
+    const r = await Promise.allSettled([applyCapturedPayment(db, { orderId: id, payment }), releaseOrderStock(db, id, 'cancelled_by_admin')]);
+    assert.ok(r.every((x) => x.status === 'fulfilled'), `iteration ${i}: ${JSON.stringify(r)}`);
+    const o = await orderOf(id) as any;
+    assert.equal(o.status, 'cancelled', `iteration ${i}`); assert.equal(o.paymentStatus, 'paid'); assert.equal(o.needsRefund, true);
+    assert.equal(await stockOf('a'), before + 1, `iteration ${i}: restored exactly once`);
+  }
+});
+
+test('race: customer cancel vs payment: either cancelled+refund-flagged (stock back once) or paid+cancellation REQUEST (stock kept)', async () => {
+  for (let i = 0; i < ITER; i++) {
+    const { id, payment } = await mkPending(`cu${i}`);
+    const before = await stockOf('a');
+    const r = await Promise.allSettled([applyCapturedPayment(db, { orderId: id, payment }), requestCancellation(db, { uid: `cu${i}`, orderId: id })]);
+    assert.ok(r.every((x) => x.status === 'fulfilled'), `iteration ${i}: ${JSON.stringify(r)}`);
+    const o = await orderOf(id) as any; const stock = await stockOf('a');
+    const cancelledPath = o.status === 'cancelled' && o.paymentStatus === 'paid' && o.needsRefund === true && stock === before + 1;
+    const requestPath = o.status === 'processing' && o.paymentStatus === 'paid' && !!o.cancellationRequest && stock === before && o.needsRefund !== true;
+    assert.ok(cancelledPath || requestPath, `iteration ${i}: inconsistent state ${JSON.stringify({ s: o.status, p: o.paymentStatus, nr: o.needsRefund, cr: !!o.cancellationRequest, stock, before })}`);
+  }
+});
+
+test('race: several simultaneous cancels/sweeps of one unpaid order restore its stock exactly once', async () => {
+  for (let i = 0; i < ITER; i++) {
+    const { id } = await mkPending(`mu${i}`);
+    const before = await stockOf('a');
+    const far = new Date(Date.now() + 120 * 60_000);
+    const r = await Promise.allSettled([
+      releaseOrderStock(db, id, 'cancelled_by_admin'), releaseOrderStock(db, id, 'cancelled_by_admin'),
+      requestCancellation(db, { uid: `mu${i}`, orderId: id }), releaseExpiredOrders(db, far),
+    ]);
+    // a losing cancel may be refused ("already cancelled"); what matters is the end state
+    assert.ok(r.every((x) => x.status === 'fulfilled' || /cancel|Order/i.test(String((x as any).reason?.message))), `iteration ${i}: ${JSON.stringify(r.map(x => x.status))}`);
+    assert.equal((await orderOf(id) as any).status, 'cancelled');
+    assert.equal(await stockOf('a'), before + 1, `iteration ${i}: exactly once`);
+  }
+});
+
+test('retries: duplicate verification, duplicate webhook event ids and a second event for the same payment change nothing', async () => {
+  const { id, payment } = await mkPending('rt1');
+  const after1 = await applyCapturedPayment(db, { orderId: id, payment, eventId: 'evt_A' });
+  assert.equal(after1.result, 'paid');
+  const stock = await stockOf('a'); const mails = (await db.collection('mail').get()).size;
+  assert.equal((await applyCapturedPayment(db, { orderId: id, payment, eventId: 'evt_A' })).result, 'duplicate_event');
+  assert.equal((await applyCapturedPayment(db, { orderId: id, payment, eventId: 'evt_B' })).result, 'already_paid');   // order.paid after payment.captured
+  assert.equal((await applyCapturedPayment(db, { orderId: id, payment })).result, 'already_paid');                      // client verify afterwards
+  assert.equal(await stockOf('a'), stock);
+  assert.equal((await db.collection('mail').get()).size, mails);
+  assert.notEqual((await orderOf(id) as any).needsRefund, true);
+});

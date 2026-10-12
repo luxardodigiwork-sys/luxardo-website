@@ -145,7 +145,7 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
     return { orderId: orderRef.id, razorpayOrderId: rz.id, amountPaise: totals.totalPaise, currency: CURRENCY, total: totals.totalPaise / 100 };
   } catch (err) {
     // Compensate: nothing was payable, so give the stock back and close the order.
-    await releaseOrderStock(db, orderRef.id, "payment_provider_error").catch(() => undefined);
+    await releaseOrderStock(db, orderRef.id, "payment_provider_error", { onlyIfUnpaid: true }).catch(() => undefined);
     throw err;
   }
 }
@@ -166,12 +166,15 @@ async function resumeExistingOrder(rzp: RazorpayLike, ref: FirebaseFirestore.Doc
 }
 
 /** Restores reserved stock exactly once and moves the order to `nextStatus`. Safe to call repeatedly. */
-export async function releaseOrderStock(db: Firestore, orderId: string, reason: string): Promise<boolean> {
+export async function releaseOrderStock(db: Firestore, orderId: string, reason: string, opts: { onlyIfUnpaid?: boolean } = {}): Promise<boolean> {
   return db.runTransaction(async (tx) => {
     const ref = db.collection("orders").doc(orderId);
     const snap = await tx.get(ref);
     if (!snap.exists) throw new OrderError("not-found", "Order not found.");
     const o = snap.data()!;
+    // Automatic releases (expiry sweep, provider-error rollback) act on a possibly STALE view of the order. Re-check inside
+    // the transaction: if the payment landed in the meantime, a paid order must never be cancelled by them.
+    if (opts.onlyIfUnpaid && (o.paymentStatus !== "pending" || o.status !== "pending")) return false;
     if (!o.stockReserved || o.stockReleased) {
       if (o.status === "pending" && o.paymentStatus === "pending") tx.update(ref, { status: "cancelled", statusReason: reason });
       return false;
@@ -317,7 +320,7 @@ export async function releaseExpiredOrders(db: Firestore, now: Date = new Date()
   let released = 0;
   for (const d of q.docs) {
     if (d.data().status !== "pending" || d.data().paymentStatus !== "pending") continue;
-    if (await releaseOrderStock(db, d.id, "payment_window_elapsed")) released++;
+    if (await releaseOrderStock(db, d.id, "payment_window_elapsed", { onlyIfUnpaid: true })) released++;
   }
   return released;
 }
