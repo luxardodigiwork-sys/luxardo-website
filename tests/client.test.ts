@@ -563,3 +563,10 @@ test('admin screens use create/update (no whole-document save that could overwri
   assert.match(read('src/pages/admin/AdminEditProductPage.tsx'), /productStore\.update\(/);
   assert.match(read('src/utils/productStore.ts'), /increment\(stockDelta\)/);
 });
+
+test('checkout sends the total the customer saw; the server callable forwards it as expectedTotalPaise', () => {
+  assert.match(read('src/pages/CheckoutPage.tsx'), /Math\.round\(quote\.total \* 100\)/);
+  assert.match(read('src/utils/payments.ts'), /expectedTotalPaise/);
+  assert.match(read('functions/src/index.ts'), /expectedTotalPaise:/);
+  assert.match(read('functions/src/orders.ts'), /PRICE_CHANGED_MESSAGE/);
+});

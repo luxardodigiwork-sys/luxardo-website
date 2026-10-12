@@ -57,6 +57,7 @@ export const createCheckoutOrderFn = onCall({ region: REGION, secrets: [RAZORPAY
       lines: request.data?.items, // ids/quantities/sizes only; prices are never read from the client
       address,
       requestId: request.data?.requestId,
+      expectedTotalPaise: Number.isInteger(request.data?.expectedTotalPaise) && request.data.expectedTotalPaise > 0 ? request.data.expectedTotalPaise : undefined,
     });
     return {
       orderId: created.orderId,

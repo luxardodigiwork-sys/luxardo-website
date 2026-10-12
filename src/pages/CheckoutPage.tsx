@@ -131,6 +131,7 @@ export default function CheckoutPage() {
           city: form.city.trim(), state: form.state, postalCode: form.postalCode.trim(),
         },
         requestIdRef.current.id,
+        quote.total === null ? undefined : Math.round(quote.total * 100), // what the customer saw; the server refuses if its own total differs
       );
       await loadRazorpay();
 

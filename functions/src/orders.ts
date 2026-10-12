@@ -34,7 +34,11 @@ export interface CreateOrderInput {
   shipping?: ShippingConfig;
   /** Client-generated retry key. The same key from the same user always maps to the same order (no duplicate orders on double-click/retry). */
   requestId?: string;
+  /** The total (paise) the customer saw before paying. The server stays authoritative: if its own total differs, nothing is created. */
+  expectedTotalPaise?: number;
 }
+
+export const PRICE_CHANGED_MESSAGE = "The price or shipping for your cart changed since you opened checkout. Please review your cart and try again.";
 
 export interface CreatedOrder {
   orderId: string;
@@ -60,7 +64,7 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
 
   if (requestId) {
     const prior = await orderRef.get();
-    if (prior.exists) return resumeExistingOrder(rzp, orderRef, prior.data()!);
+    if (prior.exists) return resumeExistingOrder(rzp, orderRef, prior.data()!, input.expectedTotalPaise);
   }
 
   // Anti-hoarding: cap concurrent unpaid orders per user.
@@ -87,6 +91,8 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
     snaps.forEach((s, i) => { productsById[ids[i]] = toProduct(ids[i], s.data()); });
 
     const t = computeOrderTotals(input.lines, productsById, input.shipping ?? DEFAULT_SHIPPING); // throws on bad ids/qty/size/price/stock/shipping
+    // Client/server agreement BEFORE anything is reserved or created: a stale cart must not silently pay a different amount.
+    if (input.expectedTotalPaise !== undefined && input.expectedTotalPaise !== t.totalPaise) throw new OrderError("failed-precondition", PRICE_CHANGED_MESSAGE);
 
     for (const [productId, qty] of Object.entries(t.qtyByProduct)) {
       tx.update(productRef(db, productId), { stock: FieldValue.increment(-qty), updatedAt: now.toISOString() });
@@ -126,7 +132,7 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
     return t;
   });
 
-  if (!totals) return resumeExistingOrder(rzp, orderRef, raced!);
+  if (!totals) return resumeExistingOrder(rzp, orderRef, raced!, input.expectedTotalPaise);
 
   try {
     const rz = await rzp.orders.create({
@@ -145,7 +151,8 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
 }
 
 /** Same user + same requestId: hand back the existing order instead of creating (and charging for) a second one. */
-async function resumeExistingOrder(rzp: RazorpayLike, ref: FirebaseFirestore.DocumentReference, o: FirebaseFirestore.DocumentData): Promise<CreatedOrder> {
+async function resumeExistingOrder(rzp: RazorpayLike, ref: FirebaseFirestore.DocumentReference, o: FirebaseFirestore.DocumentData, expectedTotalPaise?: number): Promise<CreatedOrder> {
+  if (expectedTotalPaise !== undefined && expectedTotalPaise !== o.amountPaise) throw new OrderError("failed-precondition", PRICE_CHANGED_MESSAGE);
   if (o.status !== "pending" || o.paymentStatus !== "pending") {
     throw new OrderError("failed-precondition", "This order has already been processed. Please refresh and check your orders.");
   }

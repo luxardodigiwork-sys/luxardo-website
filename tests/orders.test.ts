@@ -418,3 +418,38 @@ test('return request: owner only, delivered + within 7 days, once; no refund fla
   assert.notEqual(after.needsRefund, true); assert.equal(after.status, 'delivered'); assert.equal(await stockOf('a'), stockBefore);
   await assert.rejects(requestReturn(db, { uid: 'u1', orderId: res.orderId, now: t }), /already been requested/);
 });
+
+// ---------- client/server total agreement ----------
+test('expectedTotalPaise: matching total proceeds; a stale/wrong total is refused BEFORE anything is reserved or created', async () => {
+  const lines = [{ productId: 'a', quantity: 2, size: '40' }]; // 2 x Rs 1,000 = Rs 2,000
+  const rz = fakeRazorpay();
+  const ok = await createCheckoutOrder(db, rz, { uid: 'u1', lines, address, shipping: NO_RULE, expectedTotalPaise: 200000 });
+  assert.equal(ok.amountPaise, 200000);
+  assert.equal(await stockOf('a'), 3);
+
+  const orderCount = (await db.collection('orders').get()).size;
+  const stockBefore = await stockOf('a');
+  const created = rz.created.length;
+  // price changed under the customer (server says 2,000, customer saw 1,800), or they forgot shipping, or sent junk
+  for (const wrong of [180000, 199999, 200001, 1]) {
+    await assert.rejects(createCheckoutOrder(db, rz, { uid: 'u2', lines, address, shipping: NO_RULE, expectedTotalPaise: wrong }), /price or shipping .* changed/i);
+  }
+  assert.equal((await db.collection('orders').get()).size, orderCount); // no order
+  assert.equal(await stockOf('a'), stockBefore);                        // no reservation
+  assert.equal(rz.created.length, created);                              // no Razorpay order
+});
+test('expectedTotalPaise includes the real shipping rule (Rs 199 below Rs 7,499)', async () => {
+  const lines = [{ productId: 'a', quantity: 1, size: '40' }]; // Rs 1,000 -> total Rs 1,199 with default rule
+  const rz = fakeRazorpay();
+  await assert.rejects(createCheckoutOrder(db, rz, { uid: 'u1', lines, address, expectedTotalPaise: 100000 }), /changed/i); // subtotal only
+  const ok = await createCheckoutOrder(db, rz, { uid: 'u1', lines, address, expectedTotalPaise: 119900 });
+  assert.equal(ok.amountPaise, 119900);
+});
+test('expectedTotalPaise on a retry (same requestId): a changed total is refused, the same total returns the same order', async () => {
+  const lines = [{ productId: 'a', quantity: 1, size: '40' }];
+  const rz = fakeRazorpay();
+  const first = await createCheckoutOrder(db, rz, { uid: 'u1', lines, address, shipping: NO_RULE, requestId: 'retry-key-1', expectedTotalPaise: 100000 });
+  const same = await createCheckoutOrder(db, rz, { uid: 'u1', lines, address, shipping: NO_RULE, requestId: 'retry-key-1', expectedTotalPaise: 100000 });
+  assert.equal(same.orderId, first.orderId);
+  await assert.rejects(createCheckoutOrder(db, rz, { uid: 'u1', lines, address, shipping: NO_RULE, requestId: 'retry-key-1', expectedTotalPaise: 90000 }), /changed/i);
+});

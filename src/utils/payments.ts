@@ -14,8 +14,8 @@ export interface RazorpaySuccess {
 }
 
 /** Client sends ONLY product ids, quantities, sizes and the address. Prices are computed server-side. */
-export const createCheckoutOrder = (items: CheckoutLine[], address: CheckoutAddress, requestId?: string) =>
-  httpsCallable<{ items: CheckoutLine[]; address: CheckoutAddress; requestId?: string }, CreatedCheckout>(functions, 'createCheckoutOrderFn')({ items, address, requestId })
+export const createCheckoutOrder = (items: CheckoutLine[], address: CheckoutAddress, requestId?: string, expectedTotalPaise?: number) =>
+  httpsCallable<{ items: CheckoutLine[]; address: CheckoutAddress; requestId?: string; expectedTotalPaise?: number }, CreatedCheckout>(functions, 'createCheckoutOrderFn')({ items, address, requestId, expectedTotalPaise })
     .then((r) => r.data);
 
 export const verifyPayment = (orderId: string, res: RazorpaySuccess) =>
