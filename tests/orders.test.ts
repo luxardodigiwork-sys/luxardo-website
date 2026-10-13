@@ -543,3 +543,11 @@ test('retries: duplicate verification, duplicate webhook event ids and a second 
   assert.equal((await db.collection('mail').get()).size, mails);
   assert.notEqual((await orderOf(id) as any).needsRefund, true);
 });
+
+test('webhook: a signed captured event WITHOUT an order id is acknowledged (not retried forever) and marks nothing paid', async () => {
+  const { id } = await mkPending('wh_noorder');
+  const r = await hook('payment.captured', { id: 'pay_orphan', status: 'captured', amount: 100000, currency: 'INR' }); // no order_id
+  assert.equal(r.status, 200);
+  assert.equal((r.body as any).ok, false); assert.equal((r.body as any).error, 'invalid-argument');
+  assert.equal((await orderOf(id) as any).paymentStatus, 'pending');
+});

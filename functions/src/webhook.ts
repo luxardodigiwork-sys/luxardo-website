@@ -31,8 +31,9 @@ export async function processWebhook(db: Firestore, input: WebhookInput): Promis
     }
     return { status: 200, body: { ok: true, ignored: event } };
   } catch (err) {
-    if (err instanceof OrderError && (err.code === "not-found" || err.code === "permission-denied" || err.code === "failed-precondition")) {
-      // Not retryable (unknown order / mismatched payment): acknowledge so Razorpay stops retrying; never marks paid.
+    if (err instanceof OrderError && (err.code === "not-found" || err.code === "permission-denied" || err.code === "failed-precondition" || err.code === "invalid-argument")) {
+      // Not retryable (unknown order / mismatched payment / malformed event such as a payment with no order id):
+      // acknowledge so Razorpay stops retrying the same bad event; this path never marks anything paid.
       console.error("Webhook rejected:", err.code, err.message);
       return { status: 200, body: { ok: false, error: err.code } };
     }
