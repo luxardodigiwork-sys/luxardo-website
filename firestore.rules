@@ -8,8 +8,7 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null && (
         request.auth.token.get('admin', false) == true ||
-        request.auth.uid == 'jOnrDrh2EYghgU3ebCkWr694aDt1' ||
-        request.auth.uid == 'PqH3UUjP1acXGxyBNu2kOMTr0Xw1'
+        request.auth.uid == '0Frc6Dy2MqN0zc0UFkmqvpELFnr1'
       );
     }
 
@@ -158,6 +157,33 @@ service cloud.firestore {
         && docId.matches(request.auth.uid + '_.*');
       allow read, delete: if isRegisteredUser() && resource.data.userId == request.auth.uid;
       allow read, write: if isAdmin();
+    }
+
+    // ---- Public site content (visitors read, only admins write) ----------
+    // Kept so older deployed storefront builds keep working. Admin = claim or owner UID only
+    // (never a field on a user-writable profile document).
+    match /siteContent/{id}    { allow read: if true; allow write: if isAdmin(); }
+    match /collections/{id}    { allow read: if true; allow write: if isAdmin(); }
+    match /categories/{id}     { allow read: if true; allow write: if isAdmin(); }
+    match /policies/{id}       { allow read: if true; allow write: if isAdmin(); }
+    match /primeContent/{id}   { allow read: if true; allow write: if isAdmin(); }
+    match /media/{id}          { allow read: if true; allow write: if isAdmin(); }
+    match /partners/{id}       { allow read: if true; allow write: if isAdmin(); }
+
+    // ---- Inbound forms: anyone may submit a small document, only admins read/manage ----
+    match /contactMessages/{id} {
+      allow create: if request.resource.data.keys().size() <= 15;
+      allow read, update, delete: if isAdmin();
+    }
+    match /newsletterSubscribers/{id} {
+      allow create: if request.resource.data.keys().size() <= 10;
+      allow read, update, delete: if isAdmin();
+    }
+    match /bespokeRequests/{id} {
+      allow create: if isRegisteredUser() && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().size() <= 30;
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isAdmin();
     }
 
     match /{document=**} {

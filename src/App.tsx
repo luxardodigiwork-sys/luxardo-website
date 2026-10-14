@@ -79,8 +79,6 @@ import AdminLayout from "./components/admin/AdminLayout";
 import OwnerLayout from "./components/owner/OwnerLayout";
 import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
 import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
-import AnalysisLayout from "./components/analysis/AnalysisLayout";
-import AnalysisDashboardPage from "./pages/analysis/AnalysisDashboardPage";
 
 export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -233,20 +231,8 @@ export default function App() {
               <Route path="dashboard" element={<OwnerDashboardPage />} />
               <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
             </Route>
-            <Route
-              path="/analysis"
-              element={
-                <ProtectedAdminRoute>
-                  <AnalysisLayout />
-                </ProtectedAdminRoute>
-              }
-            >
-              <Route
-                index
-                element={<Navigate to="/analysis/dashboard" replace />}
-              />
-              <Route path="dashboard" element={<AnalysisDashboardPage />} />
-            </Route>
+            {/* Analysis area is disabled for now (only admin, owner and dispatch are active). */}
+            <Route path="/analysis/*" element={<Navigate to="/backend" replace />} />
 
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />

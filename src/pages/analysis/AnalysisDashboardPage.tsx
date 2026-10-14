@@ -478,7 +478,7 @@ export default function AnalysisDashboardPage() {
                       <td className="py-4">{u.country || 'N/A'}</td>
                       <td className="py-4 capitalize">
                         <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-wider ${
-                          u.role === 'admin' || u.role === 'super_admin' ? 'bg-brand-black text-white' : 'bg-gray-200 text-brand-black'
+                          u.role === 'admin' ? 'bg-brand-black text-white' : 'bg-gray-200 text-brand-black'
                         }`}>
                           {u.role}
                         </span>

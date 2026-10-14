@@ -43,7 +43,7 @@ type SortOption = 'newest' | 'oldest' | 'dispatch_ready' | 'shipped' | 'delivere
 
 export default function DispatchDashboardPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin';
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);

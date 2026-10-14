@@ -6,7 +6,7 @@ import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebas
 import { doc, getDoc, setDoc, updateDoc, getDocs, collection, deleteDoc, query, where, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
 
-const ADMIN_UID = 'jOnrDrh2EYghgU3ebCkWr694aDt1'; // legacy UID allow-list in the rules
+const ADMIN_UID = '0Frc6Dy2MqN0zc0UFkmqvpELFnr1'; // owner UID allow-list in the rules
 let env;
 
 before(async () => {
@@ -230,4 +230,22 @@ test('storage: customer uploads are private (owner/admin read only); catalogue s
 });
 test('storage: admin custom claim can upload too', async () => {
   await assertSucceeds(uploadBytes(ref(claimAdmin().storage(), 'products/claim.png'), png(), meta('image/png')));
+});
+
+test('legacy site content: public read, admin-only write, and a self-assigned profile role grants nothing', async () => {
+  await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'siteContent/home'), { hero: 'x' }));
+  await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'siteContent/home')));
+  await assertFails(setDoc(doc(anon().firestore(), 'siteContent/home'), { hero: 'hack' }));
+  await assertFails(setDoc(doc(customer().firestore(), 'siteContent/home'), { hero: 'hack' }));
+  await assertSucceeds(setDoc(doc(admin().firestore(), 'siteContent/home'), { hero: 'ok' }));
+  // privilege escalation attempt: customer writes role:'admin' on their own profile, then tries admin-only writes
+  await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'customers/cust1'), { role: 'admin', name: 'x' }));
+  await assertFails(setDoc(doc(customer().firestore(), 'siteContent/home'), { hero: 'hack' }));
+  await assertFails(setDoc(doc(customer().firestore(), 'products/p-hack'), { name: 'x', price: 1, stock: 1 }));
+  await assertFails(setDoc(doc(customer().firestore(), 'orders/fake1'), { userId: 'cust1', paymentStatus: 'paid', total: 1 }));
+});
+test('forms: anyone may submit, only admins read', async () => {
+  await assertSucceeds(setDoc(doc(env.unauthenticatedContext().firestore(), 'contactMessages/m1'), { name: 'a', message: 'hi' }));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'contactMessages/m1')));
+  await assertSucceeds(getDoc(doc(admin().firestore(), 'contactMessages/m1')));
 });

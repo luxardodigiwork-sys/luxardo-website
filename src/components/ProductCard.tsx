@@ -1,3 +1,4 @@
+import OptimizedImage from './OptimizedImage';
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -37,7 +38,7 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
       <div className="aspect-[3/4] overflow-hidden bg-[#F5F5F5] relative">
         <Link to={`/product/${product.id}`} className="block w-full h-full relative overflow-hidden">
           {/* Main Image - Full View */}
-          <img 
+          <OptimizedImage
             src={product.image} 
             alt={product.name} 
             className="absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-out group-hover:opacity-0"
@@ -47,7 +48,7 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
           {/* Secondary Image - Closeup View */}
           {product.images && product.images.length > 1 && (
             <div className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 transition-all duration-1000 ease-out">
-              <img 
+              <OptimizedImage
                 src={product.images[1]} 
                 alt={`${product.name} closeup`} 
                 className="w-full h-full object-cover"

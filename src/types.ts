@@ -81,7 +81,6 @@ export interface User {
   role:
     | "admin"
     | "customer"
-    | "super_admin"
     | "dispatch"
     | "owner"
     | "analysis";
