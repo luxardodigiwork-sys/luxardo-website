@@ -22,7 +22,7 @@ export const COLLECTIONS = [
     fullName: '3 Piece Suit',
     shortName: '3 Piece Suit',
     descriptor: 'Complete tailored ensembles for the discerning gentleman.',
-    image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=1000&auto=format&fit=crop',
+    image: '/placeholder.svg',
     narrative: 'The ultimate expression of tailored perfection.',
     craftsmanship: 'Three-layer construction for a flawless fit.',
     packaging: 'Archival box with premium garment protection.'
@@ -32,7 +32,7 @@ export const COLLECTIONS = [
     fullName: 'Tuxedo',
     shortName: 'Tuxedo',
     descriptor: 'The pinnacle of formal evening wear.',
-    image: 'https://images.unsplash.com/photo-1593030761757-71fae46af504?q=80&w=1000&auto=format&fit=crop',
+    image: '/placeholder.svg',
     narrative: 'Crafted for the most prestigious occasions.',
     craftsmanship: 'Traditional canvassing and satin lapels.',
     packaging: 'Structured garment carrier with custom hangers.'
@@ -42,7 +42,7 @@ export const COLLECTIONS = [
     fullName: 'Jodhpuri',
     shortName: 'Jodhpuri',
     descriptor: 'Regal Jodhpuri jackets for a commanding presence.',
-    image: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=1000&auto=format&fit=crop',
+    image: '/placeholder.svg',
     narrative: 'A symbol of heritage and authority.',
     craftsmanship: 'Structured shoulders and hand-carved buttons.',
     packaging: 'Signature archival box with certificate.'
@@ -52,7 +52,7 @@ export const COLLECTIONS = [
     fullName: 'Koti Pant',
     shortName: 'Koti Pant',
     descriptor: 'Indo-western fusion featuring tailored kotis and trousers.',
-    image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1000&auto=format&fit=crop',
+    image: '/placeholder.svg',
     narrative: 'The Koti Pant set is for the modern trendsetter.',
     craftsmanship: 'Sharp silhouettes and premium wool-silk blends.',
     packaging: 'Signature archival box presentation.'
@@ -62,7 +62,7 @@ export const COLLECTIONS = [
     fullName: 'Koti Kurta',
     shortName: 'Koti Kurta',
     descriptor: 'Traditional silhouettes with a modern koti layer.',
-    image: 'https://images.unsplash.com/photo-1621335829175-95f437384d7c?q=80&w=1000&auto=format&fit=crop',
+    image: '/placeholder.svg',
     narrative: 'A refined fusion of tradition and tailoring.',
     craftsmanship: 'Hand-finished kotis with intricate detailing.',
     packaging: 'Wrapped in custom silk dust bags.'
@@ -72,7 +72,7 @@ export const COLLECTIONS = [
     fullName: 'Kurta',
     shortName: 'Kurta',
     descriptor: 'Timeless kurtas crafted from the finest silks and linens.',
-    image: 'https://images.unsplash.com/photo-1584916201218-f4242ceb4809?q=80&w=1000&auto=format&fit=crop',
+    image: '/placeholder.svg',
     narrative: 'The soul of LUXARDO FASHION lies in our classic kurtas.',
     craftsmanship: 'Precision cut and hand-finished seams.',
     packaging: 'Acid-free tissue wrapping in archival boxes.'
@@ -82,7 +82,7 @@ export const COLLECTIONS = [
     fullName: 'Casual',
     shortName: 'Casual',
     descriptor: 'Modern tailored shirts and trousers for daily luxury.',
-    image: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=1000&auto=format&fit=crop',
+    image: '/placeholder.svg',
     narrative: 'Our Casual collection defines contemporary workwear.',
     craftsmanship: 'Precision stitching and premium cotton blends.',
     packaging: 'Delivered in a signature LUXARDO FASHION box.'

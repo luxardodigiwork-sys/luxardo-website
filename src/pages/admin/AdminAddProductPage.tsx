@@ -323,7 +323,7 @@ export default function AdminAddProductPage() {
                   <ImageUploadInput
                     value={formData.image}
                     onChange={(val) => setFormData({ ...formData, image: val })}
-                    placeholder="https://images.unsplash.com/..."
+                    placeholder="/placeholder.svg"
                   />
                   <p className="text-xs text-brand-secondary font-sans mt-2">
                     This image will be used as the main thumbnail across the site. Use a 3:4 aspect ratio for best results.
