@@ -2,7 +2,10 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { firebaseConfigProblems } from './firebase.ts';
+import { installErrorReporter } from './utils/errorReporter.ts';
 import './index.css';
+
+installErrorReporter(import.meta.env.VITE_ERROR_REPORT_URL as string | undefined);
 
 const root = createRoot(document.getElementById('root')!);
 

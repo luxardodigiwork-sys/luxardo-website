@@ -1,0 +1,37 @@
+name: Site smoke monitor
+
+# Read-only browser check of the LIVE/STAGING site. Never logs in, orders or pays.
+# Set the repo variable SMOKE_BASE_URL (Settings -> Secrets and variables -> Actions -> Variables) to the site address.
+on:
+  schedule:
+    - cron: '17 3 * * *'   # daily (UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright (not saved to package.json)
+        run: |
+          npm install --no-save --no-package-lock playwright-core@1.49.1
+          npx playwright-core install --with-deps chromium
+      - name: Run smoke test
+        env:
+          BASE_URL: ${{ vars.SMOKE_BASE_URL }}
+        run: |
+          if [ -z "$BASE_URL" ]; then echo "Set repo variable SMOKE_BASE_URL"; exit 2; fi
+          node tests/e2e/smoke.mjs
+      - name: Upload report and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-report
+          path: smoke-report/

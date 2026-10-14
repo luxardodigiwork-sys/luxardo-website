@@ -200,7 +200,7 @@ export default function LoginPage() {
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
                 required
-                className="flex-1 border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:border-black"
+                className="min-w-0 flex-1 border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:border-black"
               />
             </div>
             <div id="recaptcha-container" ref={recaptchaRef} className="mb-4 flex justify-center"></div>
