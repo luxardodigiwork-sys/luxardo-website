@@ -336,6 +336,7 @@ export default function AdminProductsPage() {
                         <Link 
                           to={`/product/${product.id}`} 
                           target="_blank"
+                          rel="noopener noreferrer"
                           className="p-2 rounded-md text-brand-secondary hover:bg-gray-100 hover:text-brand-black transition-colors"
                           title="View on Site"
                         >

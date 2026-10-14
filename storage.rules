@@ -18,7 +18,7 @@ service firebase.storage {
 
     // Customer uploads: registered (non-anonymous) users, own folder only.
     match /user-uploads/{userId}/{allPaths=**} {
-      // Reads fall under the public-read rule below (storefront-style download URLs).
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
       allow create, update: if request.auth != null
         && request.auth.uid == userId
         && request.auth.token.firebase.sign_in_provider != 'anonymous'
@@ -29,7 +29,8 @@ service firebase.storage {
     // Everything else: public read (storefront images), admin-only write,
     // images only, 50 MB max (matches the admin uploader limit).
     match /{allPaths=**} {
-      allow read: if true;
+      // Customer uploads (user-uploads/...) are private: owner or admin only.
+      allow read: if !resource.name.matches('user-uploads/.*');
       allow create, update: if isAdmin() && isAllowedImage(50 * 1024 * 1024);
       allow delete: if isAdmin();
     }

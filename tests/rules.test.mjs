@@ -221,6 +221,13 @@ test('storage: customer uploads only to own folder, images <=5MB, not anonymous'
   await assertFails(uploadBytes(ref(customer().storage(), 'user-uploads/cust1/big.png'), new Uint8Array(6 * 1024 * 1024), meta('image/png')));
   await assertFails(uploadBytes(ref(customer().storage(), 'user-uploads/cust1/a.pdf'), png(), meta('application/pdf')));
 });
+test('storage: customer uploads are private (owner/admin read only); catalogue stays public', async () => {
+  await env.withSecurityRulesDisabled(c => uploadBytes(ref(c.storage(), 'user-uploads/cust1/priv.png'), png(), meta('image/png')));
+  await assertSucceeds(getBytes(ref(customer().storage(), 'user-uploads/cust1/priv.png')));
+  await assertSucceeds(getBytes(ref(admin().storage(), 'user-uploads/cust1/priv.png')));
+  await assertFails(getBytes(ref(env.unauthenticatedContext().storage(), 'user-uploads/cust1/priv.png')));
+  await assertFails(getBytes(ref(anon().storage(), 'user-uploads/cust1/priv.png')));
+});
 test('storage: admin custom claim can upload too', async () => {
   await assertSucceeds(uploadBytes(ref(claimAdmin().storage(), 'products/claim.png'), png(), meta('image/png')));
 });
