@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local audit notes (not for the repository)
+AUDIT-REPORT-*.md
