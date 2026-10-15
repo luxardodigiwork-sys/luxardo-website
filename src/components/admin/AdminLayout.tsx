@@ -47,7 +47,7 @@ export default function AdminLayout() {
     {
       title: 'System',
       items: [
-        ...(EXPRESS_BACKEND_AVAILABLE ? [{ path: '/admin/backend-management', label: 'Staff & Roles', icon: Shield }] : []),
+        { path: '/admin/staff', label: 'Staff & Roles', icon: Shield },
         { path: '/admin/settings', label: 'Settings', icon: Settings },
       ]
     }

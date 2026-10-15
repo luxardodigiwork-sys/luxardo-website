@@ -80,6 +80,7 @@ import OwnerLayout from "./components/owner/OwnerLayout";
 import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
 import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
 import StaffLoginPage from "./pages/StaffLoginPage";
+import AdminStaffPage from "./pages/admin/AdminStaffPage";
 import CookieConsent from "./components/CookieConsent";
 import { CHECKOUT_ENABLED } from "./constants/features";
 
@@ -180,6 +181,7 @@ export default function App() {
                   path="backend-management"
                   element={EXPRESS_BACKEND_AVAILABLE ? <AdminBackendManagementPage /> : <Navigate to="/admin" replace />}
                 />
+                <Route path="staff" element={<AdminStaffPage />} />
                 <Route path="settings" element={<AdminSettingsPage />} />
               </Route>
             </Route>

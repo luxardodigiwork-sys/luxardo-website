@@ -524,11 +524,11 @@ test('deploy workflow: a push to main never deploys; production needs manual run
   assert.ok(w.indexOf('channelId: live') > w.indexOf('  production:'));
   assert.doesNotMatch(w, /LUXARDO FASHION-/);
 });
-test('firebaserc has no default project (CLI needs an explicit --project) and only placeholders', () => {
+test('firebaserc has no default project (CLI needs an explicit --project); staging stays a placeholder, production is the one known project', () => {
   const rc = JSON.parse(read('.firebaserc'));
   assert.equal(rc.projects.default, undefined);
   assert.match(rc.projects.staging, /^REPLACE_WITH_/);
-  assert.match(rc.projects.production, /^REPLACE_WITH_/);
+  assert.equal(rc.projects.production, 'luxardo-fashion-website');
   assert.doesNotMatch(read('firebase.json'), /"bucket"/);
 });
 
