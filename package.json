@@ -13,7 +13,10 @@
     "test:rules": "firebase emulators:exec --config firebase.rules-test.json --only firestore,storage --project rules-test \"node --test tests/rules.test.mjs\"",
     "test:unit": "node --import tsx --test tests/core.test.ts tests/client.test.ts tests/errorReporter.test.ts tests/optimizedImage.test.ts tests/mailstaff.test.ts tests/analytics.test.ts tests/enquiries.test.ts",
     "test:orders": "firebase emulators:exec --config firebase.rules-test.json --only firestore --project orders-test \"node --import tsx --test tests/orders.test.ts\"",
-    "test": "npm run test:unit && npm run test:rules && npm run test:orders"
+    "test:publish": "firebase emulators:exec --config firebase.rules-test.json --only firestore --project publish-test \"node --import tsx --test tests/contentPublish.test.ts\"",
+    "test:notify": "firebase emulators:exec --config firebase.rules-test.json --only firestore --project notify-test \"node --import tsx --test tests/enquiryNotify.test.ts\"",
+    "test:functions": "npm --prefix functions run build && node tests/functionsEmulatorEnv.mjs && env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy firebase emulators:exec --config firebase.functions-test.json --only functions,firestore --project demo-notify \"node tests/functionsEmulator.mjs\"",
+    "test": "npm run test:unit && npm run test:rules && npm run test:orders && npm run test:notify && npm run test:publish"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

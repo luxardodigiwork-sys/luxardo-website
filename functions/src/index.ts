@@ -16,8 +16,9 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { processWebhook } from "./webhook";
 import { sendViaResend } from "./resend";
 import { StaffRoleError, applyStaffRole } from "./staffRoles";
-import { EnquiryKind, buildEnquiryMailDoc, nextThrottle } from "./enquiries";
-import { MAIL_COLLECTION } from "./emails";
+import { EnquiryKind } from "./enquiries";
+import { queueEnquiryMail, sendEnquiryDigest } from "./enquiryNotify";
+import { processQueuedMail } from "./mailQueue";
 import { defineSecret, defineString } from "firebase-functions/params";
 import Razorpay from "razorpay";
 import {
@@ -187,39 +188,29 @@ export const setStaffRoleFn = onCall({ region: REGION }, async (request) => {
   }
 });
 
-/** Sends each queued `mail/{id}` document through Resend and records the outcome on the document. */
-export const sendQueuedMailFn = onDocumentCreated({ document: "mail/{mailId}", region: REGION, secrets: [RESEND_API_KEY] }, async (event) => {
-  const snap = event.data;
-  if (!snap) return;
-  const data = snap.data() as Record<string, unknown>;
-  if (data.delivery) return; // already handled (e.g. by an extension)
-  const result = await sendViaResend(fetch as never, RESEND_API_KEY.value(), MAIL_FROM.value(), event.params.mailId, data);
-  await snap.ref.update({
-    delivery: result.ok
-      ? { state: "SUCCESS", provider: "resend", id: result.id, at: new Date().toISOString() }
-      : { state: "ERROR", provider: "resend", error: result.error, at: new Date().toISOString() },
-  });
+/** Sends each queued `mail/{id}` document through Resend and records the outcome on the document (retries transient errors). */
+export const sendQueuedMailFn = onDocumentCreated({ document: "mail/{mailId}", region: REGION, secrets: [RESEND_API_KEY], retry: true }, async (event) => {
+  if (!event.data) return;
+  await processQueuedMail(event.data.ref, (mailId, doc) => sendViaResend(fetch as never, RESEND_API_KEY.value(), MAIL_FROM.value(), mailId, doc));
 });
 
-/** Queues one owner e-mail per website enquiry (throttled). Delivered by sendQueuedMailFn through Resend. */
+/** Queues one owner e-mail per enquiry (limited per sender and overall; held-back enquiries are reported by the digest). */
 async function notifyOwnerOfEnquiry(kind: EnquiryKind, id: string, data: Record<string, unknown>): Promise<void> {
-  const mail = buildEnquiryMailDoc(kind, id, data, OWNER_NOTIFY_EMAIL.value());
-  if (!mail) return; // OWNER_NOTIFY_EMAIL not set: the enquiry is still visible in the admin panel
-  const throttleRef = db.collection("meta").doc("enquiryEmailThrottle");
-  const mailRef = db.collection(MAIL_COLLECTION).doc(mail.id);
-  await db.runTransaction(async (tx) => {
-    const [t, m] = await Promise.all([tx.get(throttleRef), tx.get(mailRef)]);
-    if (m.exists) return;
-    const r = nextThrottle(t.data() as Record<string, number> | undefined, Date.now());
-    tx.set(throttleRef, r.state);
-    if (r.allowed) tx.set(mailRef, { ...mail.data, queuedAt: new Date().toISOString() });
-  });
+  const outcome = await queueEnquiryMail(db, kind, id, data, OWNER_NOTIFY_EMAIL.value());
+  if (outcome === "throttled" || outcome === "sender-limited") console.warn("enquiry-mail-held-back", { kind, id, outcome });
+  if (outcome === "no-owner") console.warn("enquiry-mail-skipped: OWNER_NOTIFY_EMAIL is not set or invalid", { kind, id });
 }
 
-export const onContactMessageFn = onDocumentCreated({ document: "contactMessages/{id}", region: REGION }, async (event) => {
+export const onContactMessageFn = onDocumentCreated({ document: "contactMessages/{id}", region: REGION, retry: true }, async (event) => {
   if (event.data) await notifyOwnerOfEnquiry("contact", event.params.id, event.data.data() as Record<string, unknown>);
 });
 
-export const onWholesaleInquiryFn = onDocumentCreated({ document: "wholesaleInquiries/{id}", region: REGION }, async (event) => {
+export const onWholesaleInquiryFn = onDocumentCreated({ document: "wholesaleInquiries/{id}", region: REGION, retry: true }, async (event) => {
   if (event.data) await notifyOwnerOfEnquiry("wholesale", event.params.id, event.data.data() as Record<string, unknown>);
+});
+
+/** Hourly summary of enquiries whose own e-mail was held back or failed. */
+export const enquiryDigestFn = onSchedule({ region: REGION, schedule: "every 60 minutes" }, async () => {
+  const r = await sendEnquiryDigest(db, OWNER_NOTIFY_EMAIL.value());
+  if (r.held || r.failed) console.warn("enquiry-digest", r);
 });

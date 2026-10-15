@@ -50,3 +50,20 @@ export function nextThrottle(prev: Partial<ThrottleState> | undefined, nowMs: nu
 }
 
 export { MAIL_COLLECTION };
+
+export interface DigestItem { kind: EnquiryKind; id: string; name: string; email: string; reason: "throttled" | "sender-limited" }
+export interface DigestFailure { mailId: string; error: string }
+
+/** One summary mail for enquiries whose own owner-mail was held back (limits) or failed. Content is escaped; nothing is dropped. */
+export function buildDigestEmail(items: DigestItem[], failures: DigestFailure[]): { subject: string; html: string; text: string } {
+  const rows = items.map((i) => `<li>${esc(i.kind)} ${esc(i.id)} - ${esc(oneLine(i.name, 100))} &lt;${esc(oneLine(i.email, 254))}&gt; (${esc(i.reason)})</li>`).join("");
+  const bad = failures.map((f) => `<li>${esc(f.mailId)}: ${esc(oneLine(f.error, 160))}</li>`).join("");
+  const subject = `Website enquiries need attention (${items.length} held back, ${failures.length} failed)`;
+  return {
+    subject,
+    html: `<p>These website enquiries were saved but their individual e-mail was not sent. Open Admin -> Contact Messages / Partners to read them.</p>`
+      + (rows ? `<p><strong>Held back by e-mail limits</strong></p><ul>${rows}</ul>` : "")
+      + (bad ? `<p><strong>E-mail delivery failed</strong></p><ul>${bad}</ul>` : ""),
+    text: `Website enquiries need attention.\n${items.map((i) => `- ${i.kind} ${i.id} ${oneLine(i.name, 100)} <${oneLine(i.email, 254)}> (${i.reason})`).join("\n")}\n${failures.map((f) => `- FAILED ${f.mailId}: ${oneLine(f.error, 160)}`).join("\n")}`,
+  };
+}

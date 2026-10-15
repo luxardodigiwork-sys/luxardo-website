@@ -26,6 +26,17 @@ export function toStorefrontCollections(list: AdminCollection[]): StorefrontColl
     }));
 }
 
+/**
+ * The admin's starting list when nothing has been published yet: the collections the storefront is showing today, with their
+ * CURRENT ids and URLs (slug = id), so editing them never changes an existing /collections/<id> link or a product category.
+ */
+export function adminCollectionsFromStorefront(list: StorefrontCollection[]): AdminCollection[] {
+  return (Array.isArray(list) ? list : []).map((c, i) => ({
+    id: c.id, name: c.fullName, slug: c.id, shortDescription: c.descriptor || '', longDescription: c.narrative || '',
+    bannerImageUrl: c.image || '', heroImageUrl: c.image || '', isVisible: true, sortOrder: i + 1,
+  }));
+}
+
 /** Firestore rejects `undefined`; keep only plain, defined fields. */
 export function cleanCollectionForFirestore(c: AdminCollection): AdminCollection {
   return {

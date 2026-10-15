@@ -1,4 +1,5 @@
-import { publishSiteContent } from '../../utils/contentSync';
+import { publishSiteContent, describePublishError, useSyncStatus } from '../../utils/contentSync';
+import { SyncBanner } from '../../components/admin/SyncBanner';
 import React, { useState, useEffect } from 'react';
 import { Save, Image as ImageIcon, Plus, Trash2, Link as LinkIcon, Phone, Mail, MapPin, Layout as LayoutIcon, BookOpen, Scissors, Globe, MessageSquare, Info, RotateCcw, ChevronRight, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -68,6 +69,8 @@ export default function AdminContentPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const { status: syncStatus, retry: retrySync } = useSyncStatus();
+  const canSave = syncStatus === 'ready';
 
   useEffect(() => {
     setContent(storage.getSiteContent());
@@ -82,7 +85,9 @@ export default function AdminContentPage() {
     } catch (error: any) {
       console.error('Error saving content:', error);
       const msg = String(error?.message || '');
-      if (error?.code === 'permission-denied') alert('You do not have permission to publish content. Please sign in as an admin.');
+      const publishMsg = describePublishError(error);
+      if (publishMsg) alert(publishMsg);
+      else if (error?.code === 'permission-denied') alert('You do not have permission to publish content. Please sign in as an admin.');
       else if (error?.name === 'QuotaExceededError' || msg.includes('too large')) alert(msg || 'The content is too large. Please use smaller images or image URLs.');
       else alert('Could not publish the content. Please check your connection and try again.');
     } finally {
@@ -91,6 +96,7 @@ export default function AdminContentPage() {
   };
 
   const handleReset = () => {
+    if (!canSave) return;
     setIsResetModalOpen(true);
   };
 
@@ -104,7 +110,7 @@ export default function AdminContentPage() {
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (error: any) {
-      alert(String(error?.message || 'Reset on this device only; could not publish. Please try again.'));
+      alert(describePublishError(error) || String(error?.message || 'Reset on this device only; could not publish. Please try again.'));
     }
   };
 
@@ -1510,6 +1516,7 @@ export default function AdminContentPage() {
 
   return (
     <div className="max-w-6xl mx-auto pb-20">
+      <SyncBanner status={syncStatus} retry={retrySync} />
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
         <div>
           <h1 className="text-4xl font-display uppercase tracking-tight">Content Management</h1>
@@ -1518,13 +1525,14 @@ export default function AdminContentPage() {
         <div className="flex gap-4 w-full md:w-auto">
           <button 
             onClick={handleReset}
+            disabled={!canSave}
             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-brand-divider hover:border-brand-black transition-colors text-[10px] font-bold uppercase tracking-widest"
           >
             <RotateCcw size={16} /> Reset
           </button>
           <button 
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || !canSave}
             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-brand-black text-brand-white hover:bg-brand-secondary transition-colors text-[10px] font-bold uppercase tracking-widest disabled:opacity-50"
           >
             <Save size={16} /> {isSaving ? 'Saving...' : isSaved ? 'Saved!' : 'Save Changes'}

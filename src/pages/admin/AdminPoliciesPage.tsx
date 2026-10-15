@@ -1,4 +1,5 @@
-import { publishPolicies } from '../../utils/contentSync';
+import { publishPolicies, describePublishError, useSyncStatus } from '../../utils/contentSync';
+import { SyncBanner } from '../../components/admin/SyncBanner';
 import React, { useState, useEffect } from 'react';
 import { storage } from '../../utils/localStorage';
 import { Save, CheckCircle2, RotateCcw, FileText } from 'lucide-react';
@@ -71,6 +72,8 @@ export default function AdminPoliciesPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const { status: syncStatus, retry: retrySync } = useSyncStatus();
+  const canSave = syncStatus === 'ready';
 
   useEffect(() => {
     const fetchPolicies = () => {
@@ -86,6 +89,7 @@ export default function AdminPoliciesPage() {
   }, []);
 
   const handleSave = async () => {
+    if (!canSave) return;
     setIsSaving(true);
     storage.savePolicies(policies);
     try {
@@ -96,13 +100,14 @@ export default function AdminPoliciesPage() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error: any) {
-      alert(error?.code === 'permission-denied' ? 'You do not have permission to publish policies. Please sign in as an admin.' : 'Could not publish the policies. Please try again.');
+      alert(describePublishError(error) || (error?.code === 'permission-denied' ? 'You do not have permission to publish policies. Please sign in as an admin.' : 'Could not publish the policies. Please try again.'));
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleReset = () => {
+    if (!canSave) return;
     setIsResetModalOpen(true);
   };
 
@@ -115,8 +120,8 @@ export default function AdminPoliciesPage() {
       await publishPolicies();
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-    } catch {
-      alert('Reset on this device only; could not publish. Please try again.');
+    } catch (error: any) {
+      alert(describePublishError(error) || 'Reset on this device only; could not publish. Please try again.');
     }
   };
 
@@ -134,6 +139,7 @@ export default function AdminPoliciesPage() {
 
   return (
     <div className="max-w-6xl mx-auto pb-32 px-4 md:px-0">
+      <SyncBanner status={syncStatus} retry={retrySync} />
       {/* Sticky Header */}
       <div className="sticky top-0 z-30 bg-brand-bg/90 backdrop-blur-xl border-b border-brand-divider -mx-4 px-6 py-8 mb-16 transition-all shadow-sm">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
@@ -157,13 +163,14 @@ export default function AdminPoliciesPage() {
           <div className="flex gap-4 w-full md:w-auto">
             <button 
               onClick={handleReset}
+              disabled={!canSave}
               className="btn-outline flex-1 md:flex-none flex items-center justify-center gap-2"
             >
               <RotateCcw size={14} /> Reset
             </button>
             <button 
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || !canSave}
               className="btn-primary flex-1 md:flex-none flex items-center justify-center gap-3 min-w-[200px]"
             >
               {showSuccess ? <CheckCircle2 size={16} /> : <Save size={16} />}
@@ -246,7 +253,7 @@ export default function AdminPoliciesPage() {
         </div>
         <button 
           onClick={handleSave}
-          disabled={isSaving}
+          disabled={isSaving || !canSave}
           className="flex items-center gap-3 px-16 py-5 bg-brand-black text-brand-white hover:bg-brand-secondary transition-all text-[11px] font-bold uppercase tracking-[0.25em] disabled:opacity-50 shadow-2xl shadow-brand-black/20 group"
         >
           <Save size={18} className="group-hover:scale-110 transition-transform" />
