@@ -1,5 +1,6 @@
 import { publishSiteContent, describePublishError, useSyncStatus } from '../../utils/contentSync';
 import { SyncBanner } from '../../components/admin/SyncBanner';
+import { SyncGate } from '../../components/admin/SyncGate';
 import React, { useState, useEffect } from 'react';
 import { Save, Image as ImageIcon, Plus, Trash2, Link as LinkIcon, Phone, Mail, MapPin, Layout as LayoutIcon, BookOpen, Scissors, Globe, MessageSquare, Info, RotateCcw, ChevronRight, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -63,7 +64,7 @@ const ImagePreview = ({ url, label }: { url: string; label: string }) => (
   </div>
 );
 
-export default function AdminContentPage() {
+function AdminContentPageEditor() {
   const [activeTab, setActiveTab] = useState<TabType>('homepage');
   const [content, setContent] = useState(storage.getSiteContent());
   const [isSaving, setIsSaving] = useState(false);
@@ -1583,5 +1584,13 @@ export default function AdminContentPage() {
         onCancel={() => setIsResetModalOpen(false)}
       />
     </div>
+  );
+}
+
+export default function AdminContentPage() {
+  return (
+    <SyncGate>
+      <AdminContentPageEditor />
+    </SyncGate>
   );
 }

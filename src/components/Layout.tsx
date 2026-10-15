@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, X, Search, ShoppingBag, User, Globe, 
   Instagram, Facebook, Twitter, ArrowRight, Plus, Minus
@@ -8,6 +8,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Country, Language } from '../types';
 import { COUNTRIES, LANGUAGES } from '../constants';
 import { getStorefrontCollections, useContentVersion } from '../utils/contentSync';
+import { canApplyContentUpdateNow, isEditableElement } from '../utils/contentRemount';
 import { subscribeNewsletter } from '../utils/enquiries';
 import { ALL_COUNTRIES } from '../countries';
 import { PRIME_AVAILABLE } from '../constants/features';
@@ -36,6 +37,23 @@ function ScrollToTopOnMount() {
 
 export default function Layout() {
   const contentVersion = useContentVersion();
+  const routerLocation = useLocation();
+  // Synced content re-renders the page by remounting it, but never while the visitor is typing or on a checkout/account page
+  // (that would erase input and in-flight state). Such an update is held and applied on the next navigation.
+  const [appliedVersion, setAppliedVersion] = useState(0);
+  const userTyped = useRef(false);
+  useEffect(() => {
+    const mark = (e: Event) => { if (isEditableElement(e.target as Element)) userTyped.current = true; };
+    document.addEventListener('input', mark, true);
+    return () => document.removeEventListener('input', mark, true);
+  }, []);
+  useEffect(() => { userTyped.current = false; setAppliedVersion(contentVersion); }, [routerLocation.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (contentVersion === appliedVersion) return;
+    if (canApplyContentUpdateNow({ pathname: routerLocation.pathname, userTyped: userTyped.current, fieldFocused: isEditableElement(document.activeElement) })) {
+      setAppliedVersion(contentVersion);
+    }
+  }, [contentVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterMsg, setNewsletterMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const onNewsletter = async (e: React.FormEvent) => {
@@ -642,7 +660,7 @@ export default function Layout() {
             className="h-full min-h-screen"
           >
             <ScrollToTopOnMount />
-            <Outlet key={contentVersion} context={{ selectedCountry, selectedLanguage }} />
+            <Outlet key={appliedVersion} context={{ selectedCountry, selectedLanguage }} />
           </motion.div>
         </AnimatePresence>
       </main>

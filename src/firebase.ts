@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { connectAuthEmulator, getAuth, signInWithCustomToken } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
@@ -21,6 +21,9 @@ export const db = getFirestore(app);
 // emulator. A normal `vite build` (mode "production") can never connect to an emulator.
 if (import.meta.env.VITE_FIREBASE_EMULATOR === "true" && import.meta.env.MODE !== "production") {
   connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  // Lets the browser tests sign in as a staff user (custom token from the Auth emulator). Absent from production builds.
+  (window as unknown as Record<string, unknown>).__luxardoE2E = { signInWithCustomToken: (t: string) => signInWithCustomToken(auth, t) };
 }
 export const storage = getStorage(app);
 

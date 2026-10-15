@@ -55,11 +55,24 @@ test('a retried trigger is a duplicate and does not consume the limits twice', a
   assert.equal((await db.collection('mail').get()).size, 1);
 });
 
+// A 26-way burst on one throttle document can exhaust the emulator's own transaction retries ("10 ABORTED: Transaction lock timeout").
+// In production the trigger runs with retry:true, which re-delivers the event; this helper plays that role for the test.
+// Only ABORTED is retried (bounded, short backoff); every other error and every assertion still fails the test.
+// Retrying is safe: an aborted transaction committed nothing, and a committed one would report 'duplicate'.
+const retryOnAbort = async <T,>(fn: () => Promise<T>, attempts = 8): Promise<T> => {
+  for (let i = 1; ; i++) {
+    try { return await fn(); } catch (e) {
+      if ((e as { code?: number }).code !== 10 || i >= attempts) throw e;
+      await new Promise((r) => setTimeout(r, 25 * i + Math.floor(Math.random() * 25)));
+    }
+  }
+};
+
 test('concurrent triggers for different enquiries never exceed the global limit and never lose an enquiry', async () => {
   const n = GLOBAL_MAX_PER_HOUR + 6;
   const ids = Array.from({ length: n }, (_, i) => `g${i}`);
   const datas = await Promise.all(ids.map((id) => enquiry(id)));
-  const out = await Promise.all(ids.map((id, i) => queueEnquiryMail(db, 'contact', id, datas[i], OWNER, T0)));
+  const out = await Promise.all(ids.map((id, i) => retryOnAbort(() => queueEnquiryMail(db, 'contact', id, datas[i], OWNER, T0))));
   assert.equal(out.filter((o: string) => o === 'queued').length, GLOBAL_MAX_PER_HOUR);
   assert.equal(out.filter((o: string) => o === 'throttled').length, 6);
   assert.equal((await db.collection('mail').get()).size, GLOBAL_MAX_PER_HOUR);

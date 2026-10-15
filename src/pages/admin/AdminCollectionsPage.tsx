@@ -1,5 +1,6 @@
 import { publishCollections, describePublishError, getAdminCollections, useSyncStatus } from '../../utils/contentSync';
 import { SyncBanner } from '../../components/admin/SyncBanner';
+import { SyncGate } from '../../components/admin/SyncGate';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Save, Plus, Edit2, Trash2, Image as ImageIcon, Check, X } from 'lucide-react';
@@ -18,7 +19,7 @@ interface Collection {
   sortOrder: number;
 }
 
-export default function AdminCollectionsPage() {
+function AdminCollectionsPageEditor() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [isDefaultList, setIsDefaultList] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -525,5 +526,13 @@ export default function AdminCollectionsPage() {
         onCancel={() => setItemToDelete(null)}
       />
     </div>
+  );
+}
+
+export default function AdminCollectionsPage() {
+  return (
+    <SyncGate>
+      <AdminCollectionsPageEditor />
+    </SyncGate>
   );
 }

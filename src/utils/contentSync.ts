@@ -48,6 +48,10 @@ export function getAdminCollections(): { list: AdminCollection[]; isDefault: boo
 }
 
 let syncing: Promise<void> | null = null;
+let runSeq = 0;
+let retryCount = 0;
+const SYNC_TIMEOUT_MS = 15000;
+const MAX_BACKGROUND_RETRIES = 3;
 
 /** Revisions seen by the last fully successful sync. Admin saves are only allowed on top of these (see contentPublish.ts). */
 const remote = newRemoteState();
@@ -57,22 +61,32 @@ export const SYNC_STATUS_EVENT = 'luxardo:content-sync-status';
 export const getSyncStatus = (): SyncStatus => syncStatus;
 const setStatus = (s: SyncStatus) => { syncStatus = s; remote.ready = s === 'ready'; window.dispatchEvent(new Event(SYNC_STATUS_EVENT)); };
 
+const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('Content sync timed out')), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+
 /**
  * Pulls published content from Firestore into the local copy. Never throws; the storefront falls back to what it has.
- * A failed sync is not remembered, so the next call (or the admin Retry button) tries again; `force` re-reads after a success.
+ * A hung or failed sync never sticks: it times out, is forgotten so the next call (or the admin Retry button) starts a fresh
+ * one, and public pages retry quietly a few times. `force` re-reads after a success. Only the newest run may change state.
  */
 export function syncPublicContent(opts: { force?: boolean } = {}): Promise<void> {
   if (syncing && !opts.force) return syncing;
+  const id = ++runSeq;
   setStatus('loading');
   const run = (async () => {
+    await Promise.resolve(); // `syncing` must be assigned before any failure path can clear it
     let changed = false;
     try {
-      const [site, pol, cols, meta] = await Promise.all([
+      const [site, pol, cols, meta] = await withTimeout(Promise.all([
         getDoc(doc(db, 'siteContent', 'main')),
         getDoc(doc(db, 'policies', 'main')),
         getDocs(collection(db, 'collections')),
         getDoc(doc(db, 'siteContent', 'collectionsMeta')),
-      ]);
+      ]), SYNC_TIMEOUT_MS);
+      if (id !== runSeq) return; // a newer sync superseded this one
       const nextRev = { site: revOf(site.data()), policies: revOf(pol.data()), collections: revOf(meta.data()) };
       if (site.exists()) {
         const content = parsePublished<Record<string, unknown>>(site.data().json);
@@ -98,11 +112,17 @@ export function syncPublicContent(opts: { force?: boolean } = {}): Promise<void>
         if (read(COLLECTIONS_KEY) + read(COLLECTIONS_FLAG) !== before) changed = true;
       }
       Object.assign(remote, nextRev, { collectionIds: cols.docs.map((d) => d.id) });
+      retryCount = 0;
       setStatus('ready');
     } catch (e) {
       console.warn('Content sync failed (using the local copy):', e);
+      if (id !== runSeq) return;
       setStatus('failed');
-      if (syncing === run) syncing = null; // allow a retry
+      syncing = null; // allow a retry
+      if (retryCount < MAX_BACKGROUND_RETRIES) {
+        const delay = 5000 * 3 ** retryCount++;
+        setTimeout(() => { if (!syncing) void syncPublicContent(); }, delay);
+      }
     }
     if (changed) window.dispatchEvent(new Event(CONTENT_EVENT));
   })();
@@ -120,7 +140,7 @@ export function useSyncStatus(): { status: SyncStatus; retry: () => void } {
     on();
     return () => window.removeEventListener(SYNC_STATUS_EVENT, on);
   }, []);
-  return { status, retry: () => { void syncPublicContent(); } };
+  return { status, retry: () => { retryCount = 0; void syncPublicContent(); } };
 }
 
 /** Re-renders the caller when synced content changed (used by the layouts to refresh the page once). */

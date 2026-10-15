@@ -1,5 +1,6 @@
 import { publishPolicies, describePublishError, useSyncStatus } from '../../utils/contentSync';
 import { SyncBanner } from '../../components/admin/SyncBanner';
+import { SyncGate } from '../../components/admin/SyncGate';
 import React, { useState, useEffect } from 'react';
 import { storage } from '../../utils/localStorage';
 import { Save, CheckCircle2, RotateCcw, FileText } from 'lucide-react';
@@ -65,7 +66,7 @@ const TextArea = ({ className, ...props }: React.TextareaHTMLAttributes<HTMLText
   />
 );
 
-export default function AdminPoliciesPage() {
+function AdminPoliciesPageEditor() {
   const [policies, setPolicies] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -270,5 +271,13 @@ export default function AdminPoliciesPage() {
         onCancel={() => setIsResetModalOpen(false)}
       />
     </div>
+  );
+}
+
+export default function AdminPoliciesPage() {
+  return (
+    <SyncGate>
+      <AdminPoliciesPageEditor />
+    </SyncGate>
   );
 }

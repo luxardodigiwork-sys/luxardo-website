@@ -11,7 +11,7 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
-  const contentVersion = useContentVersion();
+  useContentVersion(); // starts the content sync; editing pages wait for it themselves (SyncGate) instead of being remounted
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -194,7 +194,7 @@ export default function AdminLayout() {
         </header>
 
         <div className="flex-1 overflow-auto p-4 md:p-10">
-          <Outlet key={contentVersion} />
+          <Outlet />
         </div>
       </main>
     </div>
