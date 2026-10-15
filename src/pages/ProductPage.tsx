@@ -21,6 +21,7 @@ import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currency';
+import { track } from '../utils/analytics';
 import { db, auth } from '../firebase';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
@@ -145,6 +146,10 @@ function ProductDetail({ product, products }: { product: Product; products: Prod
 
   const [isNotifying, setIsNotifying] = useState(false);
   const [hasSubscribed, setHasSubscribed] = useState(false);
+
+  React.useEffect(() => {
+    track('view_item', { value: product.price, items: [{ id: product.id, name: product.name, price: product.price }] });
+  }, [product.id]);
 
   React.useEffect(() => {
     const checkSubscription = async () => {

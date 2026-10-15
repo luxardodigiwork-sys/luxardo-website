@@ -12,7 +12,10 @@
 import * as admin from "firebase-admin";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { processWebhook } from "./webhook";
+import { sendViaResend } from "./resend";
+import { StaffRoleError, applyStaffRole } from "./staffRoles";
 import { defineSecret, defineString } from "firebase-functions/params";
 import Razorpay from "razorpay";
 import {
@@ -33,6 +36,9 @@ const RAZORPAY_KEY_ID = defineString("RAZORPAY_KEY_ID");
 const RAZORPAY_KEY_SECRET = defineSecret("RAZORPAY_KEY_SECRET");
 const RAZORPAY_WEBHOOK_SECRET = defineSecret("RAZORPAY_WEBHOOK_SECRET");
 const ADMIN_UIDS = defineString("ADMIN_UIDS", { default: "" });
+// Resend: secret API key + the verified sender. onboarding@resend.dev only works for the account owner until a domain is verified.
+const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
+const MAIL_FROM = defineString("MAIL_FROM", { default: "Luxardo Fashion <onboarding@resend.dev>" });
 // Optional: shop-owner address for new-paid-order notifications (queued in the `mail` collection).
 const OWNER_NOTIFY_EMAIL = defineString("OWNER_NOTIFY_EMAIL", { default: "" });
 
@@ -160,4 +166,35 @@ export const cancelOrderFn = onCall({ region: REGION }, async (request) => {
   } catch (err) {
     throw toHttpsError(err);
   }
+});
+
+/** Admin: give or remove a staff role (admin | owner | dispatch | none). Roles are custom claims; super_admin/analysis do not exist. */
+export const setStaffRoleFn = onCall({ region: REGION }, async (request) => {
+  try {
+    const caller = {
+      uid: request.auth?.uid,
+      token: request.auth?.token as unknown as Record<string, unknown> | undefined,
+      allowedUids: ADMIN_UIDS.value().split(",").map((x) => x.trim()).filter(Boolean),
+    };
+    const result = await applyStaffRole(admin.auth(), caller, request.data);
+    await db.collection("auditLogs").add({ action: "setStaffRole", by: caller.uid, target: result.uid, role: result.role, at: new Date().toISOString() });
+    return result;
+  } catch (err) {
+    if (err instanceof StaffRoleError) throw new HttpsError(err.code, err.message);
+    throw toHttpsError(err);
+  }
+});
+
+/** Sends each queued `mail/{id}` document through Resend and records the outcome on the document. */
+export const sendQueuedMailFn = onDocumentCreated({ document: "mail/{mailId}", region: REGION, secrets: [RESEND_API_KEY] }, async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  const data = snap.data() as Record<string, unknown>;
+  if (data.delivery) return; // already handled (e.g. by an extension)
+  const result = await sendViaResend(fetch as never, RESEND_API_KEY.value(), MAIL_FROM.value(), event.params.mailId, data);
+  await snap.ref.update({
+    delivery: result.ok
+      ? { state: "SUCCESS", provider: "resend", id: result.id, at: new Date().toISOString() }
+      : { state: "ERROR", provider: "resend", error: result.error, at: new Date().toISOString() },
+  });
 });

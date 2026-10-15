@@ -6,6 +6,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { formatINR } from '../utils/currency';
+import { track } from '../utils/analytics';
 
 /**
  * Shows the order from Firestore (the single source of truth). "Placed" is only displayed once the
@@ -29,6 +30,13 @@ export default function OrderConfirmationPage() {
       () => setState('missing'),
     );
   }, [orderId, isAuthReady, user, navigate]);
+
+  useEffect(() => {
+    if (!order || order.paymentStatus !== 'paid') return;
+    const key = `LUXARDO_purchase_${order.id}`;
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch {}
+    track('purchase', { transactionId: order.id, value: Number(order.totalAmount) || 0, items: (order.items || []).map((i: any) => ({ id: String(i.productId), name: i.name || i.title, price: i.price, quantity: i.quantity })) });
+  }, [order?.id, order?.paymentStatus]);
 
   if (state === 'loading') {
     return <div className="section-padding min-h-[70vh] flex items-center justify-center"><p className="text-brand-secondary">Loading your order...</p></div>;

@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { resolveStaffRole } from '../utils/staffAuth';
+import type { StaffRole } from '../utils/staffRole';
 
 interface User {
   id: string;
@@ -32,6 +34,8 @@ interface AuthContextType {
   isLoggedIn: boolean;
   /** True only when Firestore rules confirm the signed-in account is an admin (server-trusted). */
   isAdmin: boolean;
+  /** Server-trusted staff role (admin | owner | dispatch) or null for customers/guests. */
+  staffRole: StaffRole | null;
   isAuthReady: boolean;
   logout: () => Promise<void>;
   login: (userData: User) => void;
@@ -41,24 +45,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/**
- * Asks Firestore whether the current account is an admin. The `adminCheck`
- * collection is readable only when firestore.rules `isAdmin()` is true, so a
- * successful read (even of a missing doc) is a server-enforced answer.
- * Any error, including permission-denied, means "not admin".
- */
-async function probeIsAdmin(): Promise<boolean> {
-  try {
-    await getDoc(doc(db, 'adminCheck', 'probe'));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [staffRole, setStaffRole] = useState<StaffRole | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
@@ -73,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!firebaseUser) {
           setUser(null);
           setIsAdmin(false);
+          setStaffRole(null);
           return;
         }
 
@@ -80,10 +71,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (firebaseUser.isAnonymous) {
           setUser(null);
           setIsAdmin(false);
+          setStaffRole(null);
           return;
         }
 
-        const admin = await probeIsAdmin();
+        const role = await resolveStaffRole(firebaseUser);
+        const admin = role === 'admin';
+        setStaffRole(role);
         setIsAdmin(admin);
 
         let data: Record<string, any> = {};
@@ -96,8 +90,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // A brand-new account without a profile stays "not logged in" until it
-        // completes the signup profile step (admins don't need a customer profile).
-        if (!hasProfile && !admin) {
+        // completes the signup profile step (staff accounts don't need a customer profile).
+        if (!hasProfile && !role) {
           setUser(null);
           return;
         }
@@ -109,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             : data.name || 'User',
           email: data.email || firebaseUser.email || '',
           // Role is derived from the server-enforced probe, never from the editable profile doc.
-          role: admin ? 'admin' : 'customer',
+          role: role ?? 'customer',
           isPrimeMember: data.isPrimeMember === true,
           phone: data.phone || firebaseUser.phoneNumber || '',
           country: data.country,
@@ -124,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Auth state change error:', err);
         setUser(null);
         setIsAdmin(false);
+        setStaffRole(null);
       } finally {
         setIsAuthReady(true);
       }
@@ -145,6 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setUser(null);
       setIsAdmin(false);
+      setStaffRole(null);
       try {
         sessionStorage.removeItem('LUXARDO FASHION_cart');
         localStorage.removeItem('LUXARDO FASHION_temp_preferences');
@@ -183,6 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isLoggedIn: !!user,
         isAdmin,
+        staffRole,
         isAuthReady,
         logout,
         login,

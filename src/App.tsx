@@ -79,6 +79,9 @@ import AdminLayout from "./components/admin/AdminLayout";
 import OwnerLayout from "./components/owner/OwnerLayout";
 import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
 import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
+import StaffLoginPage from "./pages/StaffLoginPage";
+import CookieConsent from "./components/CookieConsent";
+import { CHECKOUT_ENABLED } from "./constants/features";
 
 export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -133,8 +136,10 @@ export default function App() {
       <ProductsProvider>
       <CartProvider>
         <WishlistProvider>
+          <CookieConsent />
           <Routes>
-            <Route path="/admin/login" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="/backend/login" element={<StaffLoginPage />} />
+            <Route path="/admin/login" element={<Navigate to="/backend/login" replace />} />
 
             <Route path="/admin">
               <Route element={<ProtectedAdminRoute><AdminLayout /></ProtectedAdminRoute>}>
@@ -181,12 +186,12 @@ export default function App() {
 
             <Route
               path="/dispatch/login"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/dispatch"
               element={
-                <ProtectedAdminRoute>
+                <ProtectedAdminRoute area="dispatch">
                   <DispatchLayout />
                 </ProtectedAdminRoute>
               }
@@ -198,28 +203,28 @@ export default function App() {
               <Route path="dashboard" element={<DispatchDashboardPage />} />
             </Route>
 
-            <Route path="/backend" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="/backend" element={<Navigate to="/backend/login" replace />} />
             <Route
               path="/admin-access"
               caseSensitive={false}
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/ADMIN-ACCESS"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/analysis/login"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/owner/login"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/owner"
               element={
-                <ProtectedAdminRoute>
+                <ProtectedAdminRoute area="owner">
                   <OwnerLayout />
                 </ProtectedAdminRoute>
               }
@@ -232,7 +237,7 @@ export default function App() {
               <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
             </Route>
             {/* Analysis area is disabled for now (only admin, owner and dispatch are active). */}
-            <Route path="/analysis/*" element={<Navigate to="/backend" replace />} />
+            <Route path="/analysis/*" element={<Navigate to="/backend/login" replace />} />
 
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />
@@ -327,9 +332,13 @@ export default function App() {
               <Route
                 path="checkout"
                 element={
-                  <ProtectedRoute>
-                    <CheckoutPage />
-                  </ProtectedRoute>
+                  CHECKOUT_ENABLED ? (
+                    <ProtectedRoute>
+                      <CheckoutPage />
+                    </ProtectedRoute>
+                  ) : (
+                    <Navigate to="/cart" replace />
+                  )
                 }
               />
               <Route

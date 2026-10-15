@@ -249,3 +249,37 @@ test('forms: anyone may submit, only admins read', async () => {
   await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'contactMessages/m1')));
   await assertSucceeds(getDoc(doc(admin().firestore(), 'contactMessages/m1')));
 });
+
+const withRole = (uid, role) => env.authenticatedContext(uid, { role, firebase: { sign_in_provider: 'password' } });
+test('staff roles: owner reads orders (read-only), dispatch updates fulfilment fields only, admin claim role works; unknown roles grant nothing', async () => {
+  await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'orders/s1'), { ...baseOrder('cust1'), status: 'processing', paymentStatus: 'paid', items: [{ productId: 'a' }], stockReserved: true }));
+  const owner = withRole('own1', 'owner').firestore();
+  const dispatch = withRole('dis1', 'dispatch').firestore();
+  const roleAdmin = withRole('adm1', 'admin').firestore();
+  // owner: read-only
+  await assertSucceeds(getDoc(doc(owner, 'orders/s1')));
+  await assertFails(updateDoc(doc(owner, 'orders/s1'), { internalRemarks: 'x' }));
+  await assertFails(setDoc(doc(owner, 'products/p9'), { name: 'x', price: 1, stock: 1 }));
+  // dispatch: reads orders, may ship, may NOT touch money/items/payment, may not read customers or edit products
+  await assertSucceeds(getDoc(doc(dispatch, 'orders/s1')));
+  await assertSucceeds(updateDoc(doc(dispatch, 'orders/s1'), { status: 'shipped', trackingId: 'T1', courierName: 'DTDC' }));
+  for (const bad of [{ paymentStatus: 'refunded' }, { totalAmount: 1 }, { items: [] }, { userId: 'x' }]) await assertFails(updateDoc(doc(dispatch, 'orders/s1'), bad));
+  await assertFails(getDoc(doc(dispatch, 'customers/cust1')));
+  await assertFails(setDoc(doc(dispatch, 'products/p9'), { name: 'x', price: 1, stock: 1 }));
+  // role claim "admin" works like the admin claim; owner role can read customers
+  await assertSucceeds(setDoc(doc(roleAdmin, 'products/p9'), { name: 'x', price: 1, stock: 1 }));
+  await assertSucceeds(getDoc(doc(owner, 'customers/cust1')));
+  // super_admin / analysis / customer are NOT staff roles
+  for (const r of ['super_admin', 'analysis', 'customer', 'Admin']) {
+    const db = withRole('x_' + r, r).firestore();
+    await assertFails(getDoc(doc(db, 'orders/s1')));
+    await assertFails(setDoc(doc(db, 'products/p10'), { name: 'x', price: 1, stock: 1 }));
+  }
+  // a customer cannot become staff by editing their own profile
+  await assertFails(setDoc(doc(customer().firestore(), 'customers/cust1'), { role: 'owner' }));
+});
+test('storage: role claim admin may upload, owner/dispatch may not', async () => {
+  await assertSucceeds(uploadBytes(ref(withRole('adm1', 'admin').storage(), 'products/r1.png'), png(), meta('image/png')));
+  await assertFails(uploadBytes(ref(withRole('own1', 'owner').storage(), 'products/r2.png'), png(), meta('image/png')));
+  await assertFails(uploadBytes(ref(withRole('dis1', 'dispatch').storage(), 'products/r3.png'), png(), meta('image/png')));
+});

@@ -5,7 +5,7 @@ import { firebaseConfigProblems } from './firebase.ts';
 import { installErrorReporter } from './utils/errorReporter.ts';
 import './index.css';
 
-installErrorReporter(import.meta.env.VITE_ERROR_REPORT_URL as string | undefined);
+installErrorReporter(import.meta.env.VITE_ERROR_REPORT_URL as string | undefined, import.meta.env.VITE_SENTRY_DSN as string | undefined);
 
 const root = createRoot(document.getElementById('root')!);
 

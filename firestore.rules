@@ -5,11 +5,27 @@ service cloud.firestore {
     // ---- Helpers -------------------------------------------------------
     // Admin = hardcoded owner UIDs (legacy) OR Firebase custom claim admin=true.
     // The claim must be set server-side (Admin SDK); clients cannot forge it.
+    // Staff roles live ONLY in Firebase custom claims (set server-side by the Admin SDK), never in a document
+    // the user can edit. Recognised roles: admin, owner, dispatch. Anything else (super_admin, analysis, ...) grants nothing.
+    function claimRole() {
+      return request.auth != null ? request.auth.token.get('role', '') : '';
+    }
+
+    // Admin = `admin` claim, role claim `admin`, or the owner UID (bootstrap).
     function isAdmin() {
       return request.auth != null && (
         request.auth.token.get('admin', false) == true ||
+        claimRole() == 'admin' ||
         request.auth.uid == '0Frc6Dy2MqN0zc0UFkmqvpELFnr1'
       );
+    }
+
+    function isOwnerRole() {
+      return claimRole() == 'owner';
+    }
+
+    function isDispatchRole() {
+      return claimRole() == 'dispatch';
     }
 
     function isSignedIn() {
@@ -74,7 +90,7 @@ service cloud.firestore {
 
     // ---- Customer profiles ---------------------------------------------
     match /customers/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin() || isOwnerRole();
       allow create: if isOwner(userId) && safeProfileCreate();
       allow update: if isOwner(userId) && safeProfileUpdate();
       allow create, update, delete: if isAdmin();
@@ -105,11 +121,12 @@ service cloud.firestore {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if false;
       allow delete: if false;
-      allow read: if isAdmin();
+      // Staff: admin, owner (read-only) and dispatch (read + fulfilment updates).
+      allow read: if isAdmin() || isOwnerRole() || isDispatchRole();
       // A status change is allowed only for a PAID order that is ALREADY in the fulfilment flow with its stock still
       // reserved. A cancelled / on-hold / unpaid order can never be revived by staff: its stock was released (or never
       // reserved), so reviving it would sell the same piece twice. Those cases go through the server functions.
-      allow update: if isAdmin() && adminOrderFieldsOnly()
+      allow update: if (isAdmin() || isDispatchRole()) && adminOrderFieldsOnly()
         && (request.resource.data.status == resource.data.status
             || (resource.data.paymentStatus == 'paid'
                 && resource.data.get('stockReleased', false) == false

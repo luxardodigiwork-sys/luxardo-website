@@ -2,6 +2,7 @@
 // FIX: Now saves cart data to Firebase instead of localStorage
 // Uses Firestore for persistent cart storage across devices
 
+import { track } from '../utils/analytics';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product } from '../types';
 import { storage } from '../utils/localStorage';
@@ -175,6 +176,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [cartItems, isLoading]);
 
   const addToCart = (product: Product, quantity: number = 1, size?: string) => {
+    track('add_to_cart', { value: product.price * quantity, items: [{ id: product.id, name: product.name, price: product.price, quantity }] });
     setCartItems(prev => {
       const existing = prev.find(
         item => item.product.id === product.id && item.size === size

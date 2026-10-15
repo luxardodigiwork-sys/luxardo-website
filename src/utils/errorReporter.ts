@@ -70,17 +70,49 @@ export function createReporter(opts: {
   };
 }
 
-/** Wire global handlers. Safe no-op when no endpoint is configured. */
-export function installErrorReporter(endpoint: string | undefined): void {
-  if (!endpoint || typeof window === 'undefined') return;
-  if (!/^https:\/\//.test(endpoint)) return;
+/** Parses a Sentry DSN (https://<publicKey>@<host>/<projectId>) into the envelope URL. Returns null if invalid. */
+export function parseSentryDsn(dsn: string | undefined | null): { url: string; dsn: string } | null {
+  if (!dsn) return null;
+  const m = /^https:\/\/([A-Za-z0-9]+)@([A-Za-z0-9.-]+)\/(\d+)$/.exec(dsn.trim());
+  if (!m) return null;
+  return { url: `https://${m[2]}/api/${m[3]}/envelope/?sentry_key=${m[1]}&sentry_version=7`, dsn: dsn.trim() };
+}
+
+/** Builds a minimal Sentry envelope for one scrubbed error report (no user, cookies, headers or query strings). */
+export function buildSentryEnvelope(r: ErrorReport, dsn: string, eventId: string, origin = ''): string {
+  const event = {
+    event_id: eventId,
+    timestamp: Math.floor(new Date(r.time).getTime() / 1000),
+    platform: 'javascript',
+    level: 'error',
+    message: r.message,
+    exception: { values: [{ type: 'Error', value: r.message }] },
+    request: { url: `${origin}${r.path}` },
+    extra: { stack: r.stack, userAgent: r.userAgent },
+    tags: { site: 'luxardo-fashion' },
+  };
+  return [JSON.stringify({ event_id: eventId, sent_at: r.time, dsn }), JSON.stringify({ type: 'event' }), JSON.stringify(event)].join('\n');
+}
+
+/** Wire global handlers. Safe no-op when neither a generic endpoint nor a Sentry DSN is configured. */
+export function installErrorReporter(endpoint: string | undefined, sentryDsn?: string): void {
+  if (typeof window === 'undefined') return;
+  const sentry = parseSentryDsn(sentryDsn);
+  const generic = endpoint && /^https:\/\//.test(endpoint) ? endpoint : '';
+  if (!generic && !sentry) return;
+  const post = (url: string, body: string) => {
+    if (navigator.sendBeacon) navigator.sendBeacon(url, new Blob([body], { type: 'text/plain' }));
+    else void fetch(url, { method: 'POST', body, keepalive: true, mode: 'no-cors' }).catch(() => {});
+  };
   const report = createReporter({
     path: () => window.location.pathname,
     userAgent: navigator.userAgent,
     send: (r) => {
-      const body = JSON.stringify(r);
-      if (navigator.sendBeacon) navigator.sendBeacon(endpoint, new Blob([body], { type: 'text/plain' }));
-      else void fetch(endpoint, { method: 'POST', body, keepalive: true, mode: 'no-cors' }).catch(() => {});
+      if (generic) post(generic, JSON.stringify(r));
+      if (sentry) {
+        const id = (crypto.randomUUID?.() ?? `${Date.now()}${Math.random()}`).replace(/[^a-f0-9]/gi, '').padEnd(32, '0').slice(0, 32);
+        post(sentry.url, buildSentryEnvelope(r, sentry.dsn, id, window.location.origin));
+      }
     },
   });
   window.addEventListener('error', (ev) => report(ev.error ?? ev.message));

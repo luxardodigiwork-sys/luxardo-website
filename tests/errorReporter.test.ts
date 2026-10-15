@@ -40,3 +40,19 @@ test('installErrorReporter is a no-op without an https endpoint', () => {
   assert.doesNotThrow(() => m.installErrorReporter(undefined));
   assert.doesNotThrow(() => m.installErrorReporter('http://insecure.example'));
 });
+
+test('Sentry DSN parsing and envelope: valid DSN -> envelope URL; invalid/non-https rejected; envelope carries only scrubbed fields', () => {
+  const p = m.parseSentryDsn('https://abc123@o1234.ingest.sentry.io/456789');
+  assert.equal(p.url, 'https://o1234.ingest.sentry.io/api/456789/envelope/?sentry_key=abc123&sentry_version=7');
+  for (const bad of ['http://abc@o1.ingest.sentry.io/1', 'https://o1.ingest.sentry.io/1', 'garbage', '', undefined, null]) assert.equal(m.parseSentryDsn(bad as any), null);
+  const sent: any[] = [];
+  const rep = m.createReporter({ send: (r: any) => sent.push(r), path: () => '/p/1?token=SECRET', userAgent: 'UA', now: () => new Date('2026-01-01T00:00:00Z') });
+  rep(new Error('fail for a@b.com 9876543210'));
+  const env = m.buildSentryEnvelope(sent[0], p.dsn, 'e'.repeat(32), 'https://shop.example').split('\n');
+  assert.equal(env.length, 3);
+  assert.equal(JSON.parse(env[1]).type, 'event');
+  const ev = JSON.parse(env[2]);
+  assert.equal(ev.request.url, 'https://shop.example/p/1');
+  assert.ok(!env[2].includes('SECRET') && !env[2].includes('a@b.com') && !env[2].includes('9876543210'));
+  assert.equal(ev.level, 'error');
+});

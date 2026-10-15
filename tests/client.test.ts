@@ -101,7 +101,7 @@ test('Functions region is identical in the backend and the client', () => {
   assert.equal(fe, be);
   const idx = readFileSync(new URL('../functions/src/index.ts', import.meta.url), 'utf8');
   // every deployed function must use the shared constant, never a hardcoded region
-  assert.equal((idx.match(/region: REGION/g) || []).length, (idx.match(/\b(onCall|onRequest|onSchedule)\(/g) || []).length);
+  assert.equal((idx.match(/region: REGION/g) || []).length, (idx.match(/\b(onCall|onRequest|onSchedule|onDocumentCreated)\(/g) || []).length);
   assert.doesNotMatch(idx, /region:\s*["']/);
 });
 
@@ -569,4 +569,9 @@ test('checkout sends the total the customer saw; the server callable forwards it
   assert.match(read('src/utils/payments.ts'), /expectedTotalPaise/);
   assert.match(read('functions/src/index.ts'), /expectedTotalPaise:/);
   assert.match(read('functions/src/orders.ts'), /PRICE_CHANGED_MESSAGE/);
+});
+
+test('online ordering is OFF by default (flag reads VITE_CHECKOUT_ENABLED, never defaults to on)', async () => {
+  const f: any = await import('../src/constants/features');
+  assert.equal((f.default ?? f).CHECKOUT_ENABLED, false);
 });

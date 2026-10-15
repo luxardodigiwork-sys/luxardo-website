@@ -1,3 +1,4 @@
+import { track } from "../utils/analytics";
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { auth } from "../firebase";
@@ -50,6 +51,12 @@ export default function CheckoutPage() {
 
   // Phone-OTP login is required: no guest or anonymous checkout. Re-evaluated whenever auth changes,
   // so an expired session sends the customer back to login instead of failing at payment time.
+  const beginTracked = React.useRef(false);
+  useEffect(() => {
+    if (beginTracked.current || cartItems.length === 0) return;
+    beginTracked.current = true;
+    track('begin_checkout', { value: cartSubtotal, items: cartItems.map((i) => ({ id: i.product.id, name: i.product.name, price: i.product.price, quantity: i.quantity })) });
+  }, [cartItems.length]);
   const quote = getShippingQuote(cartSubtotal);
   const gate = getCheckoutGate({ isAuthReady, firebaseUser: auth.currentUser });
   const redirectToLogin = () => navigate("/login", { replace: true, state: { from: location } });

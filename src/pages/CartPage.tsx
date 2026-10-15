@@ -6,6 +6,7 @@ import { X, Minus, Plus, Package, Scissors, Info, Check } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currency';
+import { CHECKOUT_ENABLED } from '../constants/features';
 
 export default function CartPage() {
   const { selectedCountry } = useOutletContext<{ selectedCountry: Country | null }>();
@@ -130,7 +131,16 @@ export default function CartPage() {
               </div>
               
               <div className="space-y-6 pt-4">
-                {user && !quote.canCheckout ? (
+                {!CHECKOUT_ENABLED ? (
+                  <div className="text-center space-y-3">
+                    <button type="button" disabled className="btn-primary w-full block text-center py-5 opacity-50 cursor-not-allowed">
+                      ORDERING OPENS SOON
+                    </button>
+                    <p className="text-xs text-brand-secondary">
+                      Online ordering is opening shortly. To order now, please <Link to="/contact" className="underline">contact us</Link>.
+                    </p>
+                  </div>
+                ) : user && !quote.canCheckout ? (
                   <button type="button" disabled className="btn-primary w-full block text-center py-5 opacity-50 cursor-not-allowed">
                     CHECKOUT UNAVAILABLE
                   </button>
