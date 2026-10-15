@@ -50,6 +50,15 @@ export interface CreatedOrder {
 
 const productRef = (db: Firestore, id: string) => db.collection("products").doc(id);
 
+/**
+ * Customers can read their own `orders/{id}` document, and Firestore cannot hide single fields. Staff-only data therefore lives in
+ * `orderInternal/{id}` (readable by admin/owner/dispatch only, see firestore.rules): refund flags, payment errors and duplicate-payment
+ * metadata written here, plus the staff-written remarks, assignment and verification fields. NEVER write these onto the order itself.
+ */
+export const INTERNAL_ORDER_COLLECTION = "orderInternal";
+export const SERVER_INTERNAL_FIELDS = ["needsRefund", "lastPaymentError", "lastFailedPaymentId", "duplicatePaymentIds"] as const;
+const internalRef = (db: Firestore, orderId: string) => db.collection(INTERNAL_ORDER_COLLECTION).doc(orderId);
+
 function toProduct(id: string, data: FirebaseFirestore.DocumentData | undefined): ProductRecord | undefined {
   if (!data) return undefined;
   return { id, name: data.name, price: data.price, stock: data.stock, visibility: data.visibility, image: data.image };
@@ -184,10 +193,9 @@ export async function releaseOrderStock(db: Firestore, orderId: string, reason: 
       tx.update(productRef(db, pid), { stock: FieldValue.increment(q) });
     }
     const paid = o.paymentStatus === "paid" || o.paymentStatus === "confirmed";
-    tx.update(ref, {
-      stockReleased: true, status: "cancelled", statusReason: reason, cancelledAt: new Date().toISOString(),
-      ...(paid ? { needsRefund: true } : {}), // a paid order that is cancelled must be refunded by staff (not automatic)
-    });
+    tx.update(ref, { stockReleased: true, status: "cancelled", statusReason: reason, cancelledAt: new Date().toISOString() });
+    // a paid order that is cancelled must be refunded by staff (not automatic); the flag is staff-only, so it lives in orderInternal
+    if (paid) tx.set(internalRef(db, orderId), { needsRefund: true, updatedAt: new Date().toISOString() }, { merge: true });
     return true;
   });
 }
@@ -238,7 +246,7 @@ export async function applyCapturedPayment(db: Firestore, input: ApplyPaymentInp
       markEvent();
       if (o.razorpayPaymentId && o.razorpayPaymentId !== input.payment.id) {
         // A second, different payment captured for an already-paid order: flag for manual refund.
-        tx.update(orderRef, { duplicatePaymentIds: FieldValue.arrayUnion(input.payment.id), needsRefund: true });
+        tx.set(internalRef(db, orderRef.id), { duplicatePaymentIds: FieldValue.arrayUnion(input.payment.id), needsRefund: true, updatedAt: new Date().toISOString() }, { merge: true });
       }
       return { result: "already_paid" };
     }
@@ -248,8 +256,9 @@ export async function applyCapturedPayment(db: Firestore, input: ApplyPaymentInp
       const at = new Date().toISOString();
       tx.update(orderRef, {
         paymentStatus: "paid", razorpayPaymentId: input.payment.id, paidAt: at, paymentVerifiedAt: at,
-        needsRefund: true, statusReason: "paid_after_cancellation",
+        statusReason: "paid_after_cancellation",
       });
+      tx.set(internalRef(db, orderRef.id), { needsRefund: true, updatedAt: at }, { merge: true });
       markEvent();
       return { result: "paid_order_cancelled" };
     }
@@ -273,8 +282,9 @@ export async function applyCapturedPayment(db: Firestore, input: ApplyPaymentInp
       status: stockOk ? "processing" : "on_hold",
       stockReserved: stockOk ? true : o.stockReserved,
       stockReleased: stockOk ? false : o.stockReleased,
-      ...(stockOk ? {} : { needsRefund: true, statusReason: "paid_after_expiry_stock_unavailable" }),
+      ...(stockOk ? {} : { statusReason: "paid_after_expiry_stock_unavailable" }),
     });
+    if (!stockOk) tx.set(internalRef(db, orderRef.id), { needsRefund: true, updatedAt: paidAt }, { merge: true });
     markEvent();
     if (stockOk) {
       // Queue confirmation mail(s) in the same transaction as the paid transition (deterministic ids => once per order).
@@ -298,7 +308,7 @@ export async function recordPaymentFailure(db: Firestore, input: { razorpayOrder
     tx.set(eventRef, { type: "payment.failed", paymentId: input.paymentId, at: new Date().toISOString() });
     if (!orderRef || !orderSnap || !orderSnap.exists) return "ignored" as const;
     if (orderSnap.data()!.paymentStatus !== "paid") {
-      tx.update(orderRef, { lastPaymentError: input.reason ?? "payment_failed", lastFailedPaymentId: input.paymentId });
+      tx.set(internalRef(db, orderRef.id), { lastPaymentError: input.reason ?? "payment_failed", lastFailedPaymentId: input.paymentId, updatedAt: new Date().toISOString() }, { merge: true });
     }
     return "recorded" as const;
   });

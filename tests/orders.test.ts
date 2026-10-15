@@ -36,11 +36,21 @@ function fakeRazorpay(opts: { failCreate?: boolean; payments?: Record<string, an
 }
 
 const stockOf = async (id: string) => (await db.collection('products').doc(id).get()).data()!.stock as number;
-const orderOf = async (id: string) => (await db.collection('orders').doc(id).get()).data()!;
+// Customers can read the whole `orders/{id}` document, so staff-only data must NEVER be written onto it (it belongs in orderInternal).
+// Every test reads orders through this helper, so any server transition that leaks a private field onto the order fails here.
+const PRIVATE_ORDER_FIELDS = ['internalRemarks', 'internalLog', 'assignedStaffId', 'assignedStaffName', 'verificationStatus', 'needsRefund', 'lastPaymentError', 'lastFailedPaymentId', 'duplicatePaymentIds'];
+const internalOf = async (id: string) => (await db.collection('orderInternal').doc(id).get()).data() ?? {};
+const rawOrderOf = async (id: string) => (await db.collection('orders').doc(id).get()).data()!;
+/** The staff view: the customer-readable order with its staff-only document laid over it (after asserting nothing private is on the order). */
+const orderOf = async (id: string) => {
+  const raw = await rawOrderOf(id);
+  assert.deepEqual(PRIVATE_ORDER_FIELDS.filter((k) => k in raw), [], 'private staff-only fields leaked onto the customer-readable order');
+  return { ...raw, ...(await internalOf(id)) };
+};
 const captured = (o: { razorpayOrderId: string; amountPaise: number }, id = 'pay_1') => ({ id, order_id: o.razorpayOrderId, status: 'captured', amount: o.amountPaise, currency: 'INR' });
 
 async function wipe() {
-  for (const col of ['products', 'orders', 'webhookEvents', 'mail']) {
+  for (const col of ['products', 'orders', 'orderInternal', 'webhookEvents', 'mail']) {
     const snap = await db.collection(col).get();
     await Promise.all(snap.docs.map((d: any) => d.ref.delete()));
   }
@@ -571,4 +581,42 @@ test('webhook: a signed captured event WITHOUT an order id is acknowledged (not 
   assert.equal(r.status, 200);
   assert.equal((r.body as any).ok, false); assert.equal((r.body as any).error, 'invalid-argument');
   assert.equal((await orderOf(id) as any).paymentStatus, 'pending');
+});
+
+
+// ---------- staff-only data separation ----------
+test('refund flags, payment errors and duplicate-payment ids are written to orderInternal, never onto the customer-readable order', async () => {
+  // failed payment -> lastPaymentError
+  const a = await mkOrder();
+  await hook('payment.failed', { id: 'pay_x', order_id: a.o.razorpayOrderId, error_code: 'BAD' });
+  assert.equal((await internalOf(a.res.orderId)).lastPaymentError, 'BAD');
+  assert.equal((await internalOf(a.res.orderId)).lastFailedPaymentId, 'pay_x');
+  // a second, different payment for an already-paid order -> duplicatePaymentIds + needsRefund
+  await applyCapturedPayment(db, { orderId: a.res.orderId, payment: captured(a.o, 'pay_1') });
+  await applyCapturedPayment(db, { orderId: a.res.orderId, payment: captured(a.o, 'pay_2') });
+  const dup = await internalOf(a.res.orderId) as any;
+  assert.deepEqual(dup.duplicatePaymentIds, ['pay_2']); assert.equal(dup.needsRefund, true);
+  // paid order cancelled by an admin -> needsRefund
+  const b = await mkOrder();
+  await applyCapturedPayment(db, { orderId: b.res.orderId, payment: captured(b.o) });
+  await releaseOrderStock(db, b.res.orderId, 'cancelled_by_admin');
+  assert.equal((await internalOf(b.res.orderId)).needsRefund, true);
+  // payment after the customer cancelled -> needsRefund, order keeps the customer-facing reason only
+  const c = await buy(fakeRazorpay(), [{ productId: 'a', quantity: 1, size: '40' }], 'u3');
+  await requestCancellation(db, { uid: 'u3', orderId: c.orderId });
+  await applyCapturedPayment(db, { orderId: c.orderId, payment: captured(await rawOrderOf(c.orderId) as any, 'pay_late') });
+  assert.equal((await internalOf(c.orderId)).needsRefund, true);
+  assert.equal((await rawOrderOf(c.orderId)).statusReason, 'paid_after_cancellation');
+  // every order document above is free of private fields (orderOf asserts it), and the customer-visible payment state is intact
+  for (const id of [a.res.orderId, b.res.orderId, c.orderId]) await orderOf(id);
+  assert.equal((await rawOrderOf(a.res.orderId)).paymentStatus, 'paid');
+  assert.equal((await rawOrderOf(c.orderId)).paymentStatus, 'paid');
+});
+test('an unpaid cancellation or a normal paid order creates no refund flag and no internal document', async () => {
+  const a = await mkOrder();
+  await applyCapturedPayment(db, { orderId: a.res.orderId, payment: captured(a.o) });
+  assert.equal((await db.collection('orderInternal').doc(a.res.orderId).get()).exists, false);
+  const b = await buy(fakeRazorpay(), [{ productId: 'a', quantity: 1, size: '40' }], 'u4');
+  await releaseOrderStock(db, b.orderId, 'cancelled_by_admin');
+  assert.notEqual((await internalOf(b.orderId)).needsRefund, true);
 });

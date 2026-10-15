@@ -98,7 +98,8 @@ test('orders: client cannot update/delete own order (e.g. mark paid or change to
   await assertSucceeds(getDoc(doc(db, 'orders/o1')));
   await assertFails(getDoc(doc(customer('cust2').firestore(), 'orders/o1')));
   await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'orders/o1')));
-  await assertSucceeds(updateDoc(doc(admin().firestore(), 'orders/o1'), { internalRemarks: 'note' })); // fulfilment field, status unchanged
+  await assertSucceeds(updateDoc(doc(admin().firestore(), 'orders/o1'), { dispatchNote: 'note' })); // customer-visible fulfilment field, status unchanged
+  await assertFails(updateDoc(doc(admin().firestore(), 'orders/o1'), { internalRemarks: 'note' })); // staff-only data may not go onto the customer-readable order
 });
 test('orders: admin may update fulfilment fields of PAID orders but never money/payment/stock fields', async () => {
   await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'orders/paid1'), { ...baseOrder('cust1'), status: 'processing', paymentStatus: 'paid', items: [{ productId: 'a' }], stockReserved: true }));
@@ -159,7 +160,7 @@ test('orders: admin cannot mark an UNPAID order paid or push it forward', async 
   await assertFails(updateDoc(doc(db, 'orders/unpaid1'), { paymentStatus: 'paid' }));
   await assertFails(updateDoc(doc(db, 'orders/unpaid1'), { status: 'processing' }));
   await assertFails(updateDoc(doc(db, 'orders/unpaid1'), { status: 'shipped' }));
-  await assertSucceeds(updateDoc(doc(db, 'orders/unpaid1'), { internalRemarks: 'called customer' }));
+  await assertSucceeds(updateDoc(doc(db, 'orders/unpaid1'), { dispatchNote: 'called customer' }));
 });
 test('orders: customer can list only their own orders; admin can list all', async () => {
   await env.withSecurityRulesDisabled(async c => {
@@ -328,4 +329,66 @@ test('site content: published siteContent/policies/collections are public to rea
     await assertFails(setDoc(doc(withRole('own1', 'owner').firestore(), path), { x: 1 }));
     await assertFails(deleteDoc(doc(pub, path)));
   }
+});
+
+
+// ---------- staff-only order data (orderInternal) ----------
+const SERVER_ONLY = { needsRefund: true, lastPaymentError: 'BAD', lastFailedPaymentId: 'pay_x', duplicatePaymentIds: ['pay_2'] };
+async function seedInternal() {
+  await env.withSecurityRulesDisabled(async c => {
+    await setDoc(doc(c.firestore(), 'orders/oi1'), { ...baseOrder('cust1'), status: 'processing', paymentStatus: 'paid', items: [{ productId: 'a' }], stockReserved: true });
+    await setDoc(doc(c.firestore(), 'orderInternal/oi1'), { internalRemarks: 'STAFF ONLY', assignedStaffName: 'Asha', ...SERVER_ONLY });
+  });
+}
+test('orderInternal: customers (the order owner, other customers, guests) can neither read nor write staff-only data', async () => {
+  await seedInternal();
+  const contexts = [customer('cust1'), customer('cust2'), anon('anon9'), env.unauthenticatedContext()];
+  for (const ctx of contexts) {
+    const db = ctx.firestore();
+    await assertFails(getDoc(doc(db, 'orderInternal/oi1')));
+    await assertFails(getDocs(collection(db, 'orderInternal')));
+    await assertFails(setDoc(doc(db, 'orderInternal/oi1'), { internalRemarks: 'x' }, { merge: true }));
+    await assertFails(setDoc(doc(db, 'orderInternal/newone'), { internalRemarks: 'x' }));
+    await assertFails(deleteDoc(doc(db, 'orderInternal/oi1')));
+  }
+  // the owner still reads their own order, and it carries none of the private data
+  const own = await assertSucceeds(getDoc(doc(customer('cust1').firestore(), 'orders/oi1')));
+  for (const k of ['internalRemarks', 'assignedStaffName', 'needsRefund', 'lastPaymentError', 'duplicatePaymentIds', 'internalLog', 'verificationStatus']) assert.ok(!(k in own.data()), `${k} leaked onto the order`);
+});
+test('orderInternal: admin and dispatch read and edit the staff fields; owner reads only; nobody can touch server-only fields or delete', async () => {
+  await seedInternal();
+  const adminDb = admin().firestore(), dispatch = withRole('dis1', 'dispatch').firestore(), owner = withRole('own1', 'owner').firestore(), roleAdmin = withRole('adm1', 'admin').firestore();
+  for (const db of [adminDb, dispatch, owner, roleAdmin]) {
+    const snap = await assertSucceeds(getDoc(doc(db, 'orderInternal/oi1')));
+    assert.equal(snap.data().needsRefund, true); // staff can see the refund flag
+    await assertSucceeds(getDocs(collection(db, 'orderInternal')));
+  }
+  for (const db of [adminDb, dispatch, roleAdmin]) {
+    await assertSucceeds(updateDoc(doc(db, 'orderInternal/oi1'), { internalRemarks: 'called courier', verificationStatus: 'packing_ready', assignedStaffId: 'u7', assignedStaffName: 'Ravi', updatedAt: 't' }));
+    for (const bad of [{ needsRefund: false }, { lastPaymentError: 'forged' }, { lastFailedPaymentId: 'pay_forged' }, { duplicatePaymentIds: [] }, { needsRefund: null }, { unknownField: 1 }]) { // each CHANGES a server-only/unknown field
+      await assertFails(updateDoc(doc(db, 'orderInternal/oi1'), bad));
+    }
+    await assertFails(updateDoc(doc(db, 'orderInternal/oi1'), { verificationStatus: 'shipped' })); // not a verification state
+    await assertFails(updateDoc(doc(db, 'orderInternal/oi1'), { internalRemarks: 'x'.repeat(2001) }));
+    await assertFails(deleteDoc(doc(db, 'orderInternal/oi1')));
+  }
+  await assertFails(updateDoc(doc(owner, 'orderInternal/oi1'), { internalRemarks: 'owner is read-only' }));
+  await assertFails(setDoc(doc(owner, 'orderInternal/oi1'), { internalRemarks: 'x' }, { merge: true }));
+});
+test('orderInternal: create needs an existing order and only staff fields; server-only fields cannot be created by clients', async () => {
+  await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'orders/oi2'), baseOrder('cust1')));
+  const dispatch = withRole('dis1', 'dispatch').firestore();
+  await assertSucceeds(setDoc(doc(dispatch, 'orderInternal/oi2'), { internalRemarks: 'first note', updatedAt: 't' }));
+  await assertFails(setDoc(doc(dispatch, 'orderInternal/ghost'), { internalRemarks: 'no such order' }));
+  await assertFails(setDoc(doc(admin().firestore(), 'orderInternal/oi2b'), { internalRemarks: 'x' })); // order oi2b does not exist
+  await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'orders/oi3'), baseOrder('cust1')));
+  await assertFails(setDoc(doc(dispatch, 'orderInternal/oi3'), { needsRefund: true }));
+  await assertFails(setDoc(doc(dispatch, 'orderInternal/oi3'), { internalRemarks: 'x', lastPaymentError: 'forged' }));
+});
+test('orders: old clients can no longer write staff-only fields onto the customer-readable order (admin, dispatch, owner)', async () => {
+  await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'orders/oi4'), { ...baseOrder('cust1'), status: 'processing', paymentStatus: 'paid', items: [{ productId: 'a' }], stockReserved: true }));
+  const adminDb = admin().firestore(), dispatch = withRole('dis1', 'dispatch').firestore(), owner = withRole('own1', 'owner').firestore();
+  const privateWrites = [{ internalRemarks: 'x' }, { assignedStaffId: 'u' }, { assignedStaffName: 'n' }, { verificationStatus: 'verified' }, { internalLog: [] }, ...Object.entries(SERVER_ONLY).map(([k, v]) => ({ [k]: v }))];
+  for (const db of [adminDb, dispatch, owner]) for (const bad of privateWrites) await assertFails(updateDoc(doc(db, 'orders/oi4'), bad));
+  await assertSucceeds(updateDoc(doc(dispatch, 'orders/oi4'), { status: 'shipped', trackingId: 'T9', dispatchNote: 'Shipped with DTDC' })); // legitimate tracking still works
 });

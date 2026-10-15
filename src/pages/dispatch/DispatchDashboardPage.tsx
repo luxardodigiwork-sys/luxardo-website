@@ -81,6 +81,13 @@ export default function DispatchDashboardPage() {
   }, [liveOrders, ordersLoaded]);
 
   // Stabilize selectedOrderDetails for useEffect
+  // Staff timeline = customer-facing history plus the staff-only internal log (tagged), oldest first.
+  const staffTimeline = useMemo(() => {
+    const o = selectedOrderDetails;
+    if (!o) return [] as Array<{ status: string; timestamp: string; note?: string; internal: boolean }>;
+    return [...(o.statusHistory || []).map((h) => ({ ...h, internal: false })), ...(o.internalLog || []).map((h) => ({ ...h, internal: true }))]
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  }, [selectedOrderDetails]);
   const selectedOrderDetailsId = selectedOrderDetails?.id;
   const selectedOrderDetailsData = useMemo(() => {
     if (!selectedOrderDetails) return null;
@@ -129,16 +136,17 @@ export default function DispatchDashboardPage() {
             }
           }
           
-          // If verificationStatus is changing, add to history
+          // Verification is an internal workflow: it goes to the staff-only log, never into the customer timeline
+          const newLog = [...(order.internalLog || [])];
           if (updates.verificationStatus && updates.verificationStatus !== order.verificationStatus) {
-            newHistory.push({
+            newLog.push({
               status: updates.verificationStatus,
               timestamp: new Date().toISOString(),
               note: `Verification status updated to ${updates.verificationStatus.replace('_', ' ')}`
             });
           }
 
-          const updatedOrder = { ...order, ...updates, statusHistory: newHistory };
+          const updatedOrder = { ...order, ...updates, statusHistory: newHistory, internalLog: newLog };
           return updatedOrder;
         }
         return order;
@@ -170,22 +178,23 @@ export default function DispatchDashboardPage() {
             newHistory.push({
               status: updates.status,
               timestamp: new Date().toISOString(),
-              note: `Bulk status update to ${updates.status.replace('_', ' ')}`
+              note: `Status updated to ${updates.status.replace('_', ' ')}`
             });
             if (updates.status === 'shipped' && !order.dispatchDate) {
               updates.dispatchDate = new Date().toISOString().split('T')[0];
             }
           }
           
+          const newLog = [...(order.internalLog || [])];
           if (updates.verificationStatus && updates.verificationStatus !== order.verificationStatus) {
-            newHistory.push({
+            newLog.push({
               status: updates.verificationStatus,
               timestamp: new Date().toISOString(),
               note: `Bulk verification status update to ${updates.verificationStatus.replace('_', ' ')}`
             });
           }
 
-          return { ...order, ...updates, statusHistory: newHistory };
+          return { ...order, ...updates, statusHistory: newHistory, internalLog: newLog };
         }
         return order;
       });
@@ -1059,13 +1068,13 @@ export default function DispatchDashboardPage() {
                       <Clock size={14} /> Status Timeline
                     </h4>
                     <div className="space-y-4 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-px before:bg-gray-200">
-                      {selectedOrderDetails.statusHistory && selectedOrderDetails.statusHistory.length > 0 ? (
-                        selectedOrderDetails.statusHistory.map((history, idx) => (
+                      {staffTimeline.length > 0 ? (
+                        staffTimeline.map((history, idx) => (
                           <div key={idx} className="relative pl-8">
                             <div className="absolute left-0 top-1.5 w-[23px] h-[23px] bg-white border-2 border-black rounded-full flex items-center justify-center z-10">
                               <div className="w-1.5 h-1.5 bg-black rounded-full" />
                             </div>
-                            <p className="text-[10px] font-bold text-gray-900 uppercase tracking-widest">{history.status.replace('_', ' ')}</p>
+                            <p className="text-[10px] font-bold text-gray-900 uppercase tracking-widest">{history.status.replace('_', ' ')}{history.internal ? ' · internal' : ''}</p>
                             <p className="text-[9px] text-gray-400 mt-0.5">
                               {new Date(history.timestamp).toLocaleString('en-GB', { 
                                 day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 

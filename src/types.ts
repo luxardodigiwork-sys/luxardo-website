@@ -140,7 +140,9 @@ export interface Order {
   dispatchNote?: string;
   assignedStaffId?: string;
   assignedStaffName?: string;
+  /** Staff-only (stored in orderInternal, never on the customer-readable order). */
   internalRemarks?: string;
+  internalLog?: { status: string; timestamp: string; note?: string }[];
   statusHistory?: {
     status: string;
     timestamp: string;

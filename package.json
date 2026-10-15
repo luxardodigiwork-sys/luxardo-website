@@ -11,7 +11,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test:rules": "firebase emulators:exec --config firebase.rules-test.json --only firestore,storage --project rules-test \"node --test tests/rules.test.mjs\"",
-    "test:unit": "node --import tsx --test tests/core.test.ts tests/client.test.ts tests/errorReporter.test.ts tests/optimizedImage.test.ts tests/mailstaff.test.ts tests/analytics.test.ts tests/enquiries.test.ts tests/contentRemount.test.ts tests/legacyPayments.test.ts",
+    "test:unit": "node --import tsx --test tests/core.test.ts tests/client.test.ts tests/errorReporter.test.ts tests/optimizedImage.test.ts tests/mailstaff.test.ts tests/analytics.test.ts tests/enquiries.test.ts tests/contentRemount.test.ts tests/legacyPayments.test.ts tests/orderInternal.test.ts",
     "test:orders": "firebase emulators:exec --config firebase.rules-test.json --only firestore --project orders-test \"node --import tsx --test tests/orders.test.ts\"",
     "test:publish": "firebase emulators:exec --config firebase.rules-test.json --only firestore --project publish-test \"node --import tsx --test tests/contentPublish.test.ts\"",
     "test:notify": "firebase emulators:exec --config firebase.rules-test.json --only firestore --project notify-test \"node --import tsx --test tests/enquiryNotify.test.ts\"",

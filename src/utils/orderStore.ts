@@ -1,8 +1,9 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, setDoc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 import { Order } from '../types';
+import { mergeInternal, splitOrderPatch } from './orderInternal';
 
 /**
  * Firestore `orders` is the ONLY order database. This store is the admin-side live view
@@ -12,11 +13,15 @@ import { Order } from '../types';
  */
 
 let cache: Order[] = [];
+let rawOrders: Order[] = [];
+let internalById = new Map<string, Record<string, any>>();
 let loaded = false;
 let error: Error | null = null;
 let started = false;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
+/** Staff view = customer-readable order + its staff-only `orderInternal` document (remarks, assignment, refund flags, ...). */
+const rebuild = () => { cache = rawOrders.map((o) => mergeInternal(o, internalById.get(o.id))); };
 
 const normalise = (id: string, d: Record<string, any>): Order =>
   ({
@@ -32,16 +37,25 @@ export function startAdminOrders() {
   started = true;
   onSnapshot(
     query(collection(db, 'orders'), orderBy('createdAt', 'desc')),
-    (snap) => { cache = snap.docs.map((d) => normalise(d.id, d.data())); loaded = true; error = null; notify(); },
+    (snap) => { rawOrders = snap.docs.map((d) => normalise(d.id, d.data())); rebuild(); loaded = true; error = null; notify(); },
     (err) => { console.error('Orders listener error:', err); error = err; loaded = true; notify(); },
+  );
+  // Staff-only data; if this listener fails the order list still works, just without remarks/refund flags.
+  onSnapshot(
+    collection(db, 'orderInternal'),
+    (snap) => { internalById = new Map(snap.docs.map((d) => [d.id, d.data()])); rebuild(); notify(); },
+    (err) => { console.error('Internal order data listener error:', err); },
   );
 }
 
-/** Only these fields may be changed from the admin UI. Everything else (money, payment, stock) is server-owned. */
+/**
+ * Only these fields may be changed from the admin UI. Everything else (money, payment, stock) is server-owned.
+ * The first group goes onto the customer-readable order; the second into the staff-only `orderInternal` document.
+ */
 export const ADMIN_EDITABLE_ORDER_FIELDS = [
-  'status', 'verificationStatus', 'trackingId', 'trackingUrl', 'courierName', 'courierService',
-  'courierStatus', 'dispatchDate', 'dispatchNote', 'assignedStaffId', 'assignedStaffName',
-  'internalRemarks', 'statusHistory',
+  'status', 'trackingId', 'trackingUrl', 'courierName', 'courierService',
+  'courierStatus', 'dispatchDate', 'dispatchNote', 'statusHistory',
+  'verificationStatus', 'assignedStaffId', 'assignedStaffName', 'internalRemarks', 'internalLog',
 ] as const;
 
 const clean = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
@@ -68,8 +82,13 @@ export const orderStore = {
         delete patch.status;
         await httpsCallable(functions, 'cancelOrderFn')({ orderId: order.id }); // restores stock exactly once
       }
-      if (Object.keys(patch).length) {
-        await updateDoc(doc(db, 'orders', order.id), clean({ ...patch, updatedAt: new Date().toISOString() }));
+      const { publicPatch, internalPatch } = splitOrderPatch(patch);
+      const now = new Date().toISOString();
+      if (Object.keys(internalPatch).length) {
+        await setDoc(doc(db, 'orderInternal', order.id), clean({ ...internalPatch, updatedAt: now }), { merge: true });
+      }
+      if (Object.keys(publicPatch).length) {
+        await updateDoc(doc(db, 'orders', order.id), clean({ ...publicPatch, updatedAt: now }));
       }
     }
   },

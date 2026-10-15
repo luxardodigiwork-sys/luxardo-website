@@ -1,4 +1,5 @@
 import type { Order } from '../types';
+import { isCustomerSafeHistoryEntry } from './orderInternal';
 
 export interface TrackingEvent {
   date: string;
@@ -21,7 +22,8 @@ export function buildTrackingEvents(order: Partial<Order> & Record<string, any>)
   if (order.createdAt) events.push({ at: order.createdAt, status: 'Order received' });
   if (order.paymentStatus === 'paid' && order.paidAt) events.push({ at: order.paidAt, status: 'Payment received' });
   for (const h of order.statusHistory || []) {
-    if (h?.timestamp) events.push({ at: h.timestamp, status: label(h.status), description: h.note });
+    // Only customer-safe order statuses; internal workflow entries (verification, packing readiness) are never shown.
+    if (isCustomerSafeHistoryEntry(h)) events.push({ at: h.timestamp, status: label(h.status), description: h.note });
   }
   if (order.status === 'cancelled' && order.cancelledAt) events.push({ at: order.cancelledAt, status: 'Order cancelled' });
   return events

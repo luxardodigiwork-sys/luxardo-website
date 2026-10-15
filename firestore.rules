@@ -112,9 +112,8 @@ service cloud.firestore {
     // forward, and cancellation must go through the cancelOrderFn callable (it restores stock once).
     function adminOrderFieldsOnly() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        'status', 'verificationStatus', 'trackingId', 'trackingUrl', 'courierName', 'courierService',
-        'courierStatus', 'dispatchDate', 'dispatchNote', 'assignedStaffId', 'assignedStaffName',
-        'internalRemarks', 'statusHistory', 'updatedAt']);
+        'status', 'trackingId', 'trackingUrl', 'courierName', 'courierService',
+        'courierStatus', 'dispatchDate', 'dispatchNote', 'statusHistory', 'updatedAt']);
     }
 
     match /orders/{orderId} {
@@ -132,6 +131,31 @@ service cloud.firestore {
                 && resource.data.get('stockReleased', false) == false
                 && resource.data.status in ['processing', 'packed', 'shipped', 'delivered', 'returned', 'failed_delivery']
                 && request.resource.data.status in ['processing', 'packed', 'shipped', 'delivered', 'returned', 'failed_delivery']));
+    }
+
+    // Staff-only order data. A customer can read their whole `orders/{id}` document (Firestore cannot hide single fields), so
+    // anything private lives here instead: staff remarks, assignment, verification workflow and internal log (written by admin /
+    // dispatch), and refund flags, payment errors and duplicate-payment metadata (written ONLY by the server, never by a client).
+    // The order's customer-facing timeline stays in orders.statusHistory.
+    function internalOrderFieldsOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'verificationStatus', 'internalRemarks', 'assignedStaffId', 'assignedStaffName', 'internalLog', 'updatedAt']);
+    }
+    function internalOrderValuesValid() {
+      return request.resource.data.get('verificationStatus', 'verified') in ['verified', 'packing_ready', 'dispatch_ready']
+        && request.resource.data.get('internalRemarks', '') is string && request.resource.data.get('internalRemarks', '').size() <= 2000
+        && request.resource.data.get('assignedStaffId', '') is string && request.resource.data.get('assignedStaffId', '').size() <= 200
+        && request.resource.data.get('assignedStaffName', '') is string && request.resource.data.get('assignedStaffName', '').size() <= 200
+        && request.resource.data.get('internalLog', []) is list && request.resource.data.get('internalLog', []).size() <= 300;
+    }
+    match /orderInternal/{orderId} {
+      allow read: if isAdmin() || isOwnerRole() || isDispatchRole();
+      allow create: if (isAdmin() || isDispatchRole())
+        && exists(/databases/$(database)/documents/orders/$(orderId))
+        && request.resource.data.keys().hasOnly(['verificationStatus', 'internalRemarks', 'assignedStaffId', 'assignedStaffName', 'internalLog', 'updatedAt'])
+        && internalOrderValuesValid();
+      allow update: if (isAdmin() || isDispatchRole()) && internalOrderFieldsOnly() && internalOrderValuesValid();
+      allow delete: if false;
     }
 
     // ---- Per-user data -----------------------------------------------------
