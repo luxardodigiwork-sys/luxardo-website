@@ -336,6 +336,27 @@ test('webhook: bad signature or missing event id is rejected and changes nothing
   assert.equal((await hook('payment.captured', captured(o), { eventId: undefined })).status, 400);
   assert.equal((await orderOf(res.orderId)).paymentStatus, 'pending');
 });
+test('webhook: events forged with the EMPTY key are rejected (unset or set server secret); order stays unpaid and no event is recorded', async () => {
+  const { res, o } = await mkOrder();
+  for (const event of ['payment.captured', 'order.paid', 'payment.failed']) {
+    const body = { event, payload: { payment: { entity: event === 'payment.failed' ? { id: 'pay_forged', order_id: o.razorpayOrderId, error_code: 'X' } : captured(o, 'pay_forged') } } };
+    const raw = Buffer.from(JSON.stringify(body));
+    const forged = createHmac('sha256', '').update(raw).digest('hex'); // valid HMAC under the empty key: what the legacy webhook accepted
+    for (const secret of ['', WH_SECRET]) { // server secret unset/misconfigured, and properly configured
+      const out = await processWebhook(db, { rawBody: raw, signature: forged, eventId: `evt_forged_${event}`, body, secret });
+      assert.deepEqual(out, { status: 400, body: 'Invalid signature' }, `${event} with server secret "${secret}"`);
+    }
+  }
+  const after = await orderOf(res.orderId) as any;
+  assert.equal(after.paymentStatus, 'pending'); assert.equal(after.status, 'pending');
+  assert.equal(after.razorpayPaymentId, null); assert.equal(after.lastPaymentError, undefined);
+  assert.equal(await stockOf('a'), 4); // reservation untouched
+  assert.equal((await db.collection('webhookEvents').get()).size, 0);
+  assert.equal((await db.collection('mail').get()).size, 0);
+  // control: a correctly signed event for the same order still works afterwards
+  assert.deepEqual((await hook('payment.captured', captured(o), { eventId: 'e_real' })).body, { ok: true, result: 'paid' });
+  assert.equal((await db.collection('webhookEvents').get()).size, 1);
+});
 test('webhook: captured => paid once; duplicate event id is a no-op', async () => {
   const { res, o } = await mkOrder();
   assert.deepEqual((await hook('payment.captured', captured(o), { eventId: 'e1' })).body, { ok: true, result: 'paid' });
