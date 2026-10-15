@@ -187,14 +187,56 @@ service cloud.firestore {
     match /media/{id}          { allow read: if true; allow write: if isAdmin(); }
     match /partners/{id}       { allow read: if true; allow write: if isAdmin(); }
 
-    // ---- Inbound forms: anyone may submit a small document, only admins read/manage ----
+    // ---- Inbound forms: anyone may submit ONE small, well-formed document; only staff read, only admins manage ----
+    // Shape and size limits mirror src/utils/enquiryDocs.ts. No client can edit or delete what was submitted.
+    function shortStr(v, max) { return v is string && v.size() <= max; }
+    function validEmailStr(v) { return v is string && v.size() <= 254 && v.matches('[^ @]+@[^ @]+[.][^ @]+'); }
+
     match /contactMessages/{id} {
-      allow create: if request.resource.data.keys().size() <= 15;
-      allow read, update, delete: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['firstName', 'lastName', 'email', 'phone', 'subject', 'message', 'status', 'createdAt', 'source'])
+        && request.resource.data.keys().hasAll(['email', 'message', 'status', 'createdAt'])
+        && request.resource.data.status == 'pending'
+        && shortStr(request.resource.data.get('firstName', ''), 100)
+        && shortStr(request.resource.data.get('lastName', ''), 100)
+        && validEmailStr(request.resource.data.email)
+        && shortStr(request.resource.data.get('phone', ''), 30)
+        && shortStr(request.resource.data.get('subject', ''), 200)
+        && request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 3000
+        && shortStr(request.resource.data.createdAt, 40)
+        && shortStr(request.resource.data.get('source', ''), 20);
+      allow read: if isAdmin() || isOwnerRole();
+      allow update, delete: if isAdmin();
     }
+
+    match /wholesaleInquiries/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['full_name', 'company_name', 'email', 'phone', 'country', 'city', 'retail_type', 'monthly_volume', 'message', 'image', 'imageOmitted', 'status', 'created_at', 'createdAt', 'source'])
+        && request.resource.data.keys().hasAll(['full_name', 'email', 'status', 'createdAt'])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.full_name is string && request.resource.data.full_name.size() > 0 && request.resource.data.full_name.size() <= 150
+        && shortStr(request.resource.data.get('company_name', ''), 200)
+        && validEmailStr(request.resource.data.email)
+        && shortStr(request.resource.data.get('phone', ''), 30)
+        && shortStr(request.resource.data.get('country', ''), 100)
+        && shortStr(request.resource.data.get('city', ''), 100)
+        && shortStr(request.resource.data.get('retail_type', ''), 100)
+        && shortStr(request.resource.data.get('monthly_volume', ''), 100)
+        && shortStr(request.resource.data.get('message', ''), 3000)
+        && shortStr(request.resource.data.get('image', ''), 260000)
+        && shortStr(request.resource.data.createdAt, 40);
+      allow read: if isAdmin() || isOwnerRole();
+      allow update, delete: if isAdmin();
+    }
+
+    // Document id = lower-case email, create-only: a repeat subscription is simply refused.
     match /newsletterSubscribers/{id} {
-      allow create: if request.resource.data.keys().size() <= 10;
-      allow read, update, delete: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['email', 'createdAt', 'status', 'source'])
+        && validEmailStr(request.resource.data.email)
+        && request.resource.data.email.lower() == id
+        && request.resource.data.status == 'subscribed'
+        && shortStr(request.resource.data.createdAt, 40)
+        && shortStr(request.resource.data.get('source', ''), 20);
+      allow read: if isAdmin() || isOwnerRole();
+      allow update, delete: if isAdmin();
     }
     match /bespokeRequests/{id} {
       allow create: if isRegisteredUser() && request.resource.data.userId == request.auth.uid

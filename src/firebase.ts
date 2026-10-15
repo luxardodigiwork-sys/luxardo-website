@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 import { buildFirebaseConfig } from "./utils/firebaseConfig";
@@ -16,6 +16,12 @@ const app = initializeApp(problems.length ? { apiKey: "unset", projectId: "unset
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Local end-to-end tests only: a build made with `--mode e2e` and VITE_FIREBASE_EMULATOR=true talks to the local Firestore
+// emulator. A normal `vite build` (mode "production") can never connect to an emulator.
+if (import.meta.env.VITE_FIREBASE_EMULATOR === "true" && import.meta.env.MODE !== "production") {
+  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+}
 export const storage = getStorage(app);
 
 // Must match `REGION` in functions/src/index.ts.

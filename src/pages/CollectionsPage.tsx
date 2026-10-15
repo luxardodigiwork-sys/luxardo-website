@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { COLLECTIONS } from '../constants';
+import { getStorefrontCollections } from '../utils/contentSync';
 import { Search, X } from 'lucide-react';
 import { useProducts } from '../context/ProductsContext';
 import { CatalogueStatus } from '../components/CatalogueStatus';
@@ -9,6 +9,7 @@ import { ProductCard } from '../components/ProductCard';
 import { useAuth } from '../context/AuthContext';
 
 export default function CollectionsPage() {
+  const COLLECTIONS = getStorefrontCollections();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [conditionFilter, setConditionFilter] = useState<'All' | 'Newly' | 'Regular' | 'Limited Edition'>('All');

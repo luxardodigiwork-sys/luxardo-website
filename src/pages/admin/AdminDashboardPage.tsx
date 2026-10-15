@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Users, ShoppingBag, IndianRupee, Package, Settings, CheckCircle2, AlertCircle, Clock, Truck, Mail, Plus, FileText, Shield, Image as ImageIcon, Layers, Crown, Send, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -7,11 +7,16 @@ import { useAuth } from '../../context/AuthContext';
 import { storage } from '../../utils/localStorage';
 import { useProducts } from '../../context/ProductsContext';
 import { useAdminOrders } from '../../utils/orderStore';
+import { watchEnquiries } from '../../utils/enquiries';
 
 export default function AdminDashboardPage() {
   const { isAuthReady } = useAuth();
   const { products: liveProducts } = useProducts();
   const { orders: liveOrders } = useAdminOrders();
+
+  // Pending wholesale enquiries, live from Firestore (admin only)
+  const [wholesaleCount, setWholesaleCount] = useState(0);
+  useEffect(() => watchEnquiries('wholesaleInquiries', (rows) => setWholesaleCount(rows.filter((r) => (r.status || 'pending') === 'pending').length), () => setWholesaleCount(0)), []);
 
   const dashboardData = useMemo(() => {
     if (!isAuthReady) return null;
@@ -20,7 +25,6 @@ export default function AdminDashboardPage() {
       const data = storage.getDashboardStats();
       const orders = liveOrders;
       const products = liveProducts;
-      const wholesaleInquiries = storage.getWholesaleInquiries();
       
       const today = new Date();
       const todayString = today.toDateString();
@@ -87,7 +91,7 @@ export default function AdminDashboardPage() {
           deliveredOrders,
           activePrimeMembers: data.activeMembers,
           totalProducts: products.length,
-          wholesaleInquiries: wholesaleInquiries.length,
+          wholesaleInquiries: wholesaleCount,
           orderStatuses
         },
         alerts: newAlerts,
@@ -103,7 +107,7 @@ export default function AdminDashboardPage() {
       console.error('Dashboard fetch error:', err);
       return null;
     }
-  }, [isAuthReady, liveProducts, liveOrders]);
+  }, [isAuthReady, liveProducts, liveOrders, wholesaleCount]);
 
   if (!isAuthReady || !dashboardData) {
     return (

@@ -16,6 +16,8 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { processWebhook } from "./webhook";
 import { sendViaResend } from "./resend";
 import { StaffRoleError, applyStaffRole } from "./staffRoles";
+import { EnquiryKind, buildEnquiryMailDoc, nextThrottle } from "./enquiries";
+import { MAIL_COLLECTION } from "./emails";
 import { defineSecret, defineString } from "firebase-functions/params";
 import Razorpay from "razorpay";
 import {
@@ -197,4 +199,27 @@ export const sendQueuedMailFn = onDocumentCreated({ document: "mail/{mailId}", r
       ? { state: "SUCCESS", provider: "resend", id: result.id, at: new Date().toISOString() }
       : { state: "ERROR", provider: "resend", error: result.error, at: new Date().toISOString() },
   });
+});
+
+/** Queues one owner e-mail per website enquiry (throttled). Delivered by sendQueuedMailFn through Resend. */
+async function notifyOwnerOfEnquiry(kind: EnquiryKind, id: string, data: Record<string, unknown>): Promise<void> {
+  const mail = buildEnquiryMailDoc(kind, id, data, OWNER_NOTIFY_EMAIL.value());
+  if (!mail) return; // OWNER_NOTIFY_EMAIL not set: the enquiry is still visible in the admin panel
+  const throttleRef = db.collection("meta").doc("enquiryEmailThrottle");
+  const mailRef = db.collection(MAIL_COLLECTION).doc(mail.id);
+  await db.runTransaction(async (tx) => {
+    const [t, m] = await Promise.all([tx.get(throttleRef), tx.get(mailRef)]);
+    if (m.exists) return;
+    const r = nextThrottle(t.data() as Record<string, number> | undefined, Date.now());
+    tx.set(throttleRef, r.state);
+    if (r.allowed) tx.set(mailRef, { ...mail.data, queuedAt: new Date().toISOString() });
+  });
+}
+
+export const onContactMessageFn = onDocumentCreated({ document: "contactMessages/{id}", region: REGION }, async (event) => {
+  if (event.data) await notifyOwnerOfEnquiry("contact", event.params.id, event.data.data() as Record<string, unknown>);
+});
+
+export const onWholesaleInquiryFn = onDocumentCreated({ document: "wholesaleInquiries/{id}", region: REGION }, async (event) => {
+  if (event.data) await notifyOwnerOfEnquiry("wholesale", event.params.id, event.data.data() as Record<string, unknown>);
 });

@@ -3,39 +3,39 @@ import { PRIME_AVAILABLE } from '../constants/features';
 import { SectionHeader } from '../components/SectionHeader';
 import { Mail, Phone, MapPin, Instagram, Facebook, Linkedin, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { storage } from '../utils/localStorage';
+import { submitContact } from '../utils/enquiries';
 import { useAuth } from '../context/AuthContext';
-import { useLocation, useNavigate } from 'react-router-dom';
 
 export default function ContactPage() {
   const { user } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
   const siteContent = storage.getSiteContent();
   const [content, setContent] = useState(siteContent.contact);
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   useEffect(() => {
     const updatedSiteContent = storage.getSiteContent();
     setContent(updatedSiteContent.contact);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    const formData = new FormData(e.currentTarget);
-    const data = {
-      id: Date.now(),
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    setSending(true);
+    setSendError(null);
+    const result = await submitContact({
       firstName: formData.get('firstName'),
       lastName: formData.get('lastName'),
       email: formData.get('email'),
       phone: formData.get('phone'),
       subject: formData.get('subject'),
       message: formData.get('message'),
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    };
-    
-    storage.addContactMessage(data);
+    });
+    setSending(false);
+    if (result.ok === false) { setSendError(result.error); return; }
+    form.reset();
     setSubmitted(true);
   };
 
@@ -174,7 +174,7 @@ export default function ContactPage() {
             <p className="text-sm font-sans text-brand-secondary">Please complete the form below and our team will contact you shortly.</p>
           </div>
 
-          {user ? (
+          {(
             <form onSubmit={handleSubmit} className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
@@ -189,7 +189,7 @@ export default function ContactPage() {
 
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Email Address</label>
-                <input name="email" type="email" required className="w-full bg-transparent border-b border-brand-divider py-4 font-sans focus:outline-none focus:border-brand-black transition-colors" placeholder="alexander@luxury.com" />
+                <input name="email" type="email" required defaultValue={user?.email || ''} className="w-full bg-transparent border-b border-brand-divider py-4 font-sans focus:outline-none focus:border-brand-black transition-colors" placeholder="alexander@luxury.com" />
               </div>
 
               <div className="space-y-2">
@@ -208,18 +208,11 @@ export default function ContactPage() {
                 <textarea name="message" required rows={5} className="w-full bg-transparent border-b border-brand-divider py-4 font-sans focus:outline-none focus:border-brand-black transition-colors resize-none" placeholder="How can we assist you today?"></textarea>
               </div>
 
-              <button type="submit" className="btn-primary w-full py-5 flex items-center justify-center gap-4">
+              {sendError && <p role="alert" className="text-sm text-red-600">{sendError}</p>}
+              <button type="submit" disabled={sending} className="btn-primary w-full py-5 flex items-center justify-center gap-4 disabled:opacity-60">
                 SEND MESSAGE <ArrowRight size={18} />
               </button>
             </form>
-          ) : (
-            <div className="text-center p-12 bg-brand-bg border border-brand-divider space-y-6">
-              <h4 className="text-2xl font-display">Authentication Required</h4>
-              <p className="font-sans text-brand-secondary">Please log in to your account to send us a message.</p>
-              <button onClick={() => navigate('/login', { state: { from: location } })} className="btn-primary inline-block px-12">
-                LOG IN TO CONTINUE
-              </button>
-            </div>
           )}
         </div>
       </div>

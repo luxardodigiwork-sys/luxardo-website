@@ -1,6 +1,7 @@
 /** Sends queued `mail` documents through Resend (https://resend.com). No SDK: one fetch call. */
 export interface MailDoc {
   to?: string | string[];
+  replyTo?: string;
   message?: { subject?: string; html?: string; text?: string };
   delivery?: unknown;
 }
@@ -25,7 +26,7 @@ export async function sendViaResend(
     const res = await fetchImpl("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "Idempotency-Key": `mail-${mailId}` },
-      body: JSON.stringify({ from, to, subject: m.subject, html: m.html, text: m.text }),
+      body: JSON.stringify({ from, to, subject: m.subject, html: m.html, text: m.text, ...(normaliseRecipients(doc.replyTo).length ? { reply_to: normaliseRecipients(doc.replyTo)[0] } : {}) }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: `resend ${res.status}: ${String(body?.message || body?.name || "error").slice(0, 160)}` };

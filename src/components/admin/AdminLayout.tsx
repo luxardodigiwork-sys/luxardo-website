@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, ShoppingBag, Package, FileText, Shield, LogOut, Layers, Crown, Image as ImageIcon, Send, Truck, Settings, Users, BarChart3, Wallet, Menu, X, Mail } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useContentVersion } from '../../utils/contentSync';
 import AdminAssistantChatbot from './AdminAssistantChatbot';
 import { EXPRESS_BACKEND_AVAILABLE } from '../../constants/features';
 import { AnimatePresence, motion } from 'motion/react';
@@ -10,6 +11,7 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
+  const contentVersion = useContentVersion();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -192,7 +194,7 @@ export default function AdminLayout() {
         </header>
 
         <div className="flex-1 overflow-auto p-4 md:p-10">
-          <Outlet />
+          <Outlet key={contentVersion} />
         </div>
       </main>
     </div>

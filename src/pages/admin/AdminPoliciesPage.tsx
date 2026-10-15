@@ -1,3 +1,4 @@
+import { publishPolicies } from '../../utils/contentSync';
 import React, { useState, useEffect } from 'react';
 import { storage } from '../../utils/localStorage';
 import { Save, CheckCircle2, RotateCcw, FileText } from 'lucide-react';
@@ -84,32 +85,39 @@ export default function AdminPoliciesPage() {
     fetchPolicies();
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
     storage.savePolicies(policies);
-    
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    localStorage.setItem('LUXARDO FASHION_policies_last_saved', now);
-    
-    setTimeout(() => {
-      setIsSaving(false);
-      setShowSuccess(true);
+    try {
+      await publishPolicies(); // Firestore: customers see the published policy text
+      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      localStorage.setItem('LUXARDO FASHION_policies_last_saved', now);
       setLastSaved(now);
+      setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-    }, 800);
+    } catch (error: any) {
+      alert(error?.code === 'permission-denied' ? 'You do not have permission to publish policies. Please sign in as an admin.' : 'Could not publish the policies. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleReset = () => {
     setIsResetModalOpen(true);
   };
 
-  const confirmReset = () => {
+  const confirmReset = async () => {
     storage.resetPolicies();
     const data = storage.getPolicies();
     setPolicies(data);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
     setIsResetModalOpen(false);
+    try {
+      await publishPolicies();
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch {
+      alert('Reset on this device only; could not publish. Please try again.');
+    }
   };
 
   const updatePolicy = (key: string, field: string, value: string) => {

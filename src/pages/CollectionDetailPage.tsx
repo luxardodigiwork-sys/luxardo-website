@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useOutletContext } from 'react-router-dom';
 import { SectionHeader } from '../components/SectionHeader';
-import { COLLECTIONS } from '../constants';
+import { getStorefrontCollections } from '../utils/contentSync';
 import { useProducts } from '../context/ProductsContext';
 import { CatalogueStatus } from '../components/CatalogueStatus';
 import { ProductCard } from '../components/ProductCard';
@@ -10,6 +10,7 @@ import { motion } from 'motion/react';
 import { SlidersHorizontal } from 'lucide-react';
 
 export default function CollectionDetailPage() {
+  const COLLECTIONS = getStorefrontCollections();
   const { category } = useParams<{ category: string }>();
   const { selectedCountry } = useOutletContext<{ selectedCountry: Country | null }>();
   const [sortBy, setSortBy] = useState<'featured' | 'newest' | 'recommended'>('featured');

@@ -6,7 +6,9 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Country, Language } from '../types';
-import { COUNTRIES, LANGUAGES, COLLECTIONS } from '../constants';
+import { COUNTRIES, LANGUAGES } from '../constants';
+import { getStorefrontCollections, useContentVersion } from '../utils/contentSync';
+import { subscribeNewsletter } from '../utils/enquiries';
 import { ALL_COUNTRIES } from '../countries';
 import { PRIME_AVAILABLE } from '../constants/features';
 import Logo from './Logo';
@@ -33,8 +35,20 @@ function ScrollToTopOnMount() {
 }
 
 export default function Layout() {
+  const contentVersion = useContentVersion();
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterMsg, setNewsletterMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const onNewsletter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const r = await subscribeNewsletter(newsletterEmail);
+    if (r.ok === false) { setNewsletterMsg({ ok: false, text: r.error }); return; }
+    setNewsletterEmail('');
+    setNewsletterMsg({ ok: true, text: 'Thank you for subscribing.' });
+  };
   const siteContent = storage.getSiteContent();
   const [footerContent, setFooterContent] = useState(siteContent.footer);
+  // Footer text published from Admin -> Site Content arrives after the first render (see useContentVersion).
+  useEffect(() => { setFooterContent(storage.getSiteContent().footer); }, [contentVersion]);
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<Language>('English (US)');
   const [showRegionModal, setShowRegionModal] = useState(false);
@@ -317,7 +331,7 @@ export default function Layout() {
     { name: 'CONTACT', path: '/contact' }
   ];
 
-  const collectionItems = COLLECTIONS.map(col => ({
+  const collectionItems = getStorefrontCollections().map(col => ({
     name: col.shortName,
     path: `/collections/${col.id}`
   }));
@@ -628,7 +642,7 @@ export default function Layout() {
             className="h-full min-h-screen"
           >
             <ScrollToTopOnMount />
-            <Outlet context={{ selectedCountry, selectedLanguage }} />
+            <Outlet key={contentVersion} context={{ selectedCountry, selectedLanguage }} />
           </motion.div>
         </AnimatePresence>
       </main>
@@ -686,12 +700,13 @@ export default function Layout() {
           <div className="flex flex-col py-8 md:py-0 space-y-8 md:space-y-12">
             <div className="space-y-6 md:space-y-8">
               <h4 className="text-[10px] md:text-[11px] uppercase tracking-[0.25em] font-bold text-brand-white">Newsletter</h4>
-              <div className="flex border-b border-brand-white/20 pb-3 md:pb-4 group">
-                <input type="email" placeholder="Email Address" className="bg-transparent w-full text-xs md:text-sm font-sans text-brand-white focus:outline-none placeholder:text-brand-white/40" />
-                <button className="text-brand-white hover:text-brand-white/60 transition-colors">
+              <form onSubmit={onNewsletter} className="flex border-b border-brand-white/20 pb-3 md:pb-4 group">
+                <input type="email" required value={newsletterEmail} onChange={(e) => setNewsletterEmail(e.target.value)} placeholder="Email Address" aria-label="Email address for newsletter" className="bg-transparent w-full text-xs md:text-sm font-sans text-brand-white focus:outline-none placeholder:text-brand-white/40" />
+                <button type="submit" aria-label="Subscribe" className="text-brand-white hover:text-brand-white/60 transition-colors">
                   <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
                 </button>
-              </div>
+              </form>
+              {newsletterMsg && <p role="status" className={`text-xs ${newsletterMsg.ok ? 'text-brand-white/70' : 'text-red-300'}`}>{newsletterMsg.text}</p>}
             </div>
 
             <div className="space-y-3 md:space-y-4">

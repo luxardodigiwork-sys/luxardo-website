@@ -3,7 +3,7 @@ import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, getDocs, collection, deleteDoc, query, where, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, addDoc, updateDoc, getDocs, collection, deleteDoc, query, where, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
 
 const ADMIN_UID = '0Frc6Dy2MqN0zc0UFkmqvpELFnr1'; // owner UID allow-list in the rules
@@ -244,11 +244,6 @@ test('legacy site content: public read, admin-only write, and a self-assigned pr
   await assertFails(setDoc(doc(customer().firestore(), 'products/p-hack'), { name: 'x', price: 1, stock: 1 }));
   await assertFails(setDoc(doc(customer().firestore(), 'orders/fake1'), { userId: 'cust1', paymentStatus: 'paid', total: 1 }));
 });
-test('forms: anyone may submit, only admins read', async () => {
-  await assertSucceeds(setDoc(doc(env.unauthenticatedContext().firestore(), 'contactMessages/m1'), { name: 'a', message: 'hi' }));
-  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'contactMessages/m1')));
-  await assertSucceeds(getDoc(doc(admin().firestore(), 'contactMessages/m1')));
-});
 
 const withRole = (uid, role) => env.authenticatedContext(uid, { role, firebase: { sign_in_provider: 'password' } });
 test('staff roles: owner reads orders (read-only), dispatch updates fulfilment fields only, admin claim role works; unknown roles grant nothing', async () => {
@@ -282,4 +277,55 @@ test('storage: role claim admin may upload, owner/dispatch may not', async () =>
   await assertSucceeds(uploadBytes(ref(withRole('adm1', 'admin').storage(), 'products/r1.png'), png(), meta('image/png')));
   await assertFails(uploadBytes(ref(withRole('own1', 'owner').storage(), 'products/r2.png'), png(), meta('image/png')));
   await assertFails(uploadBytes(ref(withRole('dis1', 'dispatch').storage(), 'products/r3.png'), png(), meta('image/png')));
+});
+
+const goodContact = () => ({ firstName: 'A', lastName: 'B', email: 'a@b.co', phone: '9876543210', subject: 'Hi', message: 'Hello there', status: 'pending', createdAt: '2026-10-15T00:00:00.000Z', source: 'web' });
+test('forms: contact accepts a well-formed message from anyone; rejects junk, oversize, extra fields; only staff read; clients cannot edit or delete', async () => {
+  const pub = env.unauthenticatedContext().firestore();
+  await assertSucceeds(addDoc(collection(pub, 'contactMessages'), goodContact()));
+  for (const bad of [
+    { ...goodContact(), email: 'not-an-email' }, { ...goodContact(), message: '' }, { ...goodContact(), message: 'x'.repeat(3001) },
+    { ...goodContact(), status: 'resolved' }, { ...goodContact(), isAdmin: true }, { ...goodContact(), firstName: 'x'.repeat(101) },
+    { ...goodContact(), email: undefined },
+  ]) {
+    const clean = Object.fromEntries(Object.entries(bad).filter(([, v]) => v !== undefined));
+    await assertFails(addDoc(collection(pub, 'contactMessages'), clean));
+  }
+  let id; await env.withSecurityRulesDisabled(async c => { id = (await addDoc(collection(c.firestore(), 'contactMessages'), goodContact())).id; });
+  await assertFails(getDoc(doc(pub, 'contactMessages/' + id)));
+  await assertFails(getDoc(doc(customer().firestore(), 'contactMessages/' + id)));
+  await assertFails(updateDoc(doc(pub, 'contactMessages/' + id), { status: 'resolved' }));
+  await assertFails(deleteDoc(doc(pub, 'contactMessages/' + id)));
+  await assertSucceeds(getDoc(doc(admin().firestore(), 'contactMessages/' + id)));
+  await assertSucceeds(getDoc(doc(withRole('own1', 'owner').firestore(), 'contactMessages/' + id)));
+  await assertFails(getDoc(doc(withRole('dis1', 'dispatch').firestore(), 'contactMessages/' + id)));
+  await assertSucceeds(updateDoc(doc(admin().firestore(), 'contactMessages/' + id), { status: 'contacted' }));
+});
+test('forms: wholesale enquiry shape/size, newsletter is create-only with id = lower-case email', async () => {
+  const pub = env.unauthenticatedContext().firestore();
+  const w = { full_name: 'Raj', company_name: 'Raj Textiles', email: 'raj@x.co', phone: '9', country: 'India', city: 'Surat', retail_type: 'Store', monthly_volume: '100', message: 'hi', status: 'pending', created_at: '2026-10-15T00:00:00.000Z', createdAt: '2026-10-15T00:00:00.000Z', source: 'web' };
+  await assertSucceeds(addDoc(collection(pub, 'wholesaleInquiries'), w));
+  await assertSucceeds(addDoc(collection(pub, 'wholesaleInquiries'), { ...w, image: 'data:image/png;base64,AAAA' }));
+  await assertFails(addDoc(collection(pub, 'wholesaleInquiries'), { ...w, image: 'x'.repeat(260001) }));
+  await assertFails(addDoc(collection(pub, 'wholesaleInquiries'), { ...w, full_name: '' }));
+  await assertFails(addDoc(collection(pub, 'wholesaleInquiries'), { ...w, status: 'approved' }));
+  const n = { email: 'a@b.co', createdAt: '2026-10-15T00:00:00.000Z', status: 'subscribed', source: 'footer' };
+  await assertSucceeds(setDoc(doc(pub, 'newsletterSubscribers/a@b.co'), n));
+  await assertFails(setDoc(doc(pub, 'newsletterSubscribers/a@b.co'), n)); // repeat = update = refused
+  await assertFails(setDoc(doc(pub, 'newsletterSubscribers/other@b.co'), n)); // id must equal the email
+  await assertFails(setDoc(doc(pub, 'newsletterSubscribers/A@B.CO'), { ...n, email: 'bad' }));
+  await assertFails(getDoc(doc(pub, 'newsletterSubscribers/a@b.co')));
+  await assertSucceeds(getDoc(doc(admin().firestore(), 'newsletterSubscribers/a@b.co')));
+});
+test('site content: published siteContent/policies/collections are public to read, admin-only to write', async () => {
+  const pub = env.unauthenticatedContext().firestore();
+  await assertSucceeds(setDoc(doc(admin().firestore(), 'siteContent/main'), { json: '{}', updatedAt: 'x' }));
+  await assertSucceeds(setDoc(doc(admin().firestore(), 'policies/main'), { json: '{}', updatedAt: 'x' }));
+  await assertSucceeds(setDoc(doc(admin().firestore(), 'collections/c1'), { id: 'c1', name: 'N' }));
+  for (const path of ['siteContent/main', 'policies/main', 'collections/c1']) {
+    await assertSucceeds(getDoc(doc(pub, path)));
+    await assertFails(setDoc(doc(customer().firestore(), path), { x: 1 }));
+    await assertFails(setDoc(doc(withRole('own1', 'owner').firestore(), path), { x: 1 }));
+    await assertFails(deleteDoc(doc(pub, path)));
+  }
 });

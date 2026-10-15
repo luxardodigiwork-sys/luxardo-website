@@ -1,3 +1,4 @@
+import { publishSiteContent } from '../../utils/contentSync';
 import React, { useState, useEffect } from 'react';
 import { Save, Image as ImageIcon, Plus, Trash2, Link as LinkIcon, Phone, Mail, MapPin, Layout as LayoutIcon, BookOpen, Scissors, Globe, MessageSquare, Info, RotateCcw, ChevronRight, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -75,16 +76,15 @@ export default function AdminContentPage() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      storage.saveSiteContent(content);
+      await publishSiteContent(content); // Firestore: this is what every visitor sees
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
     } catch (error: any) {
       console.error('Error saving content:', error);
-      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
-        alert('Storage limit exceeded. The uploaded images are too large. Please use smaller images or image URLs.');
-      } else {
-        alert('Failed to save content.');
-      }
+      const msg = String(error?.message || '');
+      if (error?.code === 'permission-denied') alert('You do not have permission to publish content. Please sign in as an admin.');
+      else if (error?.name === 'QuotaExceededError' || msg.includes('too large')) alert(msg || 'The content is too large. Please use smaller images or image URLs.');
+      else alert('Could not publish the content. Please check your connection and try again.');
     } finally {
       setIsSaving(false);
     }
@@ -94,13 +94,18 @@ export default function AdminContentPage() {
     setIsResetModalOpen(true);
   };
 
-  const confirmReset = () => {
+  const confirmReset = async () => {
     storage.resetSiteContent();
     const defaultContent = storage.getSiteContent();
     setContent(defaultContent);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
     setIsResetModalOpen(false);
+    try {
+      await publishSiteContent(defaultContent);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (error: any) {
+      alert(String(error?.message || 'Reset on this device only; could not publish. Please try again.'));
+    }
   };
 
   const updateContent = (section: keyof typeof content, field: string, value: any) => {

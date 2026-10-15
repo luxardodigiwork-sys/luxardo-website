@@ -1,3 +1,4 @@
+import { publishCollections } from '../../utils/contentSync';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Save, Plus, Edit2, Trash2, Image as ImageIcon, Check, X } from 'lucide-react';
@@ -129,7 +130,7 @@ export default function AdminCollectionsPage() {
     setFormData(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData) return;
 
     let updatedCollections;
@@ -145,6 +146,7 @@ export default function AdminCollectionsPage() {
     updatedCollections.sort((a, b) => a.sortOrder - b.sortOrder);
 
     try {
+      await publishCollections(updatedCollections); // Firestore: this is what every visitor sees
       localStorage.setItem('LUXARDO FASHION_admin_collections', JSON.stringify(updatedCollections));
       setCollections(updatedCollections);
       setEditingId(null);
@@ -152,11 +154,14 @@ export default function AdminCollectionsPage() {
       setFormData(null);
     } catch (error: any) {
       console.error('Error saving collections:', error);
-      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
+      if (error?.code === 'permission-denied') {
+        alert('You do not have permission to publish collections. Please sign in as an admin.');
+      } else if (error?.name === 'QuotaExceededError' || String(error?.message || '').includes('quota')) {
         alert('Storage limit exceeded. The uploaded images are too large. Please use smaller images or image URLs.');
       } else {
-        alert('Failed to save collection.');
+        alert(String(error?.message || 'Failed to save collection.'));
       }
+      return;
     }
     showToast(isAdding ? 'Collection added successfully' : 'Collection saved successfully');
   };
@@ -165,9 +170,17 @@ export default function AdminCollectionsPage() {
     setItemToDelete(id);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (itemToDelete) {
       const updatedCollections = collections.filter(c => c.id !== itemToDelete);
+      try {
+        await publishCollections(updatedCollections);
+      } catch (error) {
+        console.error('Error deleting collection:', error);
+        alert('Could not delete the collection. Please try again.');
+        setItemToDelete(null);
+        return;
+      }
       setCollections(updatedCollections);
       localStorage.setItem('LUXARDO FASHION_admin_collections', JSON.stringify(updatedCollections));
       showToast('Collection deleted successfully');

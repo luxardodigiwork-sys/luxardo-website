@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, ArrowRight, Package, Grid, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useProducts } from '../context/ProductsContext';
-import { COLLECTIONS } from '../constants';
+import { getStorefrontCollections } from '../utils/contentSync';
 import { Product } from '../types';
 
 interface SearchOverlayProps {
@@ -23,6 +23,7 @@ const PAGES = [
 ];
 
 export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
+  const COLLECTIONS = getStorefrontCollections();
   const [query, setQuery] = useState('');
   const { storefrontProducts: products } = useProducts();
   const inputRef = useRef<HTMLInputElement>(null);
