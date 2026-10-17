@@ -53,7 +53,7 @@ export default function CheckoutPage() {
   // so an expired session sends the customer back to login instead of failing at payment time.
   const beginTracked = React.useRef(false);
   useEffect(() => {
-    if (beginTracked.current || cartItems.length === 0) return;
+    if (!isCheckoutEnabled() || beginTracked.current || cartItems.length === 0) return;
     beginTracked.current = true;
     track('begin_checkout', { value: cartSubtotal, items: cartItems.map((i) => ({ id: i.product.id, name: i.product.name, price: i.product.price, quantity: i.quantity })) });
   }, [cartItems.length]);

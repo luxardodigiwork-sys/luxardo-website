@@ -33,3 +33,6 @@ Per single-piece product: name, category, price (INR), stock count, fabric/compo
 
 ## Not yet verified (needs staging)
 Real Google sign-in, phone OTP SMS, Razorpay test payment + webhook, email delivery, Hosting deploy.
+
+## Ambiguous Razorpay order recovery
+Orders in `reconciliation_required` are intentionally not auto-retried. Use the same Razorpay mode/account to reconcile the order by receipt, amount, currency, time and notes. Attach a verified single provider order only through a reviewed Admin SDK repair procedure and only if no provider ID has already been accepted. If provider state is uncertain, leave the order pending and escalate. Release stock only after confirming no provider order/payment exists and performing a transactionally guarded, release-once cancellation. No automated repair script is included; this requires an operator.
