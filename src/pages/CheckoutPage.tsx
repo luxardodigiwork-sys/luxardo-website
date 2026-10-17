@@ -6,10 +6,11 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { formatINR } from "../utils/currency";
 import { SectionHeader } from "../components/SectionHeader";
-import { getCheckoutGate, isAuthFailure, paymentErrorMessage } from "../utils/checkoutGate";
+import { getCheckoutGate, isAuthFailure, isOrderClosedError, paymentErrorMessage } from "../utils/checkoutGate";
 import { createCheckoutOrder, loadRazorpay, verifyPayment, RazorpaySuccess } from "../utils/payments";
 import { SHIPPING_NOTE, TAX_NOTE, FREE_SHIPPING_THRESHOLD_RUPEES } from "../constants/pricing";
 import { getShippingQuote } from "../utils/shipping";
+import { CHECKOUT_ENABLED } from "../constants/features";
 
 const INDIAN_STATES = [
   "Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh",
@@ -53,12 +54,12 @@ export default function CheckoutPage() {
   // so an expired session sends the customer back to login instead of failing at payment time.
   const beginTracked = React.useRef(false);
   useEffect(() => {
-    if (!isCheckoutEnabled() || beginTracked.current || cartItems.length === 0) return;
+    if (!CHECKOUT_ENABLED || beginTracked.current || cartItems.length === 0) return;
     beginTracked.current = true;
     track('begin_checkout', { value: cartSubtotal, items: cartItems.map((i) => ({ id: i.product.id, name: i.product.name, price: i.product.price, quantity: i.quantity })) });
   }, [cartItems.length]);
   const quote = getShippingQuote(cartSubtotal);
-  const gate = isCheckoutEnabled() ? getCheckoutGate({ isAuthReady, firebaseUser: auth.currentUser }) : 'disabled';
+  const gate = CHECKOUT_ENABLED ? getCheckoutGate({ isAuthReady, firebaseUser: auth.currentUser }) : 'disabled';
   const redirectToLogin = () => navigate("/login", { replace: true, state: { from: location } });
   useEffect(() => {
     if (gate === "login") redirectToLogin();
@@ -179,6 +180,7 @@ export default function CheckoutPage() {
     } catch (err: any) {
       console.error("Checkout error:", err);
       if (isAuthFailure(err)) { redirectToLogin(); return; }
+      if (isOrderClosedError(err)) requestIdRef.current = { sig: '', id: '' }; // that checkout ended (expired/cancelled): the next attempt starts a fresh order
       setError(paymentErrorMessage(err));
       setIsSubmitting(false);
     }

@@ -166,7 +166,16 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
       receipt: orderRef.id,
       notes: { orderId: orderRef.id, uid: input.uid },
     });
-  } catch {
+  } catch (err) {
+    if (isDefinitiveProviderRejection(err)) {
+      // Razorpay answered with an HTTP 4xx: the request was rejected, so no provider order exists. It is safe (and
+      // correct) to give the stock back and let the customer start over, instead of parking the order for reconciliation.
+      const e = err as { statusCode?: number; error?: { code?: string; description?: string } };
+      console.error("Razorpay rejected order creation", { orderId: orderRef.id, statusCode: e.statusCode, code: e.error?.code, description: e.error?.description });
+      await releaseOrderStock(db, orderRef.id, "payment_provider_error", { onlyIfUnpaid: true }).catch(() => undefined);
+      throw new OrderError("failed-precondition", "We could not start your payment right now. Nothing was charged. Please try again in a few minutes.");
+    }
+    // Timeout / network error / 5xx: the provider may or may not have created the order. Never release or recreate.
     await markPaymentOrderReconciliationRequired(db, orderRef, attemptId, "provider_create_ambiguous");
     throw paymentOrderPendingError();
   }
@@ -187,13 +196,13 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
       return rz.id;
     });
     if (acceptedId !== rz.id) {
-      await markPaymentOrderReconciliationRequired(db, orderRef, attemptId, "stale_provider_completion");
+      await markPaymentOrderReconciliationRequired(db, orderRef, attemptId, "stale_provider_completion", rz.id);
       throw paymentOrderPendingError();
     }
     return { orderId: orderRef.id, razorpayOrderId: rz.id, amountPaise: totals.totalPaise, currency: CURRENCY, total: totals.totalPaise / 100 };
   } catch {
     // Provider success plus persistence failure is ambiguous. Preserve the reservation for reconciliation.
-    await markPaymentOrderReconciliationRequired(db, orderRef, attemptId, "provider_succeeded_persistence_ambiguous");
+    await markPaymentOrderReconciliationRequired(db, orderRef, attemptId, "provider_succeeded_persistence_ambiguous", rz.id);
     throw paymentOrderPendingError();
   }
 }
@@ -203,7 +212,16 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
  * absent ID is not proof that the first provider request failed. Never create again here.
  */
 function paymentOrderPendingError(): OrderError {
-  return new OrderError("unavailable", "Payment setup is pending reconciliation. Do not retry payment yet; please refresh your orders or contact support if this persists.");
+  return new OrderError("failed-precondition", "Payment setup is pending reconciliation. Do not retry payment yet; please refresh your orders or contact support if this persists.");
+}
+
+/**
+ * True only when Razorpay replied with an HTTP 4xx (the SDK rejects with `{ statusCode, error }`), meaning the order was NOT created.
+ * Network failures, timeouts (the SDK then throws a plain TypeError/Error without a status), 5xx and 408 are ambiguous.
+ */
+export function isDefinitiveProviderRejection(err: unknown): boolean {
+  const code = (err as { statusCode?: unknown } | null)?.statusCode;
+  return typeof code === "number" && code >= 400 && code < 500 && code !== 408;
 }
 
 async function markPaymentOrderReconciliationRequired(
@@ -211,6 +229,7 @@ async function markPaymentOrderReconciliationRequired(
   ref: FirebaseFirestore.DocumentReference,
   attemptId: string,
   reason: string,
+  candidateProviderOrderId?: string,
 ): Promise<void> {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -221,6 +240,8 @@ async function markPaymentOrderReconciliationRequired(
       rzpOrderCreationState: "reconciliation_required",
       rzpOrderReconciliationReason: reason,
       rzpOrderPendingAt: d.rzpOrderPendingAt || new Date().toISOString(),
+      // Best effort: the provider order we know exists but could not store as the accepted one. Operators match it by receipt = order id.
+      ...(candidateProviderOrderId ? { rzpOrderCandidateId: candidateProviderOrderId } : {}),
     });
   }).catch(() => undefined);
 }

@@ -31,3 +31,10 @@ export function paymentErrorMessage(err: unknown): string {
   if (code.endsWith('unavailable') || code.endsWith('deadline-exceeded')) return 'Network problem. Please try again.';
   return 'Something went wrong while starting your payment. Please try again.';
 }
+
+/** True when the server says this checkout (request key) already ended: cancelled/expired/paid. A retry then needs a fresh request key. */
+export function isOrderClosedError(err: unknown): boolean {
+  const code: string = (err as any)?.code ?? '';
+  const message: string = (err as any)?.message ?? '';
+  return code.endsWith('failed-precondition') && /already been processed/i.test(message);
+}

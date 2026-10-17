@@ -575,3 +575,14 @@ test('online ordering is OFF by default (flag reads VITE_CHECKOUT_ENABLED, never
   const f: any = await import('../src/constants/features');
   assert.equal((f.default ?? f).CHECKOUT_ENABLED, false);
 });
+
+
+test('checkout: a closed-order error asks the page for a fresh request key; other errors keep it', () => {
+  const G: any = (gateNs as any).default ?? gateNs;
+  assert.equal(G.isOrderClosedError({ code: 'functions/failed-precondition', message: 'This order has already been processed. Please refresh and check your orders.' }), true);
+  assert.equal(G.isOrderClosedError({ code: 'functions/failed-precondition', message: 'Payment setup is pending reconciliation. Do not retry payment yet' }), false);
+  assert.equal(G.isOrderClosedError({ code: 'functions/unavailable', message: 'already been processed' }), false);
+  assert.equal(G.isOrderClosedError(null), false);
+  // the pending-reconciliation message is shown to the customer as written (it is a failed-precondition, not a generic network error)
+  assert.match(G.paymentErrorMessage({ code: 'functions/failed-precondition', message: 'Payment setup is pending reconciliation. Do not retry payment yet.' }), /pending reconciliation/);
+});

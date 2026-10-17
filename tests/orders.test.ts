@@ -26,11 +26,11 @@ let db: FirebaseFirestore.Firestore;
 const address = validateShippingAddress({ fullName: 'A', email: 'a@b.com', phone: '9876543210', addressLine1: 'x', city: 'c', state: 'Delhi', postalCode: '110001' });
 
 let rzSeq = 0;
-function fakeRazorpay(opts: { failCreate?: boolean; payments?: Record<string, any>; delayMs?: number; gate?: Promise<void> } = {}) {
+function fakeRazorpay(opts: { failCreate?: boolean; payments?: Record<string, any>; delayMs?: number; gate?: Promise<void>; failWith?: unknown } = {}) {
   const created: any[] = [];
   const rz: RazorpayLike & { created: any[]; calls: number } = {
     created, calls: 0,
-    orders: { async create(o) { rz.calls++; if (opts.gate) await opts.gate; if (opts.delayMs) await new Promise((r) => setTimeout(r, opts.delayMs)); if (opts.failCreate) throw new Error('razorpay down'); created.push(o); return { id: `order_rz${++rzSeq}`, amount: o.amount, currency: o.currency }; } },
+    orders: { async create(o) { rz.calls++; if (opts.gate) await opts.gate; if (opts.delayMs) await new Promise((r) => setTimeout(r, opts.delayMs)); if (opts.failCreate) throw (opts.failWith ?? new Error('razorpay down')); created.push(o); return { id: `order_rz${++rzSeq}`, amount: o.amount, currency: o.currency }; } },
     payments: { async fetch(id) { const p = opts.payments?.[id]; if (!p) throw new Error('no such payment'); return p; } },
   };
   return rz;
@@ -710,4 +710,72 @@ test('expiry sweep selects unpaid pending orders beyond 200 historical paid/canc
   assert.equal((await rawOrderOf('expired-unpaid')).status, 'cancelled');
   assert.equal(await stockOf('a'), before + 1);
   assert.equal(await releaseExpiredOrders(db, now, 200), 0);
+});
+
+
+// ---------- provider failure classification + reconciliation record ----------
+test('a definitive Razorpay rejection (HTTP 4xx) releases the reservation and tells the customer nothing was charged; the checkout can be restarted', async () => {
+  const rejection = { statusCode: 400, error: { code: 'BAD_REQUEST_ERROR', description: 'The amount must be at least INR 1.00' } };
+  const rz = fakeRazorpay({ failCreate: true, failWith: rejection });
+  await assert.rejects(() => sameReq(rz, 'req-reject-01'), /Nothing was charged/);
+  assert.equal(await stockOf('a'), 5, 'stock must be given back after a definitive rejection');
+  const order = (await db.collection('orders').get()).docs[0].data();
+  assert.equal(order.status, 'cancelled'); assert.equal(order.statusReason, 'payment_provider_error'); assert.equal(order.paymentStatus, 'pending');
+  assert.notEqual(order.rzpOrderCreationState, 'reconciliation_required');
+  // the same key now belongs to a closed order; a fresh key creates a fresh, payable order
+  await assert.rejects(() => sameReq(fakeRazorpay(), 'req-reject-01'), /already been processed/);
+  const ok = await sameReq(fakeRazorpay(), 'req-reject-02');
+  assert.ok(ok.razorpayOrderId); assert.equal(await stockOf('a'), 3);
+});
+test('timeouts, network errors, 5xx and 408 are AMBIGUOUS: stock stays reserved, order is parked for reconciliation, no second create', async () => {
+  const cases: Array<[string, unknown]> = [
+    ['network TypeError (SDK has no response)', new TypeError("Cannot read properties of undefined (reading 'status')")],
+    ['HTTP 500', { statusCode: 500, error: { code: 'SERVER_ERROR' } }],
+    ['HTTP 502', { statusCode: 502, error: {} }],
+    ['HTTP 408', { statusCode: 408, error: {} }],
+    ['plain error', new Error('socket hang up')],
+  ];
+  for (const [label, failWith] of cases) {
+    await wipe(); await seed();
+    const rz = fakeRazorpay({ failCreate: true, failWith });
+    await assert.rejects(() => sameReq(rz, 'req-ambig-001'), /pending reconciliation/, label);
+    assert.equal(await stockOf('a'), 3, label);
+    const o = (await db.collection('orders').get()).docs[0].data();
+    assert.equal(o.status, 'pending', label); assert.equal(o.rzpOrderCreationState, 'reconciliation_required', label);
+    const retry = fakeRazorpay();
+    await assert.rejects(() => sameReq(retry, 'req-ambig-001'), /pending reconciliation/, label);
+    assert.equal(retry.calls, 0, `${label}: a retry must not create a second provider order`);
+  }
+});
+test('provider success + persistence failure records the provider order id it holds for reconciliation, keeps stock, and never marks the order payable or paid', async () => {
+  let transactions = 0;
+  const wrapped = new Proxy(db as any, {
+    get(target, prop) {
+      if (prop === 'runTransaction') return async (fn: any) => { transactions++; if (transactions === 2) throw new Error('simulated persistence outage'); return target.runTransaction(fn); };
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  const rz = fakeRazorpay();
+  await assert.rejects(() => createCheckoutOrder(wrapped, rz, { uid: 'u1', lines: [{ productId: 'a', quantity: 2, size: '40' }], address, shipping: NO_RULE, requestId: 'req-persist-02' }), /pending reconciliation/);
+  const o = (await db.collection('orders').get()).docs[0].data();
+  assert.equal(o.razorpayOrderId, null, 'the unconfirmed provider id must not become the accepted one');
+  assert.match(String(o.rzpOrderCandidateId), /^order_rz\d+$/);
+  assert.equal(o.rzpOrderCandidateId, rz.created.length === 1 ? `order_rz${rzSeq}` : undefined);
+  assert.equal(o.paymentStatus, 'pending'); assert.equal(await stockOf('a'), 3);
+  // a repeat request cannot hand the customer an order id either
+  await assert.rejects(() => sameReq(fakeRazorpay(), 'req-persist-02'), /pending reconciliation/);
+});
+test('a parked (reconciliation-required) order is released by the expiry sweep once its payment window ends, and a webhook for it can never pay it', async () => {
+  const rz = fakeRazorpay({ failCreate: true });
+  const t0 = new Date('2026-10-17T00:00:00.000Z');
+  await assert.rejects(() => buy(rz, [{ productId: 'a', quantity: 2, size: '40' }], 'u1', t0), /pending reconciliation/);
+  const id = (await db.collection('orders').get()).docs[0].id;
+  assert.equal(await releaseExpiredOrders(db, new Date('2026-10-17T00:10:00.000Z')), 0); // inside the window: untouched
+  assert.equal(await stockOf('a'), 3);
+  assert.equal(await releaseExpiredOrders(db, new Date('2026-10-17T02:00:00.000Z')), 1);
+  assert.equal(await stockOf('a'), 5);
+  assert.equal((await rawOrderOf(id)).status, 'cancelled');
+  // no provider id was ever stored, so a payment event cannot be matched to this order
+  await assert.rejects(() => applyCapturedPayment(db, { razorpayOrderId: 'order_unknown', payment: { id: 'pay_x', order_id: 'order_unknown', status: 'captured', amount: 200000, currency: 'INR' } as any }), /not found/i);
 });
