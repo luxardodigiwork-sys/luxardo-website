@@ -7,6 +7,7 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { formatINR } from '../utils/currency';
 import { track } from '../utils/analytics';
+import { orderConfirmationView } from '../utils/orderConfirmation';
 
 /**
  * Shows the order from Firestore (the single source of truth). "Placed" is only displayed once the
@@ -32,11 +33,11 @@ export default function OrderConfirmationPage() {
   }, [orderId, isAuthReady, user, navigate]);
 
   useEffect(() => {
-    if (!order || order.paymentStatus !== 'paid') return;
+    if (!order || !orderConfirmationView(order).trackPurchase) return;
     const key = `LUXARDO_purchase_${order.id}`;
     try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch {}
     track('purchase', { transactionId: order.id, value: Number(order.totalAmount) || 0, items: (order.items || []).map((i: any) => ({ id: String(i.productId), name: i.name || i.title, price: i.price, quantity: i.quantity })) });
-  }, [order?.id, order?.paymentStatus]);
+  }, [order?.id, order?.paymentStatus, order?.status]);
 
   if (state === 'loading') {
     return <div className="section-padding min-h-[70vh] flex items-center justify-center"><p className="text-brand-secondary">Loading your order...</p></div>;
@@ -50,40 +51,27 @@ export default function OrderConfirmationPage() {
     );
   }
 
-  const paid = order.paymentStatus === 'paid';
+  const view = orderConfirmationView(order);
+  const paid = view.paid;
   const displayOrderId = 'LX-' + order.id.slice(-8).toUpperCase();
 
   return (
     <div className="section-padding max-w-4xl mx-auto min-h-[70vh] text-center">
       <div className="flex justify-center mb-8">
-        {paid ? <CheckCircle className="w-20 h-20 text-green-600 stroke-[1px]" /> : <Clock className="w-20 h-20 text-amber-600 stroke-[1px]" />}
+        {view.success ? <CheckCircle className="w-20 h-20 text-green-600 stroke-[1px]" /> : <Clock className="w-20 h-20 text-amber-600 stroke-[1px]" />}
       </div>
 
       <SectionHeader
-        title={paid ? 'Order Placed Successfully!' : 'Confirming your payment'}
+        title={view.title}
         subtitle={`Order ID: ${displayOrderId}`}
       />
 
       <div className="space-y-10 max-w-2xl mx-auto mt-8">
         <div className="space-y-4">
-          {paid ? (
-            <p className="text-lg font-sans text-brand-black">
-              Thank you for choosing <strong>LUXARDO FASHION</strong>. Your payment was received and order{' '}
-              <span className="font-bold">{displayOrderId}</span> is being prepared. Your order contains
-              Ready-to-Stitch fabric; stitching is not included.
-            </p>
-          ) : (
-            <p className="text-lg font-sans text-brand-black">
-              We are waiting for confirmation from your bank. This page updates automatically. If money was
-              deducted and this does not update within a few minutes, contact us with order {displayOrderId}.
-            </p>
-          )}
-          {order.status === 'on_hold' && (
-            <p className="text-sm text-red-700">
-              Your payment arrived after the item reservation expired and stock is no longer available.
-              We will contact you to arrange a refund.
-            </p>
-          )}
+          <p className="text-lg font-sans text-brand-black">{view.message}</p>
+          <p className="text-sm text-brand-secondary">
+            Your order contains Ready-to-Stitch fabric; stitching is not included.
+          </p>
         </div>
 
         <div className="bg-brand-bg p-8 border border-brand-divider rounded-2xl text-left space-y-6">
