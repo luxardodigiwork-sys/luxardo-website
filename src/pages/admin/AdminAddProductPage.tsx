@@ -1,9 +1,10 @@
+import { collectionOptions } from '../../utils/collectionIdentity';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { productStore } from '../../utils/productStore';
-import { COLLECTION_CATEGORIES } from '../../constants';
+import { getAdminCollections, useContentVersion } from '../../utils/contentSync';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 
 export default function AdminAddProductPage() {
@@ -14,7 +15,7 @@ export default function AdminAddProductPage() {
     name: '',
     slug: '',
     price: 0,
-    category: '', // must be chosen explicitly: storefront collections match category names exactly
+    category: '', // stable admin collection ID; legacy names remain readable
     collection: '',
     image: '',
     images: [] as string[],
@@ -34,7 +35,8 @@ export default function AdminAddProductPage() {
   });
   const [newImageUrl, setNewImageUrl] = useState('');
 
-  const categories = COLLECTION_CATEGORIES;
+  useContentVersion();
+  const categories = collectionOptions(getAdminCollections().list);
 
   const handleAddImage = () => {
     if (newImageUrl && !formData.images.includes(newImageUrl)) {
@@ -162,7 +164,7 @@ export default function AdminAddProductPage() {
                 >
                   <option value="" disabled>Select a collection…</option>
                   {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
                   ))}
                 </select>
               </div>

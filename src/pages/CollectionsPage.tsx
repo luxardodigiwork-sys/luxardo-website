@@ -6,13 +6,12 @@ import { Search, X } from 'lucide-react';
 import { useProducts } from '../context/ProductsContext';
 import { CatalogueStatus } from '../components/CatalogueStatus';
 import { ProductCard } from '../components/ProductCard';
-import { useAuth } from '../context/AuthContext';
+import { matchesCollection, collectionLabel } from '../utils/collectionIdentity';
 
 export default function CollectionsPage() {
   const COLLECTIONS = getStorefrontCollections();
-  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [conditionFilter, setConditionFilter] = useState<'All' | 'Newly' | 'Regular' | 'Limited Edition'>('All');
+  const [conditionFilter, setConditionFilter] = useState<'All' | 'In stock' | 'Featured'>('All');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   
   const collections = COLLECTIONS.map(col => ({
@@ -33,35 +32,23 @@ export default function CollectionsPage() {
       const query = searchQuery.toLowerCase();
       result = result.filter(p => 
         p.name.toLowerCase().includes(query) ||
-        p.category.toLowerCase().includes(query) ||
-        p.description.toLowerCase().includes(query)
+        collectionLabel(p.category, COLLECTIONS).toLowerCase().includes(query) ||
+        (p.description || '').toLowerCase().includes(query)
       );
     }
 
-    // Filter by Condition (Mock logic mapping for newly, regular, limited edition based on IDs or Price)
-    if (conditionFilter === 'Newly') {
-      // Simulate "Newly" by dropping some older products (e.g. reverse and take first half)
-      result = [...result].reverse().slice(0, Math.ceil(result.length * 0.7));
-    } else if (conditionFilter === 'Limited Edition') {
-      // Simulate "Limited Edition" based on price > 150000 or specific names
-      result = result.filter(p => (p.price && p.price > 150000) || p.name.toLowerCase().includes('limited'));
-    } else if (conditionFilter === 'Regular') {
-      // Simulate "Regular" by taking items that aren't overly expensive
-      result = result.filter(p => !p.name.toLowerCase().includes('limited') && (!p.price || p.price <= 150000));
-    }
+    // Filter from actual catalogue fields; never infer condition from price or arbitrary IDs.
+    if (conditionFilter === 'In stock') result = result.filter(product => typeof product.stock === 'number' && product.stock > 0);
+    if (conditionFilter === 'Featured') result = result.filter(product => product.featured === true);
 
     // Filter by category
     if (selectedCategory) {
-      result = result.filter(p => p.category === selectedCategory);
-    }
-
-    // Prime member restrictions
-    if (!user?.isPrimeMember) {
-      result = result.filter(p => p.readyToStitch);
+      const chosen = COLLECTIONS.find(collection => matchesCollection(selectedCategory, collection));
+      result = result.filter(product => matchesCollection(product.category, chosen));
     }
 
     return result;
-  }, [allProducts, searchQuery, conditionFilter, user, selectedCategory]);
+  }, [allProducts, searchQuery, conditionFilter, selectedCategory, COLLECTIONS]);
 
   const categories = useMemo(() => {
     const cats = Array.from(new Set(allProducts.map(p => p.category)));
@@ -93,7 +80,7 @@ export default function CollectionsPage() {
           
           {/* Quick Filters */}
           <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto scrollbar-hide py-1">
-            {['All', 'Newly', 'Regular', 'Limited Edition'].map(condition => (
+            {['All', 'In stock', 'Featured'].map(condition => (
               <button
                 key={condition}
                 onClick={() => setConditionFilter(condition as any)}

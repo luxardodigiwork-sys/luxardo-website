@@ -25,7 +25,7 @@ Keep these business and safety decisions: Ready-to-Stitch fabric only; stitching
 |---|---|---|
 | `main` | `62af84d1f6854c5c00416819ccddc09c942ad699` | Existing default branch; unchanged. Selected baseline descends from it. |
 | `claude/upbeat-fermat-un7uz1` | `5c5087aa829fabfbcf70410431777c69f8edcf64` | Selected baseline. Original branch and PR #4 unchanged. |
-| `launch/cleanup` | `31c4efce867eeabc20043c92ff36274047c3db8d` | Diverges at main: 89 commits absent from the selected baseline. Compatible upload/lazy-loading/cleanup ideas adapted. Guest/COD checkout, V2 callables, staff identity, collection schema, deployment automation, tracking configuration, redesign and bulk photo optimiser require separate comparison; they are not silently applied. |
+| `launch/cleanup` | `31c4efce867eeabc20043c92ff36274047c3db8d` | Diverges at main: 89 commits absent from the selected baseline. Compatible upload/lazy-loading/cleanup ideas adapted. Guest/COD checkout, V2 callables, staff identity, collection schema, deployment automation, tracking configuration and redesign remain separate. Newsletter management, transaction-safe photo optimisation, responsive photos, collection identity and India-first UI have now been adapted with targeted tests (see final consolidation below). |
 | `launch/oct11` | `57281b119245c5de82c0896112592abad9dccd78` | Ancestor of cleanup; alternate checkout/email transition preserved there. |
 | `b2c-only` | `a1d70ab555f7a502af79b66a84dc800a54c46771` | Ancestor of cleanup; earlier B2C split preserved there. |
 | `codespace-verbose-parakeet-q7jgqr6v9jw429x6w` | `0dad672182c180a8c9905546c226bb0689ed8224` | Earlier content/hero/collection work already in cleanup ancestry; compare UI/content contracts before porting. |
@@ -55,7 +55,21 @@ No live Google/OTP, Razorpay, Resend, Firebase deployment, shipping, DNS or prod
 ## Remaining audit work
 
 1. Review the divergent B2C UI/content/schema and collections work against this fixed checkpoint; port compatible pieces individually with tests. Decide guest/COD versus the selected phone-authenticated checkout explicitly before changing it.
-2. Review bulk photo optimiser before exposing it: it writes multiple documents and must respect current content publishing/product stock guards. It is not included here.
+2. Browser-test newsletter export, image loading and photo optimisation against staging. The adapted optimiser is admin-only, updates current references transactionally, preserves stock/prices/text and bumps content revisions. No live photos were changed during recovery.
 3. Scan historical commits and rotate any previously exposed credentials through the appropriate account owner. Removing the database from the tip does not remove password hashes from history; no history rewrite or credential rotation occurred.
 4. Verify staging project alias, real Firebase claims/rules/indexes and provider settings later. Do not enable checkout or deploy production as part of the checkpoint audit.
 5. Review legacy scripts and legacy Express code before running or deploying them. They are retained for recovery and are not the selected production backend.
+
+## Final compatible-feature consolidation
+
+The earlier validation section records the initial checkpoint, not the final result. Java 21 was subsequently obtained. CI on `59c9602a57d66249537ef0e71f77f0c50e3646db` passed all verification jobs, including Functions triggers; deployment jobs were skipped (run `39022819153`). The next feature batch adds:
+
+- Admin newsletter pagination, deletion and loaded-row CSV export with formula neutralisation; no email sending.
+- Admin photo optimiser with bounded downloads, smaller-copy uploads, exact current-reference replacements in Firestore transactions, revision conflict protection, retry reuse and original-file preservation.
+- India-only launch selection without first-visit region popups; international definitions remain for a later explicit rollout.
+- Responsive Firebase image variants with original-image fallback, and the single-image product hover fix.
+- Published collection IDs in product forms; legacy names/slugs remain compatible. Product discovery uses actual stock/featured values and real date/price sorting; old Prime hiding is removed.
+
+Final local evidence: typecheck and checkout-disabled production build passed; 140 unit tests passed; 16 content-publishing emulator tests passed, including photo transactions, stale-editor protection and admin permissions. Browser verification remains pending because Chromium download failed. GitHub CI must validate this final pushed commit separately.
+
+Not automatically ported: guest/COD or alternate payment functions, Flow identity/schema/workflows, automatic country lookup/currency conversion, fake courier status, unsupported packaging claims, alternative redesign and production tracking IDs. These conflict with the selected runtime or require environment/product decisions. Original branch snapshots and full path inventories remain available. Legacy root Express scripts/dependencies are retained for reference; the selected production backend is Firebase Functions. Existing authenticated Firestore cart/session behavior is retained rather than replacing it with the older guest-cart implementation. This is compatible-feature consolidation, not a claim every divergent commit was merged.

@@ -1,3 +1,6 @@
+import { collectionLabel } from '../utils/collectionIdentity';
+import { getStorefrontCollections } from '../utils/contentSync';
+import OptimizedImage from '../components/OptimizedImage';
 import React from 'react';
 import { getShippingQuote } from '../utils/shipping';
 import { Link, useOutletContext, useLocation } from 'react-router-dom';
@@ -42,10 +45,10 @@ export default function CartPage() {
               <div key={`${item.product.id}-${item.size || 'no-size'}`} className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center py-8 border-b border-brand-divider">
                 <div className="col-span-1 md:col-span-6 flex gap-8">
                   <div className="w-32 h-40 bg-brand-divider shrink-0 overflow-hidden">
-                    <img src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <OptimizedImage src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <div className="flex flex-col justify-center space-y-3">
-                    <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-brand-secondary">{item.product.category}</p>
+                    <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-brand-secondary">{collectionLabel(item.product.category, getStorefrontCollections())}</p>
                     <h3 className="font-display text-2xl">{item.product.name}</h3>
                     <p className="text-xs font-sans text-brand-secondary">Format: Ready-to-Stitch Box</p>
                     {item.size && <p className="text-xs font-sans text-brand-secondary font-bold">Size: {item.size}</p>}

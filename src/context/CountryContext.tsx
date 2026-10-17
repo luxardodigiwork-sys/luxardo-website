@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Country } from '../types';
-import { ALL_COUNTRIES } from '../countries';
+import { INDIA_COUNTRY } from '../utils/launchMarket';
 
 interface CountryContextType {
   selectedCountry: Country | null;
@@ -16,23 +16,15 @@ const CountryContext = createContext<CountryContextType | null>(null);
 const STORAGE_KEY = 'LUXARDO FASHION_country_code';
 
 export function CountryProvider({ children }: { children: React.ReactNode }) {
-  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
-  const [showModal, setShowModal] = useState(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const found = ALL_COUNTRIES.find(c => c.code === saved);
-      if (found) { setSelectedCountry(found); setShowModal(false); return; }
-    }
-    setShowModal(true);
-  }, []);
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>(INDIA_COUNTRY);
+  // No region prompt during the India launch; stored global preferences are left untouched.
+  const showModal = false;
 
   const setCountry = async (country: Country) => {
+    if (country.code !== 'IN') return;
     setSelectedCountry(country);
-    setShowModal(false);
-    localStorage.setItem(STORAGE_KEY, country.code);
     try {
+      localStorage.setItem(STORAGE_KEY, country.code);
       const sessionId = localStorage.getItem('LUXARDO FASHION_session_id') || crypto.randomUUID();
       localStorage.setItem('LUXARDO FASHION_session_id', sessionId);
       await setDoc(doc(db, 'sessions', sessionId), {
@@ -44,7 +36,7 @@ export function CountryProvider({ children }: { children: React.ReactNode }) {
     } catch (e) { console.error('Country save error:', e); }
   };
 
-  const dismissModal = () => setShowModal(false);
+  const dismissModal = () => {};
 
   return (
     <CountryContext.Provider value={{ selectedCountry, setCountry, showModal, dismissModal }}>

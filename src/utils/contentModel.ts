@@ -4,7 +4,7 @@ export interface AdminCollection {
   bannerImageUrl: string; heroImageUrl: string; isVisible: boolean; sortOrder: number;
 }
 export interface StorefrontCollection {
-  id: string; fullName: string; shortName: string; descriptor: string; image: string;
+  id: string; categoryId?: string; fullName: string; shortName: string; descriptor: string; image: string;
   narrative: string; craftsmanship: string; packaging: string;
 }
 
@@ -16,6 +16,7 @@ export function toStorefrontCollections(list: AdminCollection[]): StorefrontColl
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
     .map((c) => ({
       id: c.slug || c.id,
+      categoryId: c.id,
       fullName: c.name,
       shortName: c.name,
       descriptor: c.shortDescription || '',
@@ -32,7 +33,7 @@ export function toStorefrontCollections(list: AdminCollection[]): StorefrontColl
  */
 export function adminCollectionsFromStorefront(list: StorefrontCollection[]): AdminCollection[] {
   return (Array.isArray(list) ? list : []).map((c, i) => ({
-    id: c.id, name: c.fullName, slug: c.id, shortDescription: c.descriptor || '', longDescription: c.narrative || '',
+    id: c.categoryId || c.id, name: c.fullName, slug: c.id, shortDescription: c.descriptor || '', longDescription: c.narrative || '',
     bannerImageUrl: c.image || '', heroImageUrl: c.image || '', isVisible: true, sortOrder: i + 1,
   }));
 }

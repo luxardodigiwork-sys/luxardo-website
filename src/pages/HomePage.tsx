@@ -1,3 +1,4 @@
+import { photo } from '../utils/optimizedImage';
 import React, { useState, useEffect, useRef } from 'react';
 import { PRIME_AVAILABLE } from '../constants/features';
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, animate, useInView, useMotionValueEvent } from 'motion/react';
@@ -81,7 +82,7 @@ export default function HomePage() {
     }
     setWholesaleLoading(true);
     const formData = new FormData(e.currentTarget);
-    
+
     let imageBase64 = '';
     const imageFile = formData.get('image') as File;
     if (imageFile && imageFile.size > 0) {
@@ -160,7 +161,7 @@ export default function HomePage() {
   return (
     <div className="bg-brand-bg text-brand-black">
       {/* 1. Hero (Video or Image Slider) */}
-      <section 
+      <section
         className="relative h-[70vh] md:h-[90vh] overflow-hidden bg-brand-black"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -178,7 +179,7 @@ export default function HomePage() {
           </div>
         ) : (
           <AnimatePresence mode="wait">
-            <motion.div 
+            <motion.div
               key={heroSlides[currentSlide].id}
               initial={{ opacity: 0, scale: 1.05 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -186,18 +187,18 @@ export default function HomePage() {
               transition={{ duration: 1.5, ease: "easeInOut" }}
               className="absolute inset-0"
             >
-              <img 
-                src={heroSlides[currentSlide].imageUrl} 
-                alt={heroSlides[currentSlide].heading} 
+              <img
+                {...photo(heroSlides[currentSlide].imageUrl, 'hero')}
+                alt={heroSlides[currentSlide].heading}
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
               />
             </motion.div>
           </AnimatePresence>
         )}
-        
+
         <div className="absolute inset-0 bg-gradient-to-b from-brand-black/40 via-brand-black/20 to-brand-black/80 z-20 pointer-events-none" />
-        
+
         <div className="absolute inset-0 flex flex-col items-center justify-center text-brand-white text-center px-4 md:px-6 z-30 pointer-events-none">
           <div className="w-full max-w-4xl pointer-events-auto">
             <AnimatePresence mode="wait">
@@ -262,7 +263,7 @@ export default function HomePage() {
             {siteContent.homepage.collections.items?.map((collection: any, index: number) => {
               let colSpan = "col-span-4";
               let heightClass = "h-[60vh]";
-              
+
               if (index < 3) {
                 colSpan = "col-span-4";
                 heightClass = "h-[60vh]";
@@ -272,8 +273,8 @@ export default function HomePage() {
               }
 
               return (
-                <Link 
-                  key={`desktop-${collection.id}`} 
+                <Link
+                  key={`desktop-${collection.id}`}
                   to={collection.link}
                   className={`group relative bg-brand-white p-3 border border-brand-black/10 shadow-sm ${heightClass} ${colSpan}`}
                 >
@@ -283,13 +284,13 @@ export default function HomePage() {
                       whileInView={{ scale: 1 }}
                       transition={{ duration: 1.5, ease: "easeOut" }}
                       viewport={{ once: true }}
-                      src={collection.image}
+                      {...photo(collection.image, 'hero')}
                       alt={collection.title}
                       className="w-full h-full object-cover transition-transform duration-[10s] group-hover:scale-105 opacity-90 group-hover:opacity-100"
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-brand-black/90 via-brand-black/20 to-transparent pointer-events-none" />
-                    
+
                     <div className="absolute bottom-0 left-0 w-full p-6 flex flex-col justify-end">
                       <div className="flex items-end justify-between">
                         <div>
@@ -315,26 +316,26 @@ export default function HomePage() {
 
           {/* Mobile Auto-slider */}
           <div className="md:hidden flex overflow-hidden relative w-full -mx-4 px-4">
-            <motion.div 
+            <motion.div
               className="flex gap-4 w-max"
               animate={{ x: ["0%", "-50%"] }}
               transition={{ repeat: Infinity, ease: "linear", duration: 20 }}
             >
               {[...(siteContent.homepage.collections.items || []), ...(siteContent.homepage.collections.items || [])].map((collection: any, index: number) => (
-                <Link 
-                  key={`mobile-${index}`} 
+                <Link
+                  key={`mobile-${index}`}
                   to={collection.link}
                   className="group relative bg-brand-white p-2 border border-brand-black/10 shadow-sm w-[260px] h-[35vh] flex-shrink-0"
                 >
                   <div className="relative w-full h-full overflow-hidden bg-brand-black">
                     <img
-                      src={collection.image}
+                      {...photo(collection.image, 'hero')}
                       alt={collection.title}
                       className="w-full h-full object-cover opacity-90"
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-brand-black/90 via-brand-black/20 to-transparent pointer-events-none" />
-                    
+
                     <div className="absolute bottom-0 left-0 w-full p-4 flex flex-col justify-end">
                       <div className="flex items-end justify-between">
                         <div>
@@ -367,7 +368,7 @@ export default function HomePage() {
                 <AnimatePresence mode="wait">
                   <motion.img
                     key={activeStoryStep}
-                    src={storySteps[activeStoryStep].image}
+                    {...photo(storySteps[activeStoryStep].image, 'hero')}
                     initial={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
                     animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
                     exit={{ opacity: 0, filter: "blur(10px)", scale: 1.05 }}
@@ -380,7 +381,7 @@ export default function HomePage() {
                 <div className="absolute inset-0 border border-brand-black/5 pointer-events-none"></div>
               </div>
             </div>
-            
+
             {/* Right: Crossfading Text */}
             <div className="w-1/2 relative h-[60vh] flex items-center pl-16">
               <AnimatePresence mode="wait">
@@ -427,7 +428,7 @@ export default function HomePage() {
               <AnimatePresence mode="wait">
                 <motion.img
                   key={activeStoryStep}
-                  src={storySteps[activeStoryStep].image}
+                  {...photo(storySteps[activeStoryStep].image, 'hero')}
                   initial={{ opacity: 0, filter: "blur(10px)", scale: 0.95 }}
                   animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
                   exit={{ opacity: 0, filter: "blur(10px)", scale: 1.05 }}
@@ -437,7 +438,7 @@ export default function HomePage() {
                 />
               </AnimatePresence>
             </div>
-            
+
             {/* Bottom: Crossfading Text */}
             <div className="h-[60vh] w-full relative px-6 pt-8">
               <AnimatePresence mode="wait">
@@ -473,7 +474,7 @@ export default function HomePage() {
       <section className="bg-brand-white pb-16 md:pb-24 pt-8 md:pt-12 overflow-hidden">
         <div className="max-w-[1400px] mx-auto px-6 md:px-12">
           {/* Scrolling Stats Section */}
-          <motion.div 
+          <motion.div
             style={{ y: statsY }}
             className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 md:gap-8 pt-8 md:pt-12 border-t border-brand-black/10"
           >
@@ -521,7 +522,7 @@ export default function HomePage() {
             <h2 className="text-3xl md:text-5xl font-display tracking-tight">Choose Your Journey</h2>
           </div>
           )}
-          
+
           <div className={`grid grid-cols-1 ${PRIME_AVAILABLE ? 'md:grid-cols-2' : ''} gap-0 border border-brand-divider`}>
             <div className={`p-8 md:p-20 bg-brand-white ${PRIME_AVAILABLE ? "border-b md:border-b-0 md:border-r border-brand-divider" : ""}`}>
               <h3 className="text-2xl md:text-3xl font-display mb-4 md:mb-6">Direct Collection</h3>
@@ -537,7 +538,7 @@ export default function HomePage() {
                 Shop Collections
               </Link>
             </div>
-            
+
             {PRIME_AVAILABLE && (
             <div className="p-8 md:p-20 bg-brand-black text-brand-white">
               <h3 className="text-2xl md:text-3xl font-display mb-4 md:mb-6 text-brand-white">Prime Membership</h3>
@@ -561,22 +562,22 @@ export default function HomePage() {
 
       {/* 6. Partner with us (Improved & Moved) */}
       <section className="relative py-20 md:py-32 overflow-hidden bg-brand-black">
-        <motion.div 
+        <motion.div
           initial={{ scale: 1.1 }}
           whileInView={{ scale: 1 }}
           transition={{ duration: 1.5, ease: "easeOut" }}
           viewport={{ once: true }}
           className="absolute inset-0"
         >
-          <img 
-            src={siteContent.homepage.partnership.img || "/placeholder.svg"}
-            alt="Partner with us" 
+          <img
+            {...photo(siteContent.homepage.partnership.img || "/placeholder.svg", 'hero')}
+            alt="Partner with us"
             className="w-full h-full object-cover opacity-40"
             referrerPolicy="no-referrer"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-brand-black via-brand-black/90 to-brand-black/40" />
         </motion.div>
-        
+
         <div className="relative z-10 max-w-[1400px] mx-auto px-6 md:px-12 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div className="max-w-2xl">
             <div className="flex items-center gap-4 mb-6 md:mb-8">
@@ -624,8 +625,8 @@ export default function HomePage() {
                 <label className="text-[10px] uppercase tracking-widest text-brand-white/70 font-bold">Storefront / Business Image</label>
                 <input required name="image" type="file" accept="image/*" className="w-full bg-transparent border-b border-brand-white/20 pb-2 text-brand-white focus:border-brand-white focus:outline-none transition-colors rounded-none file:mr-4 file:py-2 file:px-4 file:border-0 file:text-[10px] file:uppercase file:tracking-widest file:font-bold file:bg-brand-white file:text-brand-black hover:file:bg-brand-white/90 cursor-pointer" />
               </div>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={wholesaleLoading}
                 className="btn-primary w-full py-4 text-[10px] uppercase tracking-[0.3em] font-bold"
               >
@@ -644,7 +645,7 @@ export default function HomePage() {
         <div className="max-w-[1200px] mx-auto px-4 md:px-12">
           {/* Architectural Grid Container */}
           <div className="grid grid-cols-1 lg:grid-cols-2 border border-brand-black/20 relative">
-            
+
             {/* Decorative corner markers to emphasize "structure" */}
             <div className="absolute -top-1 -left-1 w-2 h-2 border-t border-l border-brand-black"></div>
             <div className="absolute -top-1 -right-1 w-2 h-2 border-t border-r border-brand-black"></div>
@@ -652,7 +653,7 @@ export default function HomePage() {
             <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b border-r border-brand-black"></div>
 
             {/* Vision */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
@@ -661,7 +662,7 @@ export default function HomePage() {
             >
               {/* Subtle background grid pattern for "architectural precision" */}
               <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-              
+
               <div className="relative z-10">
                 <div className="flex items-center gap-4 mb-4 md:mb-6">
                   <span className="w-6 h-[1px] bg-brand-black"></span>
@@ -679,7 +680,7 @@ export default function HomePage() {
             </motion.div>
 
             {/* Mission */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
@@ -698,7 +699,7 @@ export default function HomePage() {
               <p className="text-sm md:text-base text-brand-secondary/80 font-light leading-relaxed mb-6 md:mb-8">
                 {siteContent.homepage.mission?.text || 'Our mission is to create a premium menswear experience through the meticulous selection of fabrics, elegant design discipline, careful presentation, and thoughtful service.'}
               </p>
-              
+
               {siteContent.homepage.mission?.points && siteContent.homepage.mission.points.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 pt-6 md:pt-8 border-t border-brand-black/10">
                   {siteContent.homepage.mission.points.map((point: any, idx: number) => (

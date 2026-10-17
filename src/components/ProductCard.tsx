@@ -16,6 +16,7 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
   const { addToCart } = useCart();
   const { isLoggedIn } = useAuth();
   const [added, setAdded] = useState(false);
+  const hasSecondaryImage = !!product.images?.[1];
   const isWishlisted = isInWishlist(product.id);
 
   const toggleWishlist = (e: React.MouseEvent) => {
@@ -41,12 +42,12 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
           <OptimizedImage
             src={product.image} 
             alt={product.name} 
-            className="absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-out group-hover:opacity-0"
+            className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-out ${hasSecondaryImage ? 'group-hover:opacity-0' : ''}`}
             referrerPolicy="no-referrer"
           />
           
           {/* Secondary Image - Closeup View */}
-          {product.images && product.images.length > 1 && (
+          {hasSecondaryImage && (
             <div className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 transition-all duration-1000 ease-out">
               <OptimizedImage
                 src={product.images[1]} 
@@ -59,6 +60,7 @@ export const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
         </Link>
         
         <button 
+          aria-label={isWishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
           onClick={toggleWishlist}
           className="absolute top-4 right-4 p-2 transition-transform hover:scale-110 z-10"
         >

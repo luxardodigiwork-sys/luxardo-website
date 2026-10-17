@@ -38,15 +38,9 @@ const StyleConsultationPage = lazy(() => import("./pages/StyleConsultationPage")
 const FabricLibraryPage = lazy(() => import("./pages/FabricLibraryPage"));
 
 import { WishlistProvider } from "./context/WishlistContext";
-import { CountryProvider, useCountry } from "./context/CountryContext";
-import { FirstVisitModal } from "./components/FirstVisitModal";
+import { CountryProvider } from "./context/CountryContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
-function CountryModalBridge() {
-  const { showModal, setCountry } = useCountry();
-  if (!showModal) return null;
-  return <FirstVisitModal onSelect={setCountry} />;
-}
 import { CartProvider } from "./context/CartContext";
 import { ProductsProvider } from "./context/ProductsContext";
 import { PRIME_AVAILABLE } from "./constants/features";
@@ -81,6 +75,8 @@ const OwnerDashboardPage = lazy(() => import("./pages/owner/OwnerDashboardPage")
 import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
 const StaffLoginPage = lazy(() => import("./pages/StaffLoginPage"));
 const AdminStaffPage = lazy(() => import("./pages/admin/AdminStaffPage"));
+const AdminNewsletterPage = lazy(() => import("./pages/admin/AdminNewsletterPage"));
+const AdminPhotoOptimizerPage = lazy(() => import("./pages/admin/AdminPhotoOptimizerPage"));
 import CookieConsent from "./components/CookieConsent";
 import { CHECKOUT_ENABLED } from "./constants/features";
 
@@ -133,7 +129,6 @@ export default function App() {
   return (
     <AuthProvider>
       <CountryProvider>
-        <CountryModalBridge />
       <ProductsProvider>
       <CartProvider>
         <WishlistProvider>
@@ -160,6 +155,8 @@ export default function App() {
                 />
                 <Route path="content" element={<AdminContentPage />} />
                 <Route path="media" element={<AdminMediaPage />} />
+                <Route path="photo-optimizer" element={<AdminPhotoOptimizerPage />} />
+                <Route path="newsletter" element={<AdminNewsletterPage />} />
                 <Route
                   path="prime-content"
                   element={<AdminPrimeContentPage />}

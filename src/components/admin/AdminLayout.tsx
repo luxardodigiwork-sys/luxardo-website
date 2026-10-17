@@ -32,6 +32,7 @@ export default function AdminLayout() {
       title: 'Content',
       items: [
         { path: '/admin/media', label: 'Media', icon: ImageIcon },
+        { path: '/admin/photo-optimizer', label: 'Photo Optimizer', icon: ImageIcon },
         { path: '/admin/content', label: 'Site Content', icon: FileText },
         { path: '/admin/prime-content', label: 'Prime Content', icon: Crown },
         { path: '/admin/policies', label: 'Policies', icon: Shield },
@@ -44,6 +45,7 @@ export default function AdminLayout() {
         { path: '/admin/bespoke-requests', label: 'Bespoke Requests', icon: Send },
         { path: '/admin/partners', label: 'Partners', icon: Wallet },
         { path: '/admin/contact-messages', label: 'Contact Messages', icon: Mail },
+        { path: '/admin/newsletter', label: 'Newsletter', icon: Mail },
       ]
     },
     {

@@ -25,3 +25,19 @@ export function resizedImageUrl(url: string | undefined | null): string | undefi
   const resized = `${dir}${RESIZED_DIR}/${base}${RESIZED_SUFFIX}`;
   return `https://firebasestorage.googleapis.com/v0/b/${m[1]}/o/${encodeURIComponent(resized)}?alt=media`;
 }
+
+/** Responsive sources for storefront photos; private/non-Firebase assets are left unchanged. */
+export function photo(url: string | null | undefined, kind: 'card' | 'full' | 'hero' = 'card') {
+  const original = url || '';
+  const small = resizedImageUrl(original);
+  if (!small) return { src: original, decoding: 'async' as const };
+  const onError = (event: { currentTarget: HTMLImageElement }) => {
+    const img = event.currentTarget;
+    if (img.getAttribute('src') === original && !img.getAttribute('srcset')) return;
+    img.removeAttribute('srcset'); img.removeAttribute('sizes');
+    img.src = original;
+  };
+  return kind === 'card'
+    ? { src: small, decoding: 'async' as const, onError }
+    : { src: original, srcSet: `${small} 800w, ${original} 2000w`, sizes: kind === 'hero' ? '100vw' : '(min-width: 1024px) 60vw, 100vw', decoding: 'async' as const, onError };
+}

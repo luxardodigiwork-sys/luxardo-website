@@ -1,3 +1,4 @@
+import * as identity from '../src/utils/collectionIdentity';
 // Client-side gating + catalogue state logic (pure functions, no Firebase).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -139,16 +140,17 @@ const track: typeof trackNs = (trackNs as any).default ?? trackNs;
 const policies: typeof policiesNs = (policiesNs as any).default ?? policiesNs;
 const read = (rel: string) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 
-test('admin category options are exactly the storefront collection names (no legacy "Premium ..." names)', () => {
+test('published admin collection IDs and legacy names resolve to the same storefront category', () => {
   assert.deepEqual(constants.COLLECTION_CATEGORIES, constants.COLLECTIONS.map((c: any) => c.fullName));
-  assert.ok(constants.COLLECTION_CATEGORIES.includes('Tuxedo') && constants.COLLECTION_CATEGORIES.includes('3 Piece Suit'));
-  for (const f of ['src/pages/admin/AdminAddProductPage.tsx', 'src/pages/admin/AdminEditProductPage.tsx']) {
-    const src = read(f);
-    assert.match(src, /categories = COLLECTION_CATEGORIES/, f);
-    assert.doesNotMatch(src, /Premium (Tuxedos|Suits|Koti Kurta|Kurta Pajama|Bomber Jackets)|Kurta Editions/, f);
+  const list = [{ id: 'stable-category-1', name: 'Renamed Collection' }];
+  assert.deepEqual(identity.collectionOptions(list), [{ value: 'stable-category-1', label: 'Renamed Collection' }]);
+  const storefront = { id: 'new-route', categoryId: 'stable-category-1', fullName: 'Renamed Collection' };
+  assert.equal(identity.matchesCollection('stable-category-1', storefront), true);
+  assert.equal(identity.matchesCollection('Renamed Collection', storefront), true);
+  for (const collection of constants.COLLECTIONS) {
+    assert.equal(identity.matchesCollection(collection.fullName.toUpperCase(), collection), true);
+    assert.equal(identity.matchesCollection(collection.id, collection), true);
   }
-  // storefront matching is exact, which is why the names above must match
-  assert.match(read('src/pages/CollectionDetailPage.tsx'), /p\.category === collection\?\.fullName/);
 });
 test('new-product defaults: Ready-to-Stitch on, stock 0, no preselected category; edit never invents stock', () => {
   const add = read('src/pages/admin/AdminAddProductPage.tsx');

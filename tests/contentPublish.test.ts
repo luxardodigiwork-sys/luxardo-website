@@ -8,6 +8,7 @@ import { doc, getDoc, setDoc, getDocs, collection } from 'firebase/firestore';
 import * as pubNs from '../src/utils/contentPublish';
 import * as modelNs from '../src/utils/contentModel';
 import * as constNs from '../src/constants';
+import { replaceDocumentPhotos } from '../src/utils/photoMaintenanceStore';
 const unwrap = <T,>(m: T): T => (m as any).default ?? m;
 const { newRemoteState, publishJsonDoc, publishCollectionList, revOf, describePublishError } = unwrap(pubNs);
 const { adminCollectionsFromStorefront, toStorefrontCollections } = unwrap(modelNs);
@@ -150,4 +151,43 @@ test('the old admin-only garment seed (ids that never existed on the storefront)
   assert.ok(!src.includes('DEFAULT_COLLECTIONS'));
   assert.ok(!/Premium (Tuxedos|Suits|Bomber Jackets)/.test(src));
   assert.ok(!src.includes("localStorage.setItem('LUXARDO FASHION_admin_collections'"), 'the admin page must not seed or write the collections cache itself');
+});
+
+
+const oldPhoto = 'https://firebasestorage.googleapis.com/v0/b/test-project.firebasestorage.app/o/products%2Foriginal.jpg?alt=media';
+const newPhoto = 'https://firebasestorage.googleapis.com/v0/b/test-project.firebasestorage.app/o/products%2Foptimized%2Fnew.webp?alt=media';
+const photoMap = () => new Map([[oldPhoto, newPhoto]]);
+
+test('photo maintenance preserves live stock/price and never restores a concurrently changed image', async () => {
+  await seedRemote('products/p1', { name: 'Fabric', price: 1500, stock: 1, image: oldPhoto });
+  assert.equal(await replaceDocumentPhotos(adminFs(), 'products', 'p1', photoMap()), true);
+  const updated = await remoteDoc('products/p1');
+  assert.equal(updated.image, newPhoto); assert.equal(updated.stock, 1); assert.equal(updated.price, 1500);
+  // A scan held the old URL, but another admin has replaced it before apply.
+  const newest = oldPhoto.replace('original.jpg', 'newest.jpg');
+  await seedRemote('products/p1', { name: 'Fabric', price: 1700, stock: 0, image: newest });
+  assert.equal(await replaceDocumentPhotos(adminFs(), 'products', 'p1', photoMap()), false);
+  assert.equal((await remoteDoc('products/p1')).image, newest);
+  assert.equal((await remoteDoc('products/p1')).stock, 0);
+});
+
+test('photo maintenance increments site/collection revisions so stale editors cannot undo it', async () => {
+  await seedRemote('siteContent/main', { json: JSON.stringify({ image: oldPhoto, text: 'Latest copy' }), rev: 3 });
+  assert.equal(await replaceDocumentPhotos(adminFs(), 'siteContent', 'main', photoMap()), true);
+  const updated = await remoteDoc('siteContent/main');
+  assert.equal(updated.rev, 4); assert.deepEqual(JSON.parse(updated.json), { image: newPhoto, text: 'Latest copy' });
+  await rejectsWith(publishJsonDoc(adminFs(), ready({ site: 3 }), 'site', ['siteContent', 'main'], '{}', {}), 'conflict');
+  await seedRemote('collections/a', col('a', { bannerImageUrl: oldPhoto }));
+  await seedRemote('siteContent/collectionsMeta', { rev: 5 });
+  assert.equal(await replaceDocumentPhotos(adminFs(), 'collections', 'a', photoMap()), true);
+  assert.equal((await remoteDoc('siteContent/collectionsMeta')).rev, 6);
+  await rejectsWith(publishCollectionList(adminFs(), ready({ collections: 5, collectionIds: ['a'] }), [col('a')], {}), 'conflict');
+});
+
+test('photo maintenance is admin-only and unsupported collections cannot be patched', async () => {
+  await seedRemote('products/p1', { name: 'Fabric', price: 1000, stock: 2, image: oldPhoto });
+  const customer = env.authenticatedContext('customer', { firebase: { sign_in_provider: 'phone' } }).firestore();
+  await assert.rejects(replaceDocumentPhotos(customer, 'products', 'p1', photoMap()), (error: any) => error.code === 'permission-denied');
+  await assert.rejects(replaceDocumentPhotos(adminFs(), 'orders', 'order1', photoMap()), /Unsupported/);
+  assert.equal((await remoteDoc('products/p1')).image, oldPhoto);
 });

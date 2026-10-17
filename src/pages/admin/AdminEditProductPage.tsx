@@ -1,9 +1,10 @@
+import { collectionOptions } from '../../utils/collectionIdentity';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { productStore } from '../../utils/productStore';
-import { COLLECTION_CATEGORIES } from '../../constants';
+import { getAdminCollections, useContentVersion } from '../../utils/contentSync';
 import { useProducts } from '../../context/ProductsContext';
 import { Product } from '../../types';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
@@ -20,7 +21,8 @@ export default function AdminEditProductPage() {
 
   // Offer exactly the storefront collection names. A product saved with an older, non-matching category keeps it
   // (shown below as an extra option) until an admin deliberately picks a collection.
-  const categories = COLLECTION_CATEGORIES;
+  useContentVersion();
+  const categories = collectionOptions(getAdminCollections().list);
 
   useEffect(() => {
     const fetchProduct = () => {
@@ -170,11 +172,11 @@ export default function AdminEditProductPage() {
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black"
                 >
-                  {formData.category && !categories.includes(formData.category) && (
+                  {formData.category && !categories.some(category => category.value === formData.category) && (
                     <option value={formData.category}>{formData.category} (not in any storefront collection)</option>
                   )}
                   {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
                   ))}
                 </select>
               </div>
