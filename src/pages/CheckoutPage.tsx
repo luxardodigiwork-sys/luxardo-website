@@ -58,7 +58,7 @@ export default function CheckoutPage() {
     track('begin_checkout', { value: cartSubtotal, items: cartItems.map((i) => ({ id: i.product.id, name: i.product.name, price: i.product.price, quantity: i.quantity })) });
   }, [cartItems.length]);
   const quote = getShippingQuote(cartSubtotal);
-  const gate = getCheckoutGate({ isAuthReady, firebaseUser: auth.currentUser });
+  const gate = isCheckoutEnabled() ? getCheckoutGate({ isAuthReady, firebaseUser: auth.currentUser }) : 'disabled';
   const redirectToLogin = () => navigate("/login", { replace: true, state: { from: location } });
   useEffect(() => {
     if (gate === "login") redirectToLogin();

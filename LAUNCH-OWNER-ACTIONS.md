@@ -19,16 +19,16 @@ Use TWO Firebase projects: **staging** first, **production** only after staging 
 3. Authentication: enable **Google** and **Phone**; Authorized domains: add staging/custom domains. Optionally add phone test numbers.
 4. Create Firestore (location chosen deliberately) and Storage.
 5. Replace `REPLACE_WITH_STAGING_PROJECT_ID` / `REPLACE_WITH_PRODUCTION_PROJECT_ID` in `.firebaserc`.
-6. Sign in once on staging; copy your UID (Authentication -> Users). Admin currently also works through two hardcoded UIDs in `firestore.rules`/`storage.rules` (see LAUNCH-SAFETY-NOTES below) - replace them with yours before production.
+6. Sign in once on staging; copy your UID (Authentication -> Users). Staff access should be granted through server-issued Firebase custom claims. Verify the actual staging UID and claims; never assume they are configured just because the code supports them.
 7. Set Function params/secrets with the CLI: `RAZORPAY_KEY_ID`, `ADMIN_UIDS`, optional `OWNER_NOTIFY_EMAIL`; secrets `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`.
 8. Deploy functions/rules (command above), then Hosting preview. Copy the `razorpayWebhook` URL.
 9. Razorpay (Test mode): webhook to that URL, events payment.captured, payment.failed, order.paid, same secret.
-10. Install the **Trigger Email from Firestore** extension (collection `mail`) with a real SMTP/SendGrid account and verified sender. Until then orders queue mail documents but NOTHING is delivered.
+10. Configure Resend for the existing `mail` queue: set the Functions secret `RESEND_API_KEY`; set `MAIL_FROM` to a sender on a domain verified in Resend; set `OWNER_NOTIFY_EMAIL` to the monitored owner address. The current backend uses Resend, not Trigger Email. Do NOT install a second sender on the same queue: competing consumers can duplicate delivery or conflict on delivery state. Do not uninstall or alter any existing production extension without a separate migration plan.
 
 ## Admin UID note
-`firestore.rules` and `storage.rules` grant admin to `request.auth.uid` equal to two literal UIDs, or to an `admin` custom claim. UIDs are assigned by Firebase and cannot be chosen by visitors, so strangers cannot become admin; but the UIDs are public in the repo and are meaningless in a new project. Before production: replace both with your own UIDs (or move to the `admin` claim once a claim-setting script exists - not in the repo yet). Do not remove them without a replacement or you lose admin access.
+`firestore.rules` and `storage.rules` support an owner bootstrap UID and server-issued admin/role claims. Do not edit UID literals based on guesswork. Use maintained server-side staff-role tooling to assign claims, verify them with a test account, and ensure a user's editable profile cannot grant staff access. Bootstrap UID migration requires a reviewed rules change and an explicit project-specific UID from Firebase Console.
 
-## Catalogue (currently empty -> storefront shows "Products coming soon")
+## Resend email setup\n1. Verify the sending domain and sender identity in Resend.\n2. Set the Functions secret `RESEND_API_KEY`; set `MAIL_FROM` to a verified sender and `OWNER_NOTIFY_EMAIL` to the monitored owner address.\n3. Emulator tests do not prove real provider delivery. Test a real message on staging only.\n\n## Deploy code and rules separately\n- Hosting is a manual GitHub Actions workflow and deploys the frontend only; checkout stays disabled by default.\n- Deploy Functions, Firestore rules, Storage rules, and indexes separately to staging after review: `firebase deploy --only functions,firestore:rules,storage,firestore:indexes --project staging`. Never omit `--project`.\n- The expiry sweep requires the composite orders index checked into this PR.\n\n## Catalogue (currently empty -> storefront shows "Products coming soon")
 Per single-piece product: name, category, price (INR), stock count, fabric/composition, colour, available sizes, description, 1+ real photos. Add via Admin -> Add Product.
 
 ## Not yet verified (needs staging)

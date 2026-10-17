@@ -40,8 +40,11 @@ export interface CreateOrderInput {
   expectedTotalPaise?: number;
 }
 
-/** A payment-order creation that has been "in progress" longer than this is presumed dead and may be taken over. */
-export const PAYMENT_ORDER_STALE_MS = 30_000;
+/**
+ * Razorpay's documented Orders API does not expose a create-order idempotency key.
+ * An ambiguous attempt must not be taken over automatically: the provider may have
+ * created an order even if this process never persisted its ID.
+ */
 const PAYMENT_ORDER_WAIT_MS = 10_000;
 const PAYMENT_ORDER_POLL_MS = 100;
 
@@ -96,6 +99,7 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
     : [];
 
   let raced: FirebaseFirestore.DocumentData | undefined;
+  const attemptId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const totals = await db.runTransaction(async (tx) => {
     raced = undefined;
     if (requestId) {
@@ -144,69 +148,110 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
       qtyByProduct: t.qtyByProduct,
       razorpayOrderId: null,
       razorpayPaymentId: null,
-      rzpOrderPendingAt: new Date().toISOString(), // this request is creating the Razorpay order; repeat requests must wait, not create another
+      rzpOrderCreationState: "creating",
+      rzpOrderAttemptId: attemptId,
+      rzpOrderPendingAt: new Date().toISOString(), // diagnostic only; never authorizes a second external create
     });
     return t;
   });
 
   if (!totals) return resumeExistingOrder(db, rzp, orderRef, raced!, input.expectedTotalPaise, input.paymentOrderWaitMs);
 
+  let rz: { id: string; amount: number | string; currency: string };
   try {
-    const rz = await rzp.orders.create({
+    // Receipt/notes are reconciliation metadata, not documented idempotency guarantees.
+    rz = await rzp.orders.create({
       amount: totals.totalPaise,
       currency: CURRENCY,
       receipt: orderRef.id,
       notes: { orderId: orderRef.id, uid: input.uid },
     });
-    await orderRef.update({ razorpayOrderId: rz.id, rzpOrderPendingAt: FieldValue.delete() });
+  } catch {
+    await markPaymentOrderReconciliationRequired(db, orderRef, attemptId, "provider_create_ambiguous");
+    throw paymentOrderPendingError();
+  }
+
+  try {
+    const acceptedId = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists) return null;
+      const current = snap.data()!;
+      if (current.razorpayOrderId) return current.razorpayOrderId as string;
+      if (current.rzpOrderAttemptId !== attemptId || current.rzpOrderCreationState !== "creating") return null;
+      tx.update(orderRef, {
+        razorpayOrderId: rz.id,
+        rzpOrderCreationState: "ready",
+        rzpOrderPendingAt: FieldValue.delete(),
+        rzpOrderAttemptId: FieldValue.delete(),
+      });
+      return rz.id;
+    });
+    if (acceptedId !== rz.id) {
+      await markPaymentOrderReconciliationRequired(db, orderRef, attemptId, "stale_provider_completion");
+      throw paymentOrderPendingError();
+    }
     return { orderId: orderRef.id, razorpayOrderId: rz.id, amountPaise: totals.totalPaise, currency: CURRENCY, total: totals.totalPaise / 100 };
-  } catch (err) {
-    // Compensate: nothing was payable, so give the stock back and close the order.
-    await releaseOrderStock(db, orderRef.id, "payment_provider_error", { onlyIfUnpaid: true }).catch(() => undefined);
-    throw err;
+  } catch {
+    // Provider success plus persistence failure is ambiguous. Preserve the reservation for reconciliation.
+    await markPaymentOrderReconciliationRequired(db, orderRef, attemptId, "provider_succeeded_persistence_ambiguous");
+    throw paymentOrderPendingError();
   }
 }
 
 /**
- * Same user + same requestId: hand back the existing order instead of creating (and charging for) a second one.
- * The Razorpay order is created exactly once per order: whoever atomically claims `rzpOrderPendingAt` creates it; every other
- * request waits for `razorpayOrderId` to appear. A claim older than PAYMENT_ORDER_STALE_MS belongs to a dead request and can be taken over.
+ * Retry handling for the same request key. Without a provider idempotency key, an
+ * absent ID is not proof that the first provider request failed. Never create again here.
  */
+function paymentOrderPendingError(): OrderError {
+  return new OrderError("unavailable", "Payment setup is pending reconciliation. Do not retry payment yet; please refresh your orders or contact support if this persists.");
+}
+
+async function markPaymentOrderReconciliationRequired(
+  db: Firestore,
+  ref: FirebaseFirestore.DocumentReference,
+  attemptId: string,
+  reason: string,
+): Promise<void> {
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    const d = snap.data()!;
+    if (d.razorpayOrderId || d.rzpOrderAttemptId !== attemptId) return;
+    tx.update(ref, {
+      rzpOrderCreationState: "reconciliation_required",
+      rzpOrderReconciliationReason: reason,
+      rzpOrderPendingAt: d.rzpOrderPendingAt || new Date().toISOString(),
+    });
+  }).catch(() => undefined);
+}
+
 async function resumeExistingOrder(
-  db: Firestore, rzp: RazorpayLike, ref: FirebaseFirestore.DocumentReference, first: FirebaseFirestore.DocumentData, expectedTotalPaise?: number, waitMs = PAYMENT_ORDER_WAIT_MS,
+  db: Firestore, _rzp: RazorpayLike, ref: FirebaseFirestore.DocumentReference, first: FirebaseFirestore.DocumentData,
+  expectedTotalPaise?: number, waitMs = PAYMENT_ORDER_WAIT_MS,
 ): Promise<CreatedOrder> {
   const processed = () => new OrderError("failed-precondition", "This order has already been processed. Please refresh and check your orders.");
-  const ready = (o: FirebaseFirestore.DocumentData): CreatedOrder => ({ orderId: ref.id, razorpayOrderId: o.razorpayOrderId as string, amountPaise: o.amountPaise, currency: o.currency, total: o.amountPaise / 100 });
+  const ready = (d: FirebaseFirestore.DocumentData): CreatedOrder => ({
+    orderId: ref.id, razorpayOrderId: d.razorpayOrderId as string, amountPaise: d.amountPaise,
+    currency: d.currency, total: d.amountPaise / 100,
+  });
   if (expectedTotalPaise !== undefined && expectedTotalPaise !== first.amountPaise) throw new OrderError("failed-precondition", PRICE_CHANGED_MESSAGE);
   if (first.status !== "pending" || first.paymentStatus !== "pending") throw processed();
 
   const deadline = Date.now() + waitMs;
   for (;;) {
-    const verdict = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const d = snap.data();
-      if (!snap.exists || !d || d.status !== "pending" || d.paymentStatus !== "pending") return { state: "closed" as const };
-      if (d.razorpayOrderId) return { state: "ready" as const, d };
-      const startedAt = typeof d.rzpOrderPendingAt === "string" ? Date.parse(d.rzpOrderPendingAt) : 0;
-      if (startedAt && Date.now() - startedAt < PAYMENT_ORDER_STALE_MS) return { state: "busy" as const };
-      tx.update(ref, { rzpOrderPendingAt: new Date().toISOString() }); // claim: an earlier attempt died before the payment order existed
-      return { state: "claimed" as const, d };
-    });
-    if (verdict.state === "closed") throw processed();
-    if (verdict.state === "ready") return ready(verdict.d);
-    if (verdict.state === "claimed") {
-      const d = verdict.d;
-      try {
-        const rz = await rzp.orders.create({ amount: d.amountPaise, currency: d.currency, receipt: ref.id, notes: { orderId: ref.id, uid: d.userId } });
-        await ref.update({ razorpayOrderId: rz.id, rzpOrderPendingAt: FieldValue.delete() });
-        return ready({ ...d, razorpayOrderId: rz.id });
-      } catch (err) {
-        await ref.update({ rzpOrderPendingAt: FieldValue.delete() }).catch(() => undefined); // let a retry claim it straight away
-        throw err;
-      }
+    const snap = await ref.get();
+    const d = snap.data();
+    if (!snap.exists || !d || d.status !== "pending" || d.paymentStatus !== "pending") throw processed();
+    if (d.razorpayOrderId) return ready(d);
+    if (!d.rzpOrderCreationState) {
+      await ref.update({
+        rzpOrderCreationState: "reconciliation_required",
+        rzpOrderReconciliationReason: "legacy_order_missing_provider_id",
+      }).catch(() => undefined);
+      throw paymentOrderPendingError();
     }
-    // busy: another request is creating the payment order right now
-    if (Date.now() >= deadline) throw new OrderError("failed-precondition", "Your payment is still being prepared. Please try again in a moment.");
+    if (d.rzpOrderCreationState === "reconciliation_required") throw paymentOrderPendingError();
+    if (d.rzpOrderCreationState !== "creating" || Date.now() >= deadline) throw paymentOrderPendingError();
     await new Promise((r) => setTimeout(r, PAYMENT_ORDER_POLL_MS));
   }
 }
@@ -363,10 +408,16 @@ export async function verifyAndApplyPayment(db: Firestore, rzp: RazorpayLike, in
 
 /** Expiry sweep: releases stock for unpaid orders past their payment window. */
 export async function releaseExpiredOrders(db: Firestore, now: Date = new Date(), limit = 200): Promise<number> {
-  const q = await db.collection("orders").where("expiresAt", "<", now.toISOString()).limit(limit).get();
+  // Filter unpaid pending records before limit; historical paid/cancelled records must not starve the sweep.
+  const q = await db.collection("orders")
+    .where("status", "==", "pending")
+    .where("paymentStatus", "==", "pending")
+    .where("expiresAt", "<", now.toISOString())
+    .orderBy("expiresAt", "asc")
+    .limit(limit)
+    .get();
   let released = 0;
   for (const d of q.docs) {
-    if (d.data().status !== "pending" || d.data().paymentStatus !== "pending") continue;
     if (await releaseOrderStock(db, d.id, "payment_window_elapsed", { onlyIfUnpaid: true })) released++;
   }
   return released;

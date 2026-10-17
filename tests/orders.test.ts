@@ -99,11 +99,13 @@ test('concurrent orders cannot oversell the last unit', async () => {
   assert.equal(await stockOf('b'), 0);
 });
 
-test('Razorpay failure rolls the reservation back', async () => {
-  await assert.rejects(buy(fakeRazorpay({ failCreate: true }), [{ productId: 'a', quantity: 2, size: '40' }]), /razorpay down/);
-  assert.equal(await stockOf('a'), 5);
+test('ambiguous Razorpay create failure preserves stock reservation and marks reconciliation required', async () => {
+  await assert.rejects(buy(fakeRazorpay({ failCreate: true }), [{ productId: 'a', quantity: 2, size: '40' }]), /pending reconciliation/);
+  assert.equal(await stockOf('a'), 3);
   const orders = await db.collection('orders').get();
-  assert.equal(orders.size, 1); assert.equal(orders.docs[0].data().status, 'cancelled');
+  assert.equal(orders.size, 1);
+  assert.equal(orders.docs[0].data().status, 'pending');
+  assert.equal(orders.docs[0].data().rzpOrderCreationState, 'reconciliation_required');
 });
 
 test('captured payment marks the order paid once; replays and duplicate webhook events change nothing', async () => {
@@ -623,75 +625,89 @@ test('an unpaid cancellation or a normal paid order creates no refund flag and n
 });
 
 
-// ---------- double-submit race: exactly one Razorpay order per requestId ----------
+// ---------- external-provider ambiguity: retries must not infer safe retry from a lease ----------
 const sameReq = (rz: RazorpayLike, requestId = 'req-race-0001', extra: any = {}) =>
   createCheckoutOrder(db, rz, { uid: 'u1', lines: [{ productId: 'a', quantity: 2, size: '40' }], address, shipping: NO_RULE, requestId, ...extra });
 
-test('race: a repeat request that arrives while the first is still creating the Razorpay order must wait for it, not create a second one', async () => {
+test('slow first request beyond the old lease does not trigger another Razorpay create', async () => {
   let release!: () => void;
   const gate = new Promise<void>((r) => { release = r; });
   const rz = fakeRazorpay({ gate });
-  const a = sameReq(rz);                                         // first request: order + stock reserved, now stuck inside Razorpay
+  const first = sameReq(rz);
   for (let i = 0; i < 100 && rz.calls < 1; i++) await new Promise((r) => setTimeout(r, 25));
-  assert.equal(rz.calls, 1, 'setup: first request should be waiting on Razorpay');
-  const b = sameReq(rz);                                         // double-click / retry while the first is in flight
-  const bSettledEarly = await Promise.race([b.then(() => true, () => true), new Promise((r) => setTimeout(() => r(false), 2500))]);
-  assert.equal(rz.calls, 1, 'the repeat request created a SECOND Razorpay order for the same checkout');
-  assert.equal(bSettledEarly, false, 'the repeat request must wait for the first to finish creating the payment order');
+  const ref = (await db.collection('orders').get()).docs[0].ref;
+  await ref.update({ rzpOrderPendingAt: new Date(Date.now() - 60_000).toISOString() });
+  await assert.rejects(() => sameReq(rz, 'req-race-0001', { paymentOrderWaitMs: 250 }), /pending reconciliation|still being prepared/);
+  assert.equal(rz.calls, 1);
   release();
-  const [ra, rb] = await Promise.all([a, b]);
-  const stored = await rawOrderOf(ra.orderId);
+  const accepted = await first;
   assert.equal(rz.created.length, 1);
-  assert.equal(ra.razorpayOrderId, rb.razorpayOrderId, 'callers were handed different Razorpay orders');
-  assert.equal(ra.razorpayOrderId, stored.razorpayOrderId, 'the order stores a different Razorpay id than the one the customer pays');
-  assert.equal((await db.collection('orders').get()).size, 1);
-  assert.equal(await stockOf('a'), 3);                           // reserved once
-  assert.equal(stored.rzpOrderPendingAt, undefined, 'pending marker must be cleared once the payment order exists');
+  assert.equal((await rawOrderOf(accepted.orderId)).razorpayOrderId, accepted.razorpayOrderId);
 });
-test('race: an order whose creator died before the payment order existed is taken over by exactly one of several concurrent retries', async () => {
-  const first = await sameReq(fakeRazorpay());                    // creates order + payment order
-  const ref = db.collection('orders').doc(first.orderId);
-  // simulate a crash between "order reserved" and "payment order stored": no razorpay id, and a stale (or, for legacy orders, missing) marker
-  await ref.update({ razorpayOrderId: null, rzpOrderPendingAt: new Date(Date.now() - 120_000).toISOString() });
+
+test('concurrent retries share the accepted provider ID and reserve stock once', async () => {
   const rz = fakeRazorpay({ delayMs: 150 });
   const out = await Promise.all([sameReq(rz), sameReq(rz), sameReq(rz)]);
-  assert.equal(rz.created.length, 1, 'concurrent retries created more than one payment order');
+  assert.equal(rz.created.length, 1);
   assert.equal(new Set(out.map((r) => r.razorpayOrderId)).size, 1);
-  assert.equal((await rawOrderOf(first.orderId)).razorpayOrderId, out[0].razorpayOrderId);
+  assert.equal((await rawOrderOf(out[0].orderId)).razorpayOrderId, out[0].razorpayOrderId);
   assert.equal(await stockOf('a'), 3);
-  // legacy document with no marker at all
-  await ref.update({ razorpayOrderId: null, rzpOrderPendingAt: FieldValue.delete() });
-  const rz2 = fakeRazorpay();
-  const again = await sameReq(rz2);
-  assert.equal(rz2.created.length, 1); assert.equal((await rawOrderOf(first.orderId)).razorpayOrderId, again.razorpayOrderId);
 });
-test('race: while a fresh creation is in progress a waiting retry times out with a clear error, changes nothing, and succeeds once the claim is stale', async () => {
-  const first = await sameReq(fakeRazorpay());
-  const ref = db.collection('orders').doc(first.orderId);
-  await ref.update({ razorpayOrderId: null, rzpOrderPendingAt: new Date().toISOString() }); // another request is "creating" right now
+
+test('provider success followed by persistence failure returns pending and never releases reserved stock', async () => {
+  let transactions = 0;
+  const wrapped = new Proxy(db as any, {
+    get(target, prop) {
+      if (prop === 'runTransaction') return async (fn: any) => {
+        transactions++;
+        if (transactions === 2) throw new Error('simulated persistence outage');
+        return target.runTransaction(fn);
+      };
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
   const rz = fakeRazorpay();
-  await assert.rejects(() => sameReq(rz, 'req-race-0001', { paymentOrderWaitMs: 400 }), /still being prepared/);
-  assert.equal(rz.calls, 0); assert.equal(await stockOf('a'), 3);
-  await ref.update({ rzpOrderPendingAt: new Date(Date.now() - 60_000).toISOString() });
-  const ok = await sameReq(rz, 'req-race-0001', { paymentOrderWaitMs: 400 });
-  assert.equal(rz.created.length, 1); assert.equal((await rawOrderOf(first.orderId)).razorpayOrderId, ok.razorpayOrderId);
+  await assert.rejects(() => createCheckoutOrder(wrapped, rz, {
+    uid: 'u1', lines: [{ productId: 'a', quantity: 2, size: '40' }], address, shipping: NO_RULE, requestId: 'req-persist-01',
+  }), /pending reconciliation/);
+  assert.equal(rz.created.length, 1);
+  assert.equal(await stockOf('a'), 3);
+  const order = (await db.collection('orders').get()).docs[0].data();
+  assert.equal(order.status, 'pending');
+  assert.equal(order.rzpOrderCreationState, 'reconciliation_required');
 });
-test('race: if Razorpay fails during a takeover the claim is released so the next retry can proceed', async () => {
-  const first = await sameReq(fakeRazorpay());
-  const ref = db.collection('orders').doc(first.orderId);
-  await ref.update({ razorpayOrderId: null, rzpOrderPendingAt: FieldValue.delete() });
-  await assert.rejects(() => sameReq(fakeRazorpay({ failCreate: true })), /razorpay down/);
-  assert.equal((await rawOrderOf(first.orderId)).rzpOrderPendingAt, undefined);
-  const rz = fakeRazorpay();
-  const ok = await sameReq(rz);
-  assert.equal(rz.created.length, 1); assert.equal(await stockOf('a'), 3); // still reserved exactly once
-  assert.equal((await rawOrderOf(first.orderId)).razorpayOrderId, ok.razorpayOrderId);
+
+test('stale provider completion cannot overwrite an accepted ID or a newer attempt', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  const rz = fakeRazorpay({ gate });
+  const pending = sameReq(rz);
+  for (let i = 0; i < 100 && rz.calls < 1; i++) await new Promise((r) => setTimeout(r, 25));
+  const ref = (await db.collection('orders').get()).docs[0].ref;
+  await ref.update({ rzpOrderAttemptId: 'newer-attempt', razorpayOrderId: 'order_already_accepted', rzpOrderCreationState: 'ready' });
+  release();
+  await assert.rejects(() => pending, /pending reconciliation/);
+  assert.equal((await rawOrderOf(ref.id)).razorpayOrderId, 'order_already_accepted');
+  assert.equal(await stockOf('a'), 3);
 });
-test('race: a cancelled or paid order is never handed a new payment order by a late retry', async () => {
-  const first = await sameReq(fakeRazorpay());
-  await db.collection('orders').doc(first.orderId).update({ razorpayOrderId: null });
-  await requestCancellation(db, { uid: 'u1', orderId: first.orderId });
-  const rz = fakeRazorpay();
-  await assert.rejects(() => sameReq(rz), /already been processed/);
-  assert.equal(rz.calls, 0);
+
+test('expiry sweep selects unpaid pending orders beyond 200 historical paid/cancelled records', async () => {
+  const now = new Date('2026-10-17T00:00:00.000Z');
+  const batch = db.batch();
+  for (let i = 0; i < 220; i++) {
+    batch.set(db.collection('orders').doc(`historical-${String(i).padStart(3, '0')}`), {
+      status: i % 2 ? 'processing' : 'cancelled', paymentStatus: i % 2 ? 'paid' : 'pending', expiresAt: '2026-01-01T00:00:00.000Z',
+    });
+  }
+  batch.set(db.collection('orders').doc('expired-unpaid'), {
+    userId: 'old-customer', status: 'pending', paymentStatus: 'pending', expiresAt: '2026-01-02T00:00:00.000Z',
+    stockReserved: true, stockReleased: false, qtyByProduct: { a: 1 },
+  });
+  await batch.commit();
+  const before = await stockOf('a');
+  assert.equal(await releaseExpiredOrders(db, now, 200), 1);
+  assert.equal((await rawOrderOf('expired-unpaid')).status, 'cancelled');
+  assert.equal(await stockOf('a'), before + 1);
+  assert.equal(await releaseExpiredOrders(db, now, 200), 0);
 });

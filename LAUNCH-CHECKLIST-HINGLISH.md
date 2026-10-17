@@ -42,10 +42,10 @@ Ye commands aapke PC ke terminal me chalenge (is cloud session me Firebase login
 
 ## Step 5 - Admin aur email
 - [ ] Staging site par ek baar sign in karo -> Console -> **Authentication -> Users** se apna **UID** copy karo.
-- [ ] Wahi UID `ADMIN_UIDS` me daalo. `firestore.rules` aur `storage.rules` me jo 2 purane UID hardcoded hain, unhe apne UID se badalna hai (production se pehle).
-- [ ] **Extensions -> Trigger Email from Firestore** install karo (collection: `mail`), SMTP/SendGrid ke saath. Jab tak ye nahi, email deliver nahi hogi.
+- [ ] Firebase se real UID verify karo aur server-side staff-role tooling se custom claim set/verify karo. Rules me UID guess karke edit mat karo; staff role client-editable profile se grant nahi honi chahiye.
+- [ ] Resend me sending domain/sender verify karo. Functions secret `RESEND_API_KEY`; environment config me `MAIL_FROM` (verified sender) aur `OWNER_NOTIFY_EMAIL` set karo.\n- [ ] Backend Resend use karta hai, Trigger Email extension nahi. Same `mail` queue par doosra sender install mat karo. Existing production extension ko bina separate migration plan ke uninstall/change mat karo.
 
-## Step 6 - Staging par poora test (sabse zaroori)
+## Step 5A - Resend email setup\n- [ ] Resend me domain + sender verify karo. `RESEND_API_KEY` Functions secret; `MAIL_FROM` verified sender aur `OWNER_NOTIFY_EMAIL` monitored address set karo.\n- [ ] `mail` queue par doosra sender install mat karo; existing production extension ko bina approved migration ke uninstall mat karo.\n\n## Step 6 - Staging par poora test (sabse zaroori)
 Test phone number Firebase me add kar sakte ho (Authentication -> Sign-in method -> Phone -> test numbers).
 - [ ] Ek test product daalo (Admin -> Add Product): naam, category, price, stock, photo, **Ready-to-Stitch** wording.
 - [ ] Google se sign in -> phone OTP verify.

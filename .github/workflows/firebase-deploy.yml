@@ -1,7 +1,7 @@
 name: Firebase Hosting (preview by default; production only by manual approval)
 
 # SAFETY: an ordinary push to main does NOT deploy anything. It only runs checks.
-#  - Pull requests (same repo) -> temporary Hosting PREVIEW channel on the STAGING project.
+#  - Pull requests and pushes -> checks only; no deployment.
 #  - Production -> manual "Run workflow" with target=production and the typed confirmation,
 #    and the GitHub Environment "production" (configure required reviewers there yourself).
 # Hosting only: Cloud Functions, Firestore rules and Storage rules are deployed manually with the Firebase CLI
