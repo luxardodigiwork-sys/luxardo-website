@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, lazy, Suspense } from "react";
 import { EXPRESS_BACKEND_AVAILABLE } from './constants/features';
 import { Routes, Route, Navigate } from "react-router-dom";
 import { BackendPermissions } from "./types";
@@ -8,34 +8,34 @@ import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import HomePage from "./pages/HomePage";
-import CollectionsPage from "./pages/CollectionsPage";
-import CollectionDetailPage from "./pages/CollectionDetailPage";
-import PrimePage from "./pages/PrimePage";
-import PrimeMembershipCheckoutPage from "./pages/PrimeMembershipCheckoutPage";
-import PrimeMembershipSuccessPage from "./pages/PrimeMembershipSuccessPage";
-import PrimeMembershipFailedPage from "./pages/PrimeMembershipFailedPage";
-import PrimeDashboardPage from "./pages/PrimeDashboardPage";
-import MembershipTermsPage from "./pages/MembershipTermsPage";
-import CraftsmanshipPage from "./pages/CraftsmanshipPage";
-import OurStoryPage from "./pages/OurStoryPage";
-import WholesalePage from "./pages/WholesalePage";
-import ContactPage from "./pages/ContactPage";
-import FAQPage from "./pages/FAQPage";
-import ShippingPolicyPage from "./pages/ShippingPolicyPage";
-import ReturnsPolicyPage from "./pages/ReturnsPolicyPage";
-import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
-import TermsPage from "./pages/TermsPage";
-import CartPage from "./pages/CartPage";
-import CheckoutPage from "./pages/CheckoutPage";
-import OrderConfirmationPage from "./pages/OrderConfirmationPage";
-import TrackOrderPage from "./pages/TrackOrderPage";
-import AccountPage from "./pages/AccountPage";
-import OrderDetailsPage from "./pages/OrderDetailsPage";
-import LoginPage from "./pages/LoginPage";
-import ProductPage from "./pages/ProductPage";
-import BespokeRequestPage from "./pages/BespokeRequestPage";
-import StyleConsultationPage from "./pages/StyleConsultationPage";
-import FabricLibraryPage from "./pages/FabricLibraryPage";
+const CollectionsPage = lazy(() => import("./pages/CollectionsPage"));
+const CollectionDetailPage = lazy(() => import("./pages/CollectionDetailPage"));
+const PrimePage = lazy(() => import("./pages/PrimePage"));
+const PrimeMembershipCheckoutPage = lazy(() => import("./pages/PrimeMembershipCheckoutPage"));
+const PrimeMembershipSuccessPage = lazy(() => import("./pages/PrimeMembershipSuccessPage"));
+const PrimeMembershipFailedPage = lazy(() => import("./pages/PrimeMembershipFailedPage"));
+const PrimeDashboardPage = lazy(() => import("./pages/PrimeDashboardPage"));
+const MembershipTermsPage = lazy(() => import("./pages/MembershipTermsPage"));
+const CraftsmanshipPage = lazy(() => import("./pages/CraftsmanshipPage"));
+const OurStoryPage = lazy(() => import("./pages/OurStoryPage"));
+const WholesalePage = lazy(() => import("./pages/WholesalePage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const FAQPage = lazy(() => import("./pages/FAQPage"));
+const ShippingPolicyPage = lazy(() => import("./pages/ShippingPolicyPage"));
+const ReturnsPolicyPage = lazy(() => import("./pages/ReturnsPolicyPage"));
+const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
+const CartPage = lazy(() => import("./pages/CartPage"));
+const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
+const OrderConfirmationPage = lazy(() => import("./pages/OrderConfirmationPage"));
+const TrackOrderPage = lazy(() => import("./pages/TrackOrderPage"));
+const AccountPage = lazy(() => import("./pages/AccountPage"));
+const OrderDetailsPage = lazy(() => import("./pages/OrderDetailsPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const ProductPage = lazy(() => import("./pages/ProductPage"));
+const BespokeRequestPage = lazy(() => import("./pages/BespokeRequestPage"));
+const StyleConsultationPage = lazy(() => import("./pages/StyleConsultationPage"));
+const FabricLibraryPage = lazy(() => import("./pages/FabricLibraryPage"));
 
 import { WishlistProvider } from "./context/WishlistContext";
 import { CountryProvider, useCountry } from "./context/CountryContext";
@@ -51,36 +51,36 @@ import { CartProvider } from "./context/CartContext";
 import { ProductsProvider } from "./context/ProductsContext";
 import { PRIME_AVAILABLE } from "./constants/features";
 
-import RegisterPage from "./pages/RegisterPage";
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 
 // Admin imports
-import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
-import AdminDispatchPage from "./pages/admin/AdminDispatchPage";
-import AdminOrderDetailsPage from "./pages/admin/AdminOrderDetailsPage";
-import AdminProductsPage from "./pages/admin/AdminProductsPage";
-import AdminCollectionsPage from "./pages/admin/AdminCollectionsPage";
-import AdminAddProductPage from "./pages/admin/AdminAddProductPage";
-import AdminEditProductPage from "./pages/admin/AdminEditProductPage";
-import AdminContentPage from "./pages/admin/AdminContentPage";
-import AdminMediaPage from "./pages/admin/AdminMediaPage";
-import AdminPoliciesPage from "./pages/admin/AdminPoliciesPage";
-import AdminPrimeContentPage from "./pages/admin/AdminPrimeContentPage";
-import AdminBespokeRequestsPage from "./pages/admin/AdminBespokeRequestsPage";
-import AdminPrimeMembersPage from "./pages/admin/AdminPrimeMembersPage";
-import AdminBackendManagementPage from "./pages/admin/BackendManagementPage";
-import AdminPartnersPage from "./pages/admin/AdminPartnersPage";
-import AdminContactMessagesPage from "./pages/admin/AdminContactMessagesPage";
-import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
-import DispatchDashboardPage from "./pages/dispatch/DispatchDashboardPage";
+const AdminDashboardPage = lazy(() => import("./pages/admin/AdminDashboardPage"));
+const AdminDispatchPage = lazy(() => import("./pages/admin/AdminDispatchPage"));
+const AdminOrderDetailsPage = lazy(() => import("./pages/admin/AdminOrderDetailsPage"));
+const AdminProductsPage = lazy(() => import("./pages/admin/AdminProductsPage"));
+const AdminCollectionsPage = lazy(() => import("./pages/admin/AdminCollectionsPage"));
+const AdminAddProductPage = lazy(() => import("./pages/admin/AdminAddProductPage"));
+const AdminEditProductPage = lazy(() => import("./pages/admin/AdminEditProductPage"));
+const AdminContentPage = lazy(() => import("./pages/admin/AdminContentPage"));
+const AdminMediaPage = lazy(() => import("./pages/admin/AdminMediaPage"));
+const AdminPoliciesPage = lazy(() => import("./pages/admin/AdminPoliciesPage"));
+const AdminPrimeContentPage = lazy(() => import("./pages/admin/AdminPrimeContentPage"));
+const AdminBespokeRequestsPage = lazy(() => import("./pages/admin/AdminBespokeRequestsPage"));
+const AdminPrimeMembersPage = lazy(() => import("./pages/admin/AdminPrimeMembersPage"));
+const AdminBackendManagementPage = lazy(() => import("./pages/admin/BackendManagementPage"));
+const AdminPartnersPage = lazy(() => import("./pages/admin/AdminPartnersPage"));
+const AdminContactMessagesPage = lazy(() => import("./pages/admin/AdminContactMessagesPage"));
+const AdminSettingsPage = lazy(() => import("./pages/admin/AdminSettingsPage"));
+const DispatchDashboardPage = lazy(() => import("./pages/dispatch/DispatchDashboardPage"));
 import DispatchLayout from "./components/dispatch/DispatchLayout";
 
 import AdminLayout from "./components/admin/AdminLayout";
 
 import OwnerLayout from "./components/owner/OwnerLayout";
-import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
+const OwnerDashboardPage = lazy(() => import("./pages/owner/OwnerDashboardPage"));
 import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
-import StaffLoginPage from "./pages/StaffLoginPage";
-import AdminStaffPage from "./pages/admin/AdminStaffPage";
+const StaffLoginPage = lazy(() => import("./pages/StaffLoginPage"));
+const AdminStaffPage = lazy(() => import("./pages/admin/AdminStaffPage"));
 import CookieConsent from "./components/CookieConsent";
 import { CHECKOUT_ENABLED } from "./constants/features";
 
@@ -138,6 +138,7 @@ export default function App() {
       <CartProvider>
         <WishlistProvider>
           <CookieConsent />
+          <Suspense fallback={<div role="status" className="p-8 text-center">Loading page...</div>}>
           <Routes>
             <Route path="/backend/login" element={<StaffLoginPage />} />
             <Route path="/admin/login" element={<Navigate to="/backend/login" replace />} />
@@ -370,6 +371,7 @@ export default function App() {
               <Route path="product/:id" element={<ProductPage />} />
             </Route>
           </Routes>
+          </Suspense>
         </WishlistProvider>
       </CartProvider>
       </ProductsProvider>

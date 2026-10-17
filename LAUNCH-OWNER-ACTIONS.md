@@ -5,20 +5,20 @@ Use TWO Firebase projects: **staging** first, **production** only after staging 
 
 ## Deployment model (important)
 - A push to `main` runs checks only. It does NOT deploy.
-- Pull requests from this repo get a temporary Hosting **preview channel on the staging project**.
+- Pull requests and ordinary pushes run checks only. A staging Hosting preview requires a manual workflow run with target `staging`.
 - Production Hosting deploys only via GitHub -> Actions -> "Run workflow", target `production`, typed confirmation `DEPLOY PRODUCTION`, on `main`. Add required reviewers to the GitHub Environment `production` yourself.
 - The workflow deploys **Hosting only**. Functions, Firestore rules and Storage rules are deployed with the CLI and an explicit project (there is deliberately no default project):
-  `firebase deploy --only functions,firestore:rules,storage --project staging` (alias from `.firebaserc`; production the same with `--project production`). Never run it without `--project`.
+  `firebase deploy --only functions,firestore:rules,storage,firestore:indexes --project staging` (alias from `.firebaserc`; production the same with `--project production`). Never run it without `--project`.
 - GitHub secrets (per environment): `STAGING_FIREBASE_*` / `PROD_FIREBASE_*` for API_KEY, AUTH_DOMAIN, PROJECT_ID, STORAGE_BUCKET, MESSAGING_SENDER_ID, APP_ID, MEASUREMENT_ID, plus `*_FIREBASE_SERVICE_ACCOUNT`.
 - The site refuses to start if any VITE_FIREBASE_* value is missing/invalid, or if the bucket / auth domain belong to a different project than PROJECT_ID.
-- Firestore indexes: no composite indexes are needed by the current queries (single-field equality/range only) and the repo has no `firestore.indexes.json`. If an admin query reports "requires an index", create it from the link in the error and then add `firestore.indexes.json`.
+- Deploy the checked-in `firestore.indexes.json`. The expired pending-order sweep requires its composite orders index; wait for that index to become ready before verifying expiry processing.
 
 ## Firebase Console (do for staging first)
 1. Create the project. Project settings -> General: note **Project ID**; add a **Web app** and copy its config.
 2. Upgrade to Blaze (Functions + phone SMS); set a budget alert.
 3. Authentication: enable **Google** and **Phone**; Authorized domains: add staging/custom domains. Optionally add phone test numbers.
 4. Create Firestore (location chosen deliberately) and Storage.
-5. Replace `REPLACE_WITH_STAGING_PROJECT_ID` / `REPLACE_WITH_PRODUCTION_PROJECT_ID` in `.firebaserc`.
+5. Replace the staging placeholder in `.firebaserc`; independently verify the existing production project alias before any later deployment.
 6. Sign in once on staging; copy your UID (Authentication -> Users). Staff access should be granted through server-issued Firebase custom claims. Verify the actual staging UID and claims; never assume they are configured just because the code supports them.
 7. Set Function params/secrets with the CLI: `RAZORPAY_KEY_ID`, `ADMIN_UIDS`, optional `OWNER_NOTIFY_EMAIL`; secrets `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`.
 8. Deploy functions/rules (command above), then Hosting preview. Copy the `razorpayWebhook` URL.
@@ -28,7 +28,17 @@ Use TWO Firebase projects: **staging** first, **production** only after staging 
 ## Admin UID note
 `firestore.rules` and `storage.rules` support an owner bootstrap UID and server-issued admin/role claims. Do not edit UID literals based on guesswork. Use maintained server-side staff-role tooling to assign claims, verify them with a test account, and ensure a user's editable profile cannot grant staff access. Bootstrap UID migration requires a reviewed rules change and an explicit project-specific UID from Firebase Console.
 
-## Resend email setup\n1. Verify the sending domain and sender identity in Resend.\n2. Set the Functions secret `RESEND_API_KEY`; set `MAIL_FROM` to a verified sender and `OWNER_NOTIFY_EMAIL` to the monitored owner address.\n3. Emulator tests do not prove real provider delivery. Test a real message on staging only.\n\n## Deploy code and rules separately\n- Hosting is a manual GitHub Actions workflow and deploys the frontend only; checkout stays disabled by default.\n- Deploy Functions, Firestore rules, Storage rules, and indexes separately to staging after review: `firebase deploy --only functions,firestore:rules,storage,firestore:indexes --project staging`. Never omit `--project`.\n- The expiry sweep requires the composite orders index checked into this PR.\n\n## Catalogue (currently empty -> storefront shows "Products coming soon")
+## Resend email setup
+1. Verify the sending domain and sender identity in Resend.
+2. Set the Functions secret `RESEND_API_KEY`; set `MAIL_FROM` to a verified sender and `OWNER_NOTIFY_EMAIL` to the monitored owner address.
+3. Emulator tests do not prove real provider delivery. Test a real message on staging only.
+
+## Deploy code and rules separately
+- Hosting is a manual GitHub Actions workflow and deploys the frontend only; checkout stays disabled by default.
+- Deploy Functions, Firestore rules, Storage rules, and indexes separately to staging after review: `firebase deploy --only functions,firestore:rules,storage,firestore:indexes --project staging`. Never omit `--project`.
+- The expiry sweep requires the composite orders index checked into this PR.
+
+## Catalogue (verify the actual environment; empty catalogues show "Products coming soon")
 Per single-piece product: name, category, price (INR), stock count, fabric/composition, colour, available sizes, description, 1+ real photos. Add via Admin -> Add Product.
 
 ## Not yet verified (needs staging)

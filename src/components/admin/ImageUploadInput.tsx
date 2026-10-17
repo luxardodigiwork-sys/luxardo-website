@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage as firebaseStorage } from '../../firebase';
+import { compressForWeb } from '../../utils/imageCompress';
 
 interface ImageUploadInputProps {
   value: string;
@@ -11,7 +12,7 @@ interface ImageUploadInputProps {
   placeholder?: string;
   storagePath?: string;   // optional custom path, default: "uploads"
   maxSizeMB?: number;     // default: 50MB
-  quality?: '4k' | '2k' | '1080p' | 'original'; // default: 'original' (no compression)
+  quality?: 'web' | '4k' | '2k' | '1080p' | 'original'; // default: web-optimised upload
 }
 
 export const ImageUploadInput = ({
@@ -20,60 +21,18 @@ export const ImageUploadInput = ({
   placeholder,
   storagePath = 'uploads',
   maxSizeMB = 50,
-  quality = 'original',
+  quality = 'web',
 }: ImageUploadInputProps) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
 
-  // Only resize if quality param is explicitly set (not 'original')
-  // For 4K: no resize at all — upload as-is
-  const processImage = (file: File): Promise<File> => {
-    return new Promise((resolve, reject) => {
-      // 'original' or '4k' = no compression, upload raw file
-      if (quality === 'original' || quality === '4k') {
-        resolve(file);
-        return;
-      }
-
-      // For 2k/1080p — only downscale if image is LARGER than target
-      const maxWidths: Record<string, number> = {
-        '2k': 2560,
-        '1080p': 1920,
-      };
-      const maxWidth = maxWidths[quality] || 1920;
-
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (e) => {
-        const img = new Image();
-        img.src = e.target?.result as string;
-        img.onload = () => {
-          // If image is smaller than target, don't upscale
-          if (img.width <= maxWidth) {
-            resolve(file);
-            return;
-          }
-          const ratio = maxWidth / img.width;
-          const canvas = document.createElement('canvas');
-          canvas.width = maxWidth;
-          canvas.height = Math.round(img.height * ratio);
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) { resolve(file); return; }
-              resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-            },
-            'image/jpeg',
-            0.92  // 92% quality — high quality, not destructive
-          );
-        };
-        img.onerror = () => reject(new Error('Image load failed'));
-      };
-      reader.onerror = () => reject(new Error('File read failed'));
-    });
+  // Ported from launch/cleanup: optimise new uploads without changing existing photos.
+  const processImage = async (file: File): Promise<File> => {
+    if (quality === 'original') return file;
+    const maxEdges = { web: 2000, '4k': 3840, '2k': 2560, '1080p': 1920 };
+    return compressForWeb(file, { maxEdge: maxEdges[quality] });
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,8 +64,7 @@ export const ImageUploadInput = ({
 
       // Upload to Firebase Storage
       const timestamp = Date.now();
-      const ext = file.name.split('.').pop() || 'jpg';
-      const filename = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const filename = `${timestamp}_${processedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       const fullPath = `${storagePath}/${filename}`;
 
       const storageRef = ref(firebaseStorage, fullPath);
@@ -136,12 +94,17 @@ export const ImageUploadInput = ({
         },
         async () => {
           // Success — get download URL
-          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          onChange(downloadUrl);
-          setIsUploading(false);
-          setUploadProgress(100);
-          // Reset progress after short delay
-          setTimeout(() => setUploadProgress(0), 1500);
+          try {
+            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+            onChange(downloadUrl);
+            setUploadProgress(100);
+            setTimeout(() => setUploadProgress(0), 1500);
+          } catch {
+            setError('Uploaded image URL could not be retrieved. Please try again.');
+            setUploadProgress(0);
+          } finally {
+            setIsUploading(false);
+          }
         }
       );
     } catch (err) {

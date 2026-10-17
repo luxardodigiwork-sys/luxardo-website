@@ -1,4 +1,50 @@
-# Deployment Guide (safe, environment-specific)\n\n## 1. Clean-checkout validation\n\n```bash\nnpm ci\nnpm --prefix functions ci\nnpx tsc --noEmit\nnpm run test:unit\nnpm run build\nnpm --prefix functions run build\nnpm run test:rules\nnpm run test:orders\nnpm run test:publish\nnpm run test:notify\nnpm run test:functions\n```\n\nTests use isolated emulator project IDs (`rules-test`, `orders-test`, `publish-test`, `notify-test`, `demo-notify`). Never point tests at production. Java 21+ is required by the current Firebase CLI/emulator toolchain.\n\n## 2. Build configuration\n\n- Supply `VITE_FIREBASE_*` from the selected Firebase web app. Do not invent IDs.\n- Optional settings: `VITE_GA_MEASUREMENT_ID`, `VITE_META_PIXEL_ID`, `VITE_SENTRY_DSN`, `VITE_ERROR_REPORT_URL`; blank values must not break the build.\n- `VITE_CHECKOUT_ENABLED=false` by default and for this launch-blocker PR. Enabling checkout needs separate approval after staging verification.\n- Never put server secrets (Razorpay secrets, Resend API key, service-account private keys) in `VITE_*`.\n\n## 3. Separate deployments\n\nHosting is manual GitHub Actions and deploys Hosting only. Pull requests and pushes run checks only. Configure GitHub `staging` and `production` Environments and their variables/secrets. Production requires manual approval and typed confirmation.\n\nAfter review, deploy backend/security to staging separately:\n\n```bash\nfirebase deploy --only functions,firestore:rules,storage,firestore:indexes --project staging\n```\n\nNever omit `--project`. Do not deploy production as part of this task.\n\n## 4. Resend\n\nThe backend consumes `mail` via Resend. Configure Functions secret `RESEND_API_KEY`, `MAIL_FROM` using a verified sender/domain, and `OWNER_NOTIFY_EMAIL`. Do not install a second mail sender on the same queue; consumers can conflict or deliver twice. Do not remove existing production extensions without a separate migration plan.\n\n## 5. Verification boundaries\n\nLocal/emulator tests prove code behavior only against isolated emulators. They do not prove live Google/phone OTP, Razorpay credentials/webhooks, Resend sender verification/delivery, IAM, live deployment of rules/functions/indexes, or domain DNS/TLS. Verify each separately on staging before production approval.\n
+# Deployment Guide (safe, environment-specific)
+
+## 1. Clean-checkout validation
+
+```bash
+npm ci
+npm --prefix functions ci
+npx tsc --noEmit
+npm run test:unit
+npm run build
+npm --prefix functions run build
+npm run test:rules
+npm run test:orders
+npm run test:publish
+npm run test:notify
+npm run test:functions
+```
+
+Tests use isolated emulator project IDs (`rules-test`, `orders-test`, `publish-test`, `notify-test`, `demo-notify`). Never point tests at production. Java 21+ is required by the current Firebase CLI/emulator toolchain.
+
+## 2. Build configuration
+
+- Supply `VITE_FIREBASE_*` from the selected Firebase web app. Do not invent IDs.
+- Optional settings: `VITE_GA_MEASUREMENT_ID`, `VITE_META_PIXEL_ID`, `VITE_SENTRY_DSN`, `VITE_ERROR_REPORT_URL`; blank values must not break the build.
+- `VITE_CHECKOUT_ENABLED=false` by default and for this launch-blocker PR. Enabling checkout needs separate approval after staging verification.
+- Never put server secrets (Razorpay secrets, Resend API key, service-account private keys) in `VITE_*`.
+
+## 3. Separate deployments
+
+Hosting is manual GitHub Actions and deploys Hosting only. Pull requests and pushes run checks only. Configure GitHub `staging` and `production` Environments and their variables/secrets. Production requires manual approval and typed confirmation.
+
+After review, deploy backend/security to staging separately:
+
+```bash
+firebase deploy --only functions,firestore:rules,storage,firestore:indexes --project staging
+```
+
+Never omit `--project`. Do not deploy production as part of this task.
+
+## 4. Resend
+
+The backend consumes `mail` via Resend. Configure Functions secret `RESEND_API_KEY`, `MAIL_FROM` using a verified sender/domain, and `OWNER_NOTIFY_EMAIL`. Do not install a second mail sender on the same queue; consumers can conflict or deliver twice. Do not remove existing production extensions without a separate migration plan.
+
+## 5. Verification boundaries
+
+Local/emulator tests prove code behavior only against isolated emulators. They do not prove live Google/phone OTP, Razorpay credentials/webhooks, Resend sender verification/delivery, IAM, live deployment of rules/functions/indexes, or domain DNS/TLS. Verify each separately on staging before production approval.
+
 ## 6. Razorpay order reconciliation (manual, never blind retry)
 
 Orders marked `rzpOrderCreationState=reconciliation_required` have an ambiguous provider outcome. The checkout retry path intentionally does not create another Razorpay order. A trained operator must reconcile using the same Razorpay account/mode and the order's unique receipt, amount, currency, creation time and notes:

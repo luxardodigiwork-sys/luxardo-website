@@ -32,7 +32,7 @@ Pehle STAGING (test project), phir PRODUCTION (asli site). Staging pass hone se 
 Ye commands aapke PC ke terminal me chalenge (is cloud session me Firebase login nahi hai). Mujhse exact commands chahiye ho to bolo.
 - [ ] `.firebaserc` me `REPLACE_WITH_STAGING_PROJECT_ID` ki jagah staging Project ID daalo.
 - [ ] Function settings (CLI se): `RAZORPAY_KEY_ID`, `ADMIN_UIDS` (aapka UID), optional `OWNER_NOTIFY_EMAIL`; secrets: `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`.
-- [ ] Deploy hamesha project likhkar: `firebase deploy --only functions,firestore:rules,storage --project staging`. **Bina `--project` ke kabhi nahi.**
+- [ ] Deploy hamesha project likhkar: `firebase deploy --only functions,firestore:rules,storage,firestore:indexes --project staging`. **Bina `--project` ke kabhi nahi.**
 - [ ] Deploy ke baad **Functions** me dekho: `createCheckoutOrderFn`, `verifyPaymentFn`, `razorpayWebhook` sab **asia-south1** me hon.
 
 ## Step 4 - Razorpay webhook (test)
@@ -43,9 +43,14 @@ Ye commands aapke PC ke terminal me chalenge (is cloud session me Firebase login
 ## Step 5 - Admin aur email
 - [ ] Staging site par ek baar sign in karo -> Console -> **Authentication -> Users** se apna **UID** copy karo.
 - [ ] Firebase se real UID verify karo aur server-side staff-role tooling se custom claim set/verify karo. Rules me UID guess karke edit mat karo; staff role client-editable profile se grant nahi honi chahiye.
-- [ ] Resend me sending domain/sender verify karo. Functions secret `RESEND_API_KEY`; environment config me `MAIL_FROM` (verified sender) aur `OWNER_NOTIFY_EMAIL` set karo.\n- [ ] Backend Resend use karta hai, Trigger Email extension nahi. Same `mail` queue par doosra sender install mat karo. Existing production extension ko bina separate migration plan ke uninstall/change mat karo.
+- [ ] Resend me sending domain/sender verify karo. Functions secret `RESEND_API_KEY`; environment config me `MAIL_FROM` (verified sender) aur `OWNER_NOTIFY_EMAIL` set karo.
+- [ ] Backend Resend use karta hai, Trigger Email extension nahi. Same `mail` queue par doosra sender install mat karo. Existing production extension ko bina separate migration plan ke uninstall/change mat karo.
 
-## Step 5A - Resend email setup\n- [ ] Resend me domain + sender verify karo. `RESEND_API_KEY` Functions secret; `MAIL_FROM` verified sender aur `OWNER_NOTIFY_EMAIL` monitored address set karo.\n- [ ] `mail` queue par doosra sender install mat karo; existing production extension ko bina approved migration ke uninstall mat karo.\n\n## Step 6 - Staging par poora test (sabse zaroori)
+## Step 5A - Resend email setup
+- [ ] Resend me domain + sender verify karo. `RESEND_API_KEY` Functions secret; `MAIL_FROM` verified sender aur `OWNER_NOTIFY_EMAIL` monitored address set karo.
+- [ ] `mail` queue par doosra sender install mat karo; existing production extension ko bina approved migration ke uninstall mat karo.
+
+## Step 6 - Staging par poora test (sabse zaroori)
 Test phone number Firebase me add kar sakte ho (Authentication -> Sign-in method -> Phone -> test numbers).
 - [ ] Ek test product daalo (Admin -> Add Product): naam, category, price, stock, photo, **Ready-to-Stitch** wording.
 - [ ] Google se sign in -> phone OTP verify.
@@ -54,7 +59,7 @@ Test phone number Firebase me add kar sakte ho (Authentication -> Sign-in method
 - [ ] Stock 1 kam hua? (sirf ek baar)
 - [ ] **`/account` par page refresh karo** -> login par wapas nahi bhejna chahiye.
 - [ ] Payment beech me cancel karo -> order unpaid rahe, stock wapas aa jaye (payment window ke baad).
-- [ ] Email aayi? (agar extension installed hai)
+- [ ] Resend se email aayi? (verified sender aur mail queue check karo)
 - [ ] Koi bhi error ya kuch ajeeb dikha to **screenshot** lo, mujhe bhejo.
 
 ## Step 7 - Asli content
