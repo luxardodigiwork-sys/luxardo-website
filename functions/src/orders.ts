@@ -15,7 +15,7 @@ import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import {
   CURRENCY, MAX_PENDING_ORDERS_PER_USER, PAYMENT_WINDOW_MINUTES, OrderError,
-  ProductRecord, RazorpayPayment, ShippingAddress, ShippingConfig, DEFAULT_SHIPPING, assertPaymentMatchesOrder, computeOrderTotals, evaluateCancellation, evaluateReturn,
+  ProductRecord, RazorpayPayment, ShippingAddress, ShippingConfig, DEFAULT_SHIPPING, razorpayReceiptForOrder, assertPaymentMatchesOrder, computeOrderTotals, evaluateCancellation, evaluateReturn,
 } from "./core";
 import { MAIL_COLLECTION, buildMailDocs } from "./emails";
 
@@ -88,9 +88,9 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
 
   // Anti-hoarding: cap concurrent unpaid orders per user.
   const open = await db.collection("orders").where("userId", "==", input.uid).where("paymentStatus", "==", "pending").get();
-  const stillOpen = open.docs.filter((d) => d.data().status === "pending" && (d.data().expiresAt as string) > now.toISOString());
+  const stillOpen = open.docs.filter((d) => d.data().status === "pending" && ((d.data().expiresAt as string) > now.toISOString() || paymentSetupUnresolved(d.data())));
   if (stillOpen.length >= MAX_PENDING_ORDERS_PER_USER) {
-    throw new OrderError("failed-precondition", "You have too many unpaid orders. Please complete or wait for them to expire.");
+    throw new OrderError("failed-precondition", "You have too many unpaid orders. Complete them or contact support if payment setup needs review.");
   }
 
   const lines = input.lines as Array<{ productId?: unknown }>;
@@ -146,6 +146,7 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
       stockReserved: true,
       stockReleased: false,
       qtyByProduct: t.qtyByProduct,
+      razorpayReceipt: razorpayReceiptForOrder(orderRef.id),
       razorpayOrderId: null,
       razorpayPaymentId: null,
       rzpOrderCreationState: "creating",
@@ -163,7 +164,7 @@ export async function createCheckoutOrder(db: Firestore, rzp: RazorpayLike, inpu
     rz = await rzp.orders.create({
       amount: totals.totalPaise,
       currency: CURRENCY,
-      receipt: orderRef.id,
+      receipt: razorpayReceiptForOrder(orderRef.id),
       notes: { orderId: orderRef.id, uid: input.uid },
     });
   } catch (err) {
@@ -240,7 +241,8 @@ async function markPaymentOrderReconciliationRequired(
       rzpOrderCreationState: "reconciliation_required",
       rzpOrderReconciliationReason: reason,
       rzpOrderPendingAt: d.rzpOrderPendingAt || new Date().toISOString(),
-      // Best effort: the provider order we know exists but could not store as the accepted one. Operators match it by receipt = order id.
+      // Best effort: provider order known to exist. Operators match razorpayReceipt and notes.orderId.
+      // Legacy orders may have used the full order id as receipt.
       ...(candidateProviderOrderId ? { rzpOrderCandidateId: candidateProviderOrderId } : {}),
     });
   }).catch(() => undefined);
@@ -277,13 +279,29 @@ async function resumeExistingOrder(
   }
 }
 
-/** Restores reserved stock exactly once and moves the order to `nextStatus`. Safe to call repeatedly. */
+/** An unknown provider outcome is never proof that stock can safely be released. */
+function paymentSetupUnresolved(o: FirebaseFirestore.DocumentData): boolean {
+  return o.status === "pending" && o.paymentStatus === "pending" &&
+    (o.rzpOrderCreationState !== "ready" || typeof o.razorpayOrderId !== "string" || !o.razorpayOrderId);
+}
+
+/** Restores reserved stock exactly once and cancels an eligible order. Safe to call repeatedly. */
 export async function releaseOrderStock(db: Firestore, orderId: string, reason: string, opts: { onlyIfUnpaid?: boolean } = {}): Promise<boolean> {
   return db.runTransaction(async (tx) => {
     const ref = db.collection("orders").doc(orderId);
     const snap = await tx.get(ref);
     if (!snap.exists) throw new OrderError("not-found", "Order not found.");
     const o = snap.data()!;
+    if (reason === "cancelled_by_admin") {
+      if (o.status === "cancelled") return false;
+      // This check must share the stock-release transaction, including retries after a concurrent dispatch.
+      if (["shipped", "delivered", "returned", "failed_delivery"].includes(o.status) || o.trackingId || o.dispatchDate) {
+        throw new OrderError("failed-precondition", "A dispatched order cannot be cancelled here.");
+      }
+      if (paymentSetupUnresolved(o)) throw paymentOrderPendingError();
+    }
+    // Expiry must also re-check setup state transactionally: query results may be stale.
+    if (reason === "payment_window_elapsed" && paymentSetupUnresolved(o)) return false;
     // Automatic releases (expiry sweep, provider-error rollback) act on a possibly STALE view of the order. Re-check inside
     // the transaction: if the payment landed in the meantime, a paid order must never be cancelled by them.
     if (opts.onlyIfUnpaid && (o.paymentStatus !== "pending" || o.status !== "pending")) return false;
@@ -429,10 +447,11 @@ export async function verifyAndApplyPayment(db: Firestore, rzp: RazorpayLike, in
 
 /** Expiry sweep: releases stock for unpaid orders past their payment window. */
 export async function releaseExpiredOrders(db: Firestore, now: Date = new Date(), limit = 200): Promise<number> {
-  // Filter unpaid pending records before limit; historical paid/cancelled records must not starve the sweep.
+  // Filter resolved, unpaid pending records before limit; reconciliation records must neither expire nor starve ready orders.
   const q = await db.collection("orders")
     .where("status", "==", "pending")
     .where("paymentStatus", "==", "pending")
+    .where("rzpOrderCreationState", "==", "ready")
     .where("expiresAt", "<", now.toISOString())
     .orderBy("expiresAt", "asc")
     .limit(limit)
@@ -467,6 +486,8 @@ export async function requestCancellation(db: Firestore, input: { uid: string; o
       tx.update(ref, { cancellationRequest: { requestedAt: now.toISOString(), reason, status: "requested" } });
       return { outcome: "requested" };
     }
+    // Unknown provider outcomes require operator reconciliation, even if the customer asks to cancel.
+    if (paymentSetupUnresolved(o)) throw paymentOrderPendingError();
     // cancel_unpaid
     const qty = (o.qtyByProduct || {}) as Record<string, number>;
     if (o.stockReserved && !o.stockReleased) {

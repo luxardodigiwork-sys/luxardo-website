@@ -222,3 +222,12 @@ test('product update: stock is never written as an absolute number; only the rea
   assert.equal(pw.buildProductUpdate({ ...p, stock: NaN }, 5).stockDelta, 0);
   assert.equal(pw.buildProductUpdate({ ...p, stock: 4 }, undefined).stockDelta, 4);
 });
+
+
+test('provider receipts remain within 40 characters, deterministic and distinct even for long shared prefixes', () => {
+  const prefix = 'u'.repeat(128) + '_';
+  const first = core.razorpayReceiptForOrder(prefix + '12345678-1234-4123-8123-123456789012');
+  assert.equal(first.length, 35);
+  assert.equal(core.razorpayReceiptForOrder(prefix + '12345678-1234-4123-8123-123456789012'), first);
+  assert.notEqual(core.razorpayReceiptForOrder(prefix + '12345678-1234-4123-8123-123456789013'), first);
+});

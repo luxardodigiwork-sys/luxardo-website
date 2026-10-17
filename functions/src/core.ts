@@ -5,6 +5,12 @@
 import * as crypto from "crypto";
 
 export const CURRENCY = "INR";
+
+/** Stable provider receipt (35 chars, below Razorpay's 40-char limit). Full ID stays in notes. */
+export function razorpayReceiptForOrder(orderId: string): string {
+  return `lx_${crypto.createHash("sha256").update(orderId).digest("hex").slice(0, 32)}`;
+}
+
 export const MAX_LINES = 20;
 export const MAX_QTY_PER_LINE = 10;
 export const MAX_PENDING_ORDERS_PER_USER = 5;

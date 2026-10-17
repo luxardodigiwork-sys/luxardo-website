@@ -160,10 +160,7 @@ export const cancelOrderFn = onCall({ region: REGION }, async (request) => {
     }
     const orderId = request.data?.orderId;
     if (typeof orderId !== "string" || !orderId) throw new OrderError("invalid-argument", "Missing order id.");
-    const snap = await db.collection("orders").doc(orderId).get();
-    if (!snap.exists) throw new OrderError("not-found", "Order not found.");
-    const status = snap.data()!.status;
-    if (["shipped", "delivered"].includes(status)) throw new OrderError("failed-precondition", "A shipped order cannot be cancelled here.");
+    // Eligibility and stock restoration are checked together inside the transaction.
     const restored = await releaseOrderStock(db, orderId, "cancelled_by_admin");
     return { restored };
   } catch (err) {

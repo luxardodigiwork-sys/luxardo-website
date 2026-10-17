@@ -30,7 +30,7 @@ function fakeRazorpay(opts: { failCreate?: boolean; payments?: Record<string, an
   const created: any[] = [];
   const rz: RazorpayLike & { created: any[]; calls: number } = {
     created, calls: 0,
-    orders: { async create(o) { rz.calls++; if (opts.gate) await opts.gate; if (opts.delayMs) await new Promise((r) => setTimeout(r, opts.delayMs)); if (opts.failCreate) throw (opts.failWith ?? new Error('razorpay down')); created.push(o); return { id: `order_rz${++rzSeq}`, amount: o.amount, currency: o.currency }; } },
+    orders: { async create(o) { assert.ok(o.receipt.length <= 40, 'Razorpay receipt must fit its provider limit'); rz.calls++; if (opts.gate) await opts.gate; if (opts.delayMs) await new Promise((r) => setTimeout(r, opts.delayMs)); if (opts.failCreate) throw (opts.failWith ?? new Error('razorpay down')); created.push(o); return { id: `order_rz${++rzSeq}`, amount: o.amount, currency: o.currency }; } },
     payments: { async fetch(id) { const p = opts.payments?.[id]; if (!p) throw new Error('no such payment'); return p; } },
   };
   return rz;
@@ -703,6 +703,7 @@ test('expiry sweep selects unpaid pending orders beyond 200 historical paid/canc
   batch.set(db.collection('orders').doc('expired-unpaid'), {
     userId: 'old-customer', status: 'pending', paymentStatus: 'pending', expiresAt: '2026-01-02T00:00:00.000Z',
     stockReserved: true, stockReleased: false, qtyByProduct: { a: 1 },
+    rzpOrderCreationState: 'ready', razorpayOrderId: 'order_expired',
   });
   await batch.commit();
   const before = await stockOf('a');
@@ -766,16 +767,107 @@ test('provider success + persistence failure records the provider order id it ho
   // a repeat request cannot hand the customer an order id either
   await assert.rejects(() => sameReq(fakeRazorpay(), 'req-persist-02'), /pending reconciliation/);
 });
-test('a parked (reconciliation-required) order is released by the expiry sweep once its payment window ends, and a webhook for it can never pay it', async () => {
-  const rz = fakeRazorpay({ failCreate: true });
+test('unresolved provider setup keeps its reservation after expiry and cannot be cancelled without reconciliation', async () => {
   const t0 = new Date('2026-10-17T00:00:00.000Z');
-  await assert.rejects(() => buy(rz, [{ productId: 'a', quantity: 2, size: '40' }], 'u1', t0), /pending reconciliation/);
+  await assert.rejects(() => buy(fakeRazorpay({ failCreate: true }), [{ productId: 'a', quantity: 2, size: '40' }], 'u1', t0), /pending reconciliation/);
   const id = (await db.collection('orders').get()).docs[0].id;
-  assert.equal(await releaseExpiredOrders(db, new Date('2026-10-17T00:10:00.000Z')), 0); // inside the window: untouched
+  const far = new Date('2026-10-17T02:00:00.000Z');
+  assert.equal(await releaseExpiredOrders(db, far), 0);
+  assert.equal(await releaseOrderStock(db, id, 'payment_window_elapsed', { onlyIfUnpaid: true }), false);
+  await assert.rejects(() => releaseOrderStock(db, id, 'cancelled_by_admin'), /pending reconciliation/);
+  await assert.rejects(() => requestCancellation(db, { uid: 'u1', orderId: id, now: far }), /pending reconciliation/);
   assert.equal(await stockOf('a'), 3);
-  assert.equal(await releaseExpiredOrders(db, new Date('2026-10-17T02:00:00.000Z')), 1);
+  const o = await rawOrderOf(id);
+  assert.equal(o.status, 'pending');
+  assert.equal(o.rzpOrderCreationState, 'reconciliation_required');
+  assert.equal(o.stockReleased, false);
+});
+
+test('more than 200 unresolved/creating/legacy orders cannot starve a ready expired order', async () => {
+  const batch = db.batch();
+  for (let i = 0; i < 220; i++) {
+    batch.set(db.collection('orders').doc(`unresolved-${i}`), {
+      status: 'pending', paymentStatus: 'pending', expiresAt: '2026-01-01T00:00:00.000Z',
+      ...(i % 3 ? { rzpOrderCreationState: i % 2 ? 'creating' : 'reconciliation_required' } : {}),
+      stockReserved: true, stockReleased: false, qtyByProduct: { a: 1 },
+    });
+  }
+  await batch.commit();
+  const t0 = new Date('2026-10-17T00:00:00.000Z');
+  const ready = await buy(fakeRazorpay(), [{ productId: 'a', quantity: 1, size: '40' }], 'ready-customer', t0);
+  assert.equal(await stockOf('a'), 4);
+  assert.equal(await releaseExpiredOrders(db, new Date(t0.getTime() + 3_600_000), 200), 1);
+  assert.equal((await rawOrderOf(ready.orderId)).status, 'cancelled');
+  assert.equal((await rawOrderOf('unresolved-1')).status, 'pending');
   assert.equal(await stockOf('a'), 5);
-  assert.equal((await rawOrderOf(id)).status, 'cancelled');
-  // no provider id was ever stored, so a payment event cannot be matched to this order
-  await assert.rejects(() => applyCapturedPayment(db, { razorpayOrderId: 'order_unknown', payment: { id: 'pay_x', order_id: 'order_unknown', status: 'captured', amount: 200000, currency: 'INR' } as any }), /not found/i);
+});
+
+test('a ready record changed to unresolved after sweep selection is still protected transactionally', async () => {
+  const res = await buy(fakeRazorpay(), [{ productId: 'a', quantity: 1, size: '40' }]);
+  await db.collection('orders').doc(res.orderId).update({ rzpOrderCreationState: 'reconciliation_required', razorpayOrderId: null });
+  assert.equal(await releaseOrderStock(db, res.orderId, 'payment_window_elapsed', { onlyIfUnpaid: true }), false);
+  assert.equal(await stockOf('a'), 4);
+});
+
+test('long Firebase UID plus UUID uses a short unique receipt and retains full provider mapping', async () => {
+  const rz = fakeRazorpay();
+  const uid = 'u'.repeat(28);
+  const requestId = '12345678-1234-4123-8123-123456789012';
+  const input = { uid, requestId, address, shipping: NO_RULE, lines: [{ productId: 'a', quantity: 1, size: '40' }] };
+  const res = await createCheckoutOrder(db, rz, input);
+  assert.equal(res.orderId.length, 65);
+  const providerRequest = rz.created[0];
+  assert.match(providerRequest.receipt, /^lx_[a-f0-9]{32}$/);
+  assert.equal(providerRequest.notes.orderId, res.orderId);
+  assert.equal(providerRequest.notes.uid, uid);
+  assert.equal((await rawOrderOf(res.orderId)).razorpayReceipt, providerRequest.receipt);
+  const retry = await createCheckoutOrder(db, rz, input);
+  assert.equal(retry.razorpayOrderId, res.razorpayOrderId);
+  assert.equal(rz.calls, 1);
+});
+
+test('admin cancellation rechecks dispatch inside the transaction instead of trusting a stale precheck', async () => {
+  const res = await buy(fakeRazorpay(), [{ productId: 'a', quantity: 1, size: '40' }]);
+  await applyCapturedPayment(db, { orderId: res.orderId, payment: captured(await rawOrderOf(res.orderId) as any) });
+  const stale = await rawOrderOf(res.orderId);
+  assert.equal(stale.status, 'processing');
+  // Dispatch completes after the caller's original eligibility check.
+  await db.collection('orders').doc(res.orderId).update({ status: 'shipped', trackingId: 'TEST-TRACKING' });
+  await assert.rejects(() => releaseOrderStock(db, res.orderId, 'cancelled_by_admin'), (e: any) => e.code === 'failed-precondition');
+  assert.equal((await rawOrderOf(res.orderId)).status, 'shipped');
+  assert.equal(await stockOf('a'), 4);
+  assert.notEqual((await internalOf(res.orderId)).needsRefund, true);
+});
+
+test('admin cancellation rejects dispatched lifecycle states and tracking evidence; packed cancellation remains release-once', async () => {
+  const res = await buy(fakeRazorpay(), [{ productId: 'a', quantity: 1, size: '40' }]);
+  await applyCapturedPayment(db, { orderId: res.orderId, payment: captured(await rawOrderOf(res.orderId) as any) });
+  for (const status of ['shipped', 'delivered', 'returned', 'failed_delivery']) {
+    await db.collection('orders').doc(res.orderId).update({ status });
+    await assert.rejects(() => releaseOrderStock(db, res.orderId, 'cancelled_by_admin'), /dispatched/);
+    assert.equal(await stockOf('a'), 4);
+  }
+  await db.collection('orders').doc(res.orderId).update({ status: 'processing', trackingId: 'TEST-TRACKING' });
+  await assert.rejects(() => releaseOrderStock(db, res.orderId, 'cancelled_by_admin'), /dispatched/);
+  await db.collection('orders').doc(res.orderId).update({ status: 'processing', trackingId: null, dispatchDate: '2026-10-17' });
+  await assert.rejects(() => releaseOrderStock(db, res.orderId, 'cancelled_by_admin'), /dispatched/);
+  await db.collection('orders').doc(res.orderId).update({ status: 'packed', dispatchDate: null });
+  assert.equal(await releaseOrderStock(db, res.orderId, 'cancelled_by_admin'), true);
+  assert.equal(await releaseOrderStock(db, res.orderId, 'cancelled_by_admin'), false);
+  assert.equal(await stockOf('a'), 5);
+  assert.equal((await internalOf(res.orderId)).needsRefund, true);
+});
+
+test('unresolved expired reservations still count toward the unpaid-order cap', async () => {
+  const batch = db.batch();
+  for (let i = 0; i < 5; i++) batch.set(db.collection('orders').doc(`held-${i}`), {
+    userId: 'held-customer', status: 'pending', paymentStatus: 'pending',
+    expiresAt: '2026-01-01T00:00:00.000Z', rzpOrderCreationState: 'reconciliation_required',
+    stockReserved: true, stockReleased: false,
+  });
+  await batch.commit();
+  const rz = fakeRazorpay();
+  await assert.rejects(() => buy(rz, [{ productId: 'a', quantity: 1, size: '40' }], 'held-customer'), /too many unpaid orders/i);
+  assert.equal(rz.calls, 0);
+  assert.equal(await stockOf('a'), 5);
 });

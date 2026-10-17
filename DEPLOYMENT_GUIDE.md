@@ -49,9 +49,14 @@ Local/emulator tests prove code behavior only against isolated emulators. They d
 
 Orders marked `rzpOrderCreationState=reconciliation_required` have an ambiguous provider outcome. The checkout retry path intentionally does not create another Razorpay order. A trained operator must reconcile using the same Razorpay account/mode and the order's unique receipt, amount, currency, creation time and notes:
 
-1. Search/fetch provider Orders using the stored receipt/order ID and verify the amount/currency and metadata. Do not infer failure from a network timeout.
+1. Search/fetch provider Orders using `razorpayReceipt` (legacy orders may use the full order ID) and `notes.orderId` and verify the amount/currency and metadata. Do not infer failure from a network timeout.
 2. If exactly one matching provider order exists, use a reviewed Admin SDK repair procedure to atomically attach its ID only if the order is still pending, no provider ID is already accepted, and the attempt remains in reconciliation state.
 3. If the provider result is still uncertain or more than one candidate exists, keep the order pending and escalate; do not create another provider order.
 4. Only after the provider confirms no order exists may an authorized operator use a reviewed transactional cancellation/release procedure. Preserve stock release-once and recheck payment state in the transaction.
 
 This repository does not automatically run this repair procedure. Emulator tests cannot verify live Razorpay records.
+
+
+## 7. Expiry and cancellation guards
+
+Deploy the updated orders composite index including `rzpOrderCreationState`; wait for it to be ready before verifying the sweep. Only ready unpaid orders expire automatically. Creating/reconciliation/legacy-without-state orders remain reserved and need operator review; do not bulk-backfill them as ready. Unresolved reservations still count toward the per-user unpaid-order cap. Admin cancellation checks shipment state, tracking and dispatch evidence inside the same transaction that restores stock; a dispatched order must use the returns/refund workflow instead.
