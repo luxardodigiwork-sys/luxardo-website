@@ -6,3 +6,22 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local audit notes (not for the repository)
+AUDIT-REPORT-*.md
+
+# Recovered cleanup safeguards: never commit local credentials, databases or CLI output.
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.backup
+.firebase/
+serviceAccount.json
+service-account*.json
+*-firebase-adminsdk-*.json
+*.pem
+*.key
+firestore-debug.log
+ui-debug.log
+smoke-report/

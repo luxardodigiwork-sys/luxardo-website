@@ -11,7 +11,7 @@ export default function ProtectedDispatchRoute() {
     </div>;
   }
 
-  if (!user || (user.role !== 'dispatch' && !['super_admin', 'admin'].includes(user.role))) {
+  if (!user || (user.role !== 'dispatch' && user.role !== 'admin')) {
     return <Navigate to="/backend" replace />;
   }
 

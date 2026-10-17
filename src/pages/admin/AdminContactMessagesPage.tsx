@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { storage } from '../../utils/localStorage';
+import { setEnquiryStatus, watchEnquiries } from '../../utils/enquiries';
 import { Search, Mail, Calendar, User } from 'lucide-react';
 
 export default function AdminContactMessagesPage() {
@@ -7,17 +7,18 @@ export default function AdminContactMessagesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchMessages = () => {
-      // Simulate network request
-      setTimeout(() => {
-        const data = storage.getContactMessages();
-        setMessages(data);
-        setIsLoading(false);
-      }, 500);
-    };
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-    fetchMessages();
+  useEffect(() => {
+    // Live list from Firestore (admin only): messages sent from the website Contact form.
+    return watchEnquiries('contactMessages', (rows) => {
+      setMessages(rows);
+      setLoadError(null);
+      setIsLoading(false);
+    }, () => {
+      setLoadError('Could not load messages. Please check you are signed in as an admin.');
+      setIsLoading(false);
+    });
   }, []);
 
   const filteredMessages = messages.filter(msg => 
@@ -27,12 +28,12 @@ export default function AdminContactMessagesPage() {
     (msg.subject?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
-  const handleStatusChange = (id: number, newStatus: string) => {
-    const updatedMessages = messages.map(msg => 
-      msg.id === id ? { ...msg, status: newStatus } : msg
-    );
-    storage.saveContactMessages(updatedMessages);
-    setMessages(updatedMessages);
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    try {
+      await setEnquiryStatus('contactMessages', id, newStatus);
+    } catch {
+      alert('Could not update the status. Please try again.');
+    }
   };
 
   return (
@@ -40,6 +41,7 @@ export default function AdminContactMessagesPage() {
       <div>
         <h1 className="text-4xl font-display uppercase tracking-tight">Contact Messages</h1>
         <p className="text-brand-secondary font-sans mt-1">Manage customer inquiries and support requests</p>
+        {loadError && <p role="alert" className="text-sm text-red-600 mt-2">{loadError}</p>}
       </div>
 
       <div className="bg-white border border-brand-divider shadow-sm">

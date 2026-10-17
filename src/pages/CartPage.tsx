@@ -1,10 +1,15 @@
+import { collectionLabel } from '../utils/collectionIdentity';
+import { getStorefrontCollections } from '../utils/contentSync';
+import OptimizedImage from '../components/OptimizedImage';
 import React from 'react';
+import { getShippingQuote } from '../utils/shipping';
 import { Link, useOutletContext, useLocation } from 'react-router-dom';
 import { Country } from '../types';
 import { X, Minus, Plus, Package, Scissors, Info, Check } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currency';
+import { CHECKOUT_ENABLED } from '../constants/features';
 
 export default function CartPage() {
   const { selectedCountry } = useOutletContext<{ selectedCountry: Country | null }>();
@@ -13,6 +18,7 @@ export default function CartPage() {
   const location = useLocation();
 
   const displaySubtotal = cartSubtotal;
+  const quote = getShippingQuote(cartSubtotal);
 
   return (
     <div className="section-padding max-w-[1800px] mx-auto min-h-[70vh]">
@@ -39,10 +45,10 @@ export default function CartPage() {
               <div key={`${item.product.id}-${item.size || 'no-size'}`} className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center py-8 border-b border-brand-divider">
                 <div className="col-span-1 md:col-span-6 flex gap-8">
                   <div className="w-32 h-40 bg-brand-divider shrink-0 overflow-hidden">
-                    <img src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <OptimizedImage src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <div className="flex flex-col justify-center space-y-3">
-                    <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-brand-secondary">{item.product.category}</p>
+                    <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-brand-secondary">{collectionLabel(item.product.category, getStorefrontCollections())}</p>
                     <h3 className="font-display text-2xl">{item.product.name}</h3>
                     <p className="text-xs font-sans text-brand-secondary">Format: Ready-to-Stitch Box</p>
                     {item.size && <p className="text-xs font-sans text-brand-secondary font-bold">Size: {item.size}</p>}
@@ -76,24 +82,7 @@ export default function CartPage() {
                 <p className="text-lg font-display italic text-brand-secondary">Every order is an invitation into our world of modern ethnic luxury.</p>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-brand-divider pb-3">
-                    <Package size={18} className="text-brand-black" />
-                    <h5 className="text-[10px] uppercase tracking-[0.2em] font-bold text-brand-black">Signature Presentation</h5>
-                  </div>
-                  <div className="space-y-4">
-                    <p className="text-sm font-sans text-brand-secondary leading-relaxed">
-                      Arrives in our signature LUXARDO FASHION matte black presentation box, featuring acid-free archival tissue and a hand-pressed wax seal.
-                    </p>
-                    <ul className="text-[11px] uppercase tracking-widest font-bold text-brand-secondary space-y-3">
-                      <li className="flex items-center gap-2"><Check size={12} /> Premium packaging included</li>
-                      <li className="flex items-center gap-2"><Check size={12} /> Signature garment cover</li>
-                      <li className="flex items-center gap-2"><Check size={12} /> Hand-signed thank-you note</li>
-                    </ul>
-                  </div>
-                </div>
-                
+              <div className="grid grid-cols-1 gap-16">
                 <div className="space-y-6">
                   <div className="flex items-center gap-3 border-b border-brand-divider pb-3">
                     <Scissors size={18} className="text-brand-black" />
@@ -125,19 +114,40 @@ export default function CartPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm uppercase tracking-widest">Shipping</span>
-                  <span className="text-xs italic">Calculated at checkout</span>
+                  <span className="text-xs italic">
+                    {quote.free ? 'Free' : quote.shipping === null ? 'Free from ₹7,499' : formatCurrency(quote.shipping)}
+                  </span>
                 </div>
               </div>
+
+              {!quote.free && (
+                <p className="text-xs font-sans text-brand-secondary leading-relaxed">
+                  Add {formatCurrency(quote.amountToFreeShipping)} more to get free shipping (shipping is ₹199 below ₹7,499).
+                </p>
+              )}
               
               <div className="border-t border-brand-divider pt-8 flex justify-between items-end">
                 <span className="text-[11px] uppercase tracking-[0.25em] font-bold text-brand-black">Estimated Total</span>
                 <span className="text-3xl font-sans text-brand-black">
-                  {formatCurrency(displaySubtotal)}
+                  {formatCurrency(quote.total ?? displaySubtotal)}
                 </span>
               </div>
               
               <div className="space-y-6 pt-4">
-                {user ? (
+                {!CHECKOUT_ENABLED ? (
+                  <div className="text-center space-y-3">
+                    <button type="button" disabled className="btn-primary w-full block text-center py-5 opacity-50 cursor-not-allowed">
+                      ORDERING OPENS SOON
+                    </button>
+                    <p className="text-xs text-brand-secondary">
+                      Online ordering is opening shortly. To order now, please <Link to="/contact" className="underline">contact us</Link>.
+                    </p>
+                  </div>
+                ) : user && !quote.canCheckout ? (
+                  <button type="button" disabled className="btn-primary w-full block text-center py-5 opacity-50 cursor-not-allowed">
+                    CHECKOUT UNAVAILABLE
+                  </button>
+                ) : user ? (
                   <Link to="/checkout" className="btn-primary w-full block text-center py-5">PROCEED TO CHECKOUT</Link>
                 ) : (
                   <Link to="/login" state={{ from: location }} className="btn-primary w-full block text-center py-5">LOGIN TO CHECKOUT</Link>
@@ -145,7 +155,7 @@ export default function CartPage() {
                 <div className="flex gap-3 p-4 bg-brand-bg border border-brand-divider">
                   <Info size={16} className="text-brand-secondary shrink-0" />
                   <p className="text-[10px] font-sans text-brand-secondary leading-relaxed uppercase tracking-wider">
-                    Shipping and taxes calculated at checkout. Standard orders include ready-to-stitch garments only.
+                    Free shipping on orders of ₹7,499 or more; ₹199 below that. Each listing is a single piece of ready-to-stitch fabric; stitching is not included.
                   </p>
                 </div>
               </div>

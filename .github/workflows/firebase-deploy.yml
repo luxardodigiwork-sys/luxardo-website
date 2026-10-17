@@ -1,31 +1,160 @@
-name: Deploy LUXARDO FASHION to Firebase
+name: Firebase Hosting (manual deploy; checks on PR/push)
+
+# Safety: pull requests and ordinary pushes only run checks. Hosting deployment is manual.
+# Functions, Firestore rules, Storage rules and indexes are deployed separately with an explicit project.
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'staging or production'
+        type: choice
+        options: [staging, production]
+        default: staging
+      confirm:
+        description: 'For production type exactly: DEPLOY PRODUCTION'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
-  deploy:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - name: Build
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install root dependencies
+        run: npm ci
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci
+      - name: Frontend typecheck
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Frontend production build (checkout disabled)
         run: npm run build
         env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
-      - name: Deploy to Firebase
+          VITE_CHECKOUT_ENABLED: 'false'
+          VITE_GA_MEASUREMENT_ID: ${{ vars.STAGING_GA_MEASUREMENT_ID }}
+          VITE_META_PIXEL_ID: ${{ vars.STAGING_META_PIXEL_ID }}
+          VITE_SENTRY_DSN: ${{ vars.STAGING_SENTRY_DSN }}
+          VITE_ERROR_REPORT_URL: ${{ vars.STAGING_ERROR_REPORT_URL }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.STAGING_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.STAGING_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.STAGING_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.STAGING_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.STAGING_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.STAGING_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.STAGING_FIREBASE_MEASUREMENT_ID }}
+      - name: Functions build
+        run: npm --prefix functions run build
+      - name: Firestore and Storage rules emulator tests
+        run: npm run test:rules
+      - name: Order, payment and stock emulator tests
+        run: npm run test:orders
+      - name: Content publishing emulator tests
+        run: npm run test:publish
+      - name: Notification emulator tests
+        run: npm run test:notify
+      - name: Functions emulator tests
+        run: npm run test:functions
+
+  preview:
+    # Explicit manual staging deploy only; PRs and pushes do not deploy.
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'staging'
+    needs: check
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npm --prefix functions ci
+      - name: Build staging frontend (checkout disabled)
+        run: npm run build
+        env:
+          VITE_CHECKOUT_ENABLED: 'false'
+          VITE_GA_MEASUREMENT_ID: ${{ vars.STAGING_GA_MEASUREMENT_ID }}
+          VITE_META_PIXEL_ID: ${{ vars.STAGING_META_PIXEL_ID }}
+          VITE_SENTRY_DSN: ${{ vars.STAGING_SENTRY_DSN }}
+          VITE_ERROR_REPORT_URL: ${{ vars.STAGING_ERROR_REPORT_URL }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.STAGING_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.STAGING_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.STAGING_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.STAGING_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.STAGING_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.STAGING_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.STAGING_FIREBASE_MEASUREMENT_ID }}
+      - name: Deploy staging Hosting channel
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          firebaseServiceAccount: ${{ secrets.STAGING_FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ secrets.STAGING_FIREBASE_PROJECT_ID }}
+          channelId: staging-manual
+          expires: 7d
+
+  production:
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'production' && inputs.confirm == 'DEPLOY PRODUCTION' && github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - run: npm ci
+      - run: npm --prefix functions ci
+      - name: Build production frontend (checkout disabled)
+        run: npm run build
+        env:
+          VITE_CHECKOUT_ENABLED: 'false'
+          VITE_GA_MEASUREMENT_ID: ${{ vars.PROD_GA_MEASUREMENT_ID }}
+          VITE_META_PIXEL_ID: ${{ vars.PROD_META_PIXEL_ID }}
+          VITE_SENTRY_DSN: ${{ vars.PROD_SENTRY_DSN }}
+          VITE_ERROR_REPORT_URL: ${{ vars.PROD_ERROR_REPORT_URL }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.PROD_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.PROD_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.PROD_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.PROD_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.PROD_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.PROD_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.PROD_FIREBASE_MEASUREMENT_ID }}
+      - name: Deploy LIVE Hosting only
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.PROD_FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ secrets.PROD_FIREBASE_PROJECT_ID }}
           channelId: live
-          projectId: LUXARDO FASHION-fashion-website

@@ -2,62 +2,271 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ---- Helpers -------------------------------------------------------
+    // Admin = hardcoded owner UIDs (legacy) OR Firebase custom claim admin=true.
+    // The claim must be set server-side (Admin SDK); clients cannot forge it.
+    // Staff roles live ONLY in Firebase custom claims (set server-side by the Admin SDK), never in a document
+    // the user can edit. Recognised roles: admin, owner, dispatch. Anything else (super_admin, analysis, ...) grants nothing.
+    function claimRole() {
+      return request.auth != null ? request.auth.token.get('role', '') : '';
+    }
+
+    // Admin = `admin` claim, role claim `admin`, or the owner UID (bootstrap).
     function isAdmin() {
       return request.auth != null && (
-        request.auth.uid == 'jOnrDrh2EYghgU3ebCkWr694aDt1' ||
-        request.auth.uid == 'PqH3UUjP1acXGxyBNu2kOMTr0Xw1'
+        request.auth.token.get('admin', false) == true ||
+        claimRole() == 'admin' ||
+        request.auth.uid == '0Frc6Dy2MqN0zc0UFkmqvpELFnr1'
       );
+    }
+
+    function isOwnerRole() {
+      return claimRole() == 'owner';
+    }
+
+    function isDispatchRole() {
+      return claimRole() == 'dispatch';
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Real (phone/email) account, not an anonymous guest session.
+    function isRegisteredUser() {
+      return request.auth != null &&
+        request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Fields a customer must never be able to set or change on their own profile.
+    function privilegedKeys() {
+      return ['role', 'isAdmin', 'admin', 'permissions', 'isPrimeMember',
+              'primePrivileges', 'membershipActivation', 'membershipExpiry',
+              'forcePasswordReset', 'notes'];
+    }
+
+    // Create: no privileged fields, except role may be exactly 'customer'
+    // and isPrimeMember may be exactly false (what the signup flow writes).
+    function safeProfileCreate() {
+      let d = request.resource.data;
+      return d.keys().hasAny(['isAdmin', 'admin', 'permissions', 'primePrivileges',
+                              'membershipActivation', 'membershipExpiry',
+                              'forcePasswordReset', 'notes']) == false &&
+        (!('role' in d) || d.role == 'customer') &&
+        (!('isPrimeMember' in d) || d.isPrimeMember == false);
+    }
+
+    // Update: privileged fields must be untouched.
+    function safeProfileUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(privilegedKeys()) == false;
+    }
+
+    // ---- Catalogue (public read, admin write) --------------------------
+    // Basic integrity for catalogue writes: price/stock must be sane numbers.
+    function validProduct() {
+      let d = request.resource.data;
+      return d.name is string && d.name.size() > 0
+        && d.price is number && d.price >= 0
+        && (!('stock' in d) || (d.stock is int && d.stock >= 0));
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /customers/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isAdmin();
-    }
-
-    match /orders/{orderId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isAdmin();
-    }
-
-    match /carts/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isAdmin();
-    }
-
-    match /wishlists/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isAdmin();
-    }
-
-    match /userPreferences/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isAdmin();
-    }
-
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isAdmin();
-    }
-
-    match /sessions/{sessionId} {
-      allow create: if true;
-      allow read, update: if true;
+      allow create, update: if isAdmin() && validProduct();
       allow delete: if isAdmin();
     }
 
-    match /favorites/{docId} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin();
+    // ---- Admin-only probe doc used by the client to learn if the signed-in
+    // user is an admin (read is allowed only for admins; doc need not exist).
+    match /adminCheck/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
-    match /lowStockNotifications/{docId} {
+    // ---- Customer profiles ---------------------------------------------
+    match /customers/{userId} {
+      allow read: if isOwner(userId) || isAdmin() || isOwnerRole();
+      allow create: if isOwner(userId) && safeProfileCreate();
+      allow update: if isOwner(userId) && safeProfileUpdate();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && safeProfileCreate();
+      allow update: if isOwner(userId) && safeProfileUpdate();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---- Orders ----------------------------------------------------------
+    // Orders are created, priced, paid and stock-adjusted ONLY by the payment backend
+    // (Cloud Functions / Admin SDK, which bypass these rules). Clients can never create an order,
+    // so nobody can fabricate a paid order or alter totals.
+    // Customers can read their own orders. Admins can read all orders and may update FULFILMENT
+    // fields only: never money, payment, items or stock fields. An unpaid order cannot be moved
+    // forward, and cancellation must go through the cancelOrderFn callable (it restores stock once).
+    function adminOrderFieldsOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'status', 'trackingId', 'trackingUrl', 'courierName', 'courierService',
+        'courierStatus', 'dispatchDate', 'dispatchNote', 'statusHistory', 'updatedAt']);
+    }
+
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+      allow delete: if false;
+      // Staff: admin, owner (read-only) and dispatch (read + fulfilment updates).
+      allow read: if isAdmin() || isOwnerRole() || isDispatchRole();
+      // A status change is allowed only for a PAID order that is ALREADY in the fulfilment flow with its stock still
+      // reserved. A cancelled / on-hold / unpaid order can never be revived by staff: its stock was released (or never
+      // reserved), so reviving it would sell the same piece twice. Those cases go through the server functions.
+      allow update: if (isAdmin() || isDispatchRole()) && adminOrderFieldsOnly()
+        && (request.resource.data.status == resource.data.status
+            || (resource.data.paymentStatus == 'paid'
+                && resource.data.get('stockReleased', false) == false
+                && resource.data.status in ['processing', 'packed', 'shipped', 'delivered', 'returned', 'failed_delivery']
+                && request.resource.data.status in ['processing', 'packed', 'shipped', 'delivered', 'returned', 'failed_delivery']));
+    }
+
+    // Staff-only order data. A customer can read their whole `orders/{id}` document (Firestore cannot hide single fields), so
+    // anything private lives here instead: staff remarks, assignment, verification workflow and internal log (written by admin /
+    // dispatch), and refund flags, payment errors and duplicate-payment metadata (written ONLY by the server, never by a client).
+    // The order's customer-facing timeline stays in orders.statusHistory.
+    function internalOrderFieldsOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'verificationStatus', 'internalRemarks', 'assignedStaffId', 'assignedStaffName', 'internalLog', 'updatedAt']);
+    }
+    function internalOrderValuesValid() {
+      return request.resource.data.get('verificationStatus', 'verified') in ['verified', 'packing_ready', 'dispatch_ready']
+        && request.resource.data.get('internalRemarks', '') is string && request.resource.data.get('internalRemarks', '').size() <= 2000
+        && request.resource.data.get('assignedStaffId', '') is string && request.resource.data.get('assignedStaffId', '').size() <= 200
+        && request.resource.data.get('assignedStaffName', '') is string && request.resource.data.get('assignedStaffName', '').size() <= 200
+        && request.resource.data.get('internalLog', []) is list && request.resource.data.get('internalLog', []).size() <= 300;
+    }
+    match /orderInternal/{orderId} {
+      allow read: if isAdmin() || isOwnerRole() || isDispatchRole();
+      allow create: if (isAdmin() || isDispatchRole())
+        && exists(/databases/$(database)/documents/orders/$(orderId))
+        && request.resource.data.keys().hasOnly(['verificationStatus', 'internalRemarks', 'assignedStaffId', 'assignedStaffName', 'internalLog', 'updatedAt'])
+        && internalOrderValuesValid();
+      allow update: if (isAdmin() || isDispatchRole()) && internalOrderFieldsOnly() && internalOrderValuesValid();
+      allow delete: if false;
+    }
+
+    // ---- Per-user data -----------------------------------------------------
+    match /carts/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    match /wishlists/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    match /userPreferences/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    // Anonymous country/currency preference. Readable only by document id
+    // (no listing), writable only with the expected keys.
+    match /sessions/{sessionId} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, update: if request.resource.data.keys()
+        .hasOnly(['country', 'currency', 'language', 'updatedAt']);
+      allow delete: if isAdmin();
+    }
+
+    // Wishlist items: doc id is "<uid>_<productId>", owner only.
+    match /favorites/{docId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && docId.matches(request.auth.uid + '_.*');
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow read, write: if isAdmin();
+    }
+
+    // "Notify me about low stock" subscriptions, doc id "<uid>_<productId>".
+    match /lowStockNotifications/{docId} {
+      allow create: if isRegisteredUser()
+        && request.resource.data.userId == request.auth.uid
+        && docId.matches(request.auth.uid + '_.*');
+      allow read, delete: if isRegisteredUser() && resource.data.userId == request.auth.uid;
+      allow read, write: if isAdmin();
+    }
+
+    // ---- Public site content (visitors read, only admins write) ----------
+    // Kept so older deployed storefront builds keep working. Admin = claim or owner UID only
+    // (never a field on a user-writable profile document).
+    match /siteContent/{id}    { allow read: if true; allow write: if isAdmin(); }
+    match /collections/{id}    { allow read: if true; allow write: if isAdmin(); }
+    match /categories/{id}     { allow read: if true; allow write: if isAdmin(); }
+    match /policies/{id}       { allow read: if true; allow write: if isAdmin(); }
+    match /primeContent/{id}   { allow read: if true; allow write: if isAdmin(); }
+    match /media/{id}          { allow read: if true; allow write: if isAdmin(); }
+    match /partners/{id}       { allow read: if true; allow write: if isAdmin(); }
+
+    // ---- Inbound forms: anyone may submit ONE small, well-formed document; only staff read, only admins manage ----
+    // Shape and size limits mirror src/utils/enquiryDocs.ts. No client can edit or delete what was submitted.
+    function shortStr(v, max) { return v is string && v.size() <= max; }
+    function validEmailStr(v) { return v is string && v.size() <= 254 && v.matches('[^ @]+@[^ @]+[.][^ @]+'); }
+
+    match /contactMessages/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['firstName', 'lastName', 'email', 'phone', 'subject', 'message', 'status', 'createdAt', 'source'])
+        && request.resource.data.keys().hasAll(['email', 'message', 'status', 'createdAt'])
+        && request.resource.data.status == 'pending'
+        && shortStr(request.resource.data.get('firstName', ''), 100)
+        && shortStr(request.resource.data.get('lastName', ''), 100)
+        && validEmailStr(request.resource.data.email)
+        && shortStr(request.resource.data.get('phone', ''), 30)
+        && shortStr(request.resource.data.get('subject', ''), 200)
+        && request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 3000
+        && shortStr(request.resource.data.createdAt, 40)
+        && shortStr(request.resource.data.get('source', ''), 20);
+      allow read: if isAdmin() || isOwnerRole();
+      allow update, delete: if isAdmin();
+    }
+
+    match /wholesaleInquiries/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['full_name', 'company_name', 'email', 'phone', 'country', 'city', 'retail_type', 'monthly_volume', 'message', 'image', 'imageOmitted', 'status', 'created_at', 'createdAt', 'source'])
+        && request.resource.data.keys().hasAll(['full_name', 'email', 'status', 'createdAt'])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.full_name is string && request.resource.data.full_name.size() > 0 && request.resource.data.full_name.size() <= 150
+        && shortStr(request.resource.data.get('company_name', ''), 200)
+        && validEmailStr(request.resource.data.email)
+        && shortStr(request.resource.data.get('phone', ''), 30)
+        && shortStr(request.resource.data.get('country', ''), 100)
+        && shortStr(request.resource.data.get('city', ''), 100)
+        && shortStr(request.resource.data.get('retail_type', ''), 100)
+        && shortStr(request.resource.data.get('monthly_volume', ''), 100)
+        && shortStr(request.resource.data.get('message', ''), 3000)
+        && shortStr(request.resource.data.get('image', ''), 260000)
+        && shortStr(request.resource.data.createdAt, 40);
+      allow read: if isAdmin() || isOwnerRole();
+      allow update, delete: if isAdmin();
+    }
+
+    // Document id = lower-case email, create-only: a repeat subscription is simply refused.
+    match /newsletterSubscribers/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'createdAt', 'status', 'source'])
+        && validEmailStr(request.resource.data.email)
+        && request.resource.data.email.lower() == id
+        && request.resource.data.status == 'subscribed'
+        && shortStr(request.resource.data.createdAt, 40)
+        && shortStr(request.resource.data.get('source', ''), 20);
+      allow read: if isAdmin() || isOwnerRole();
+      allow update, delete: if isAdmin();
+    }
+    match /bespokeRequests/{id} {
+      allow create: if isRegisteredUser() && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().size() <= 30;
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isAdmin();
     }
 
     match /{document=**} {

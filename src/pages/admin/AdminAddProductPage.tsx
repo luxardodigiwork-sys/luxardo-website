@@ -1,8 +1,10 @@
+import { collectionOptions } from '../../utils/collectionIdentity';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { storage } from '../../utils/localStorage';
+import { productStore } from '../../utils/productStore';
+import { getAdminCollections, useContentVersion } from '../../utils/contentSync';
 import { ImageUploadInput } from '../../components/admin/ImageUploadInput';
 
 export default function AdminAddProductPage() {
@@ -13,17 +15,17 @@ export default function AdminAddProductPage() {
     name: '',
     slug: '',
     price: 0,
-    category: 'Kurta Editions',
+    category: '', // stable admin collection ID; legacy names remain readable
     collection: '',
     image: '',
     images: [] as string[],
     description: '',
     productStory: '',
-    stock: 10,
+    stock: 0, // never invent stock: the admin enters the real quantity
     lowStockThreshold: 5,
     visibility: 'public' as 'public' | 'hidden',
     featured: false,
-    readyToStitch: false,
+    readyToStitch: true, // all launch products are Ready-to-Stitch fabric (AGENTS.md)
     readyToStitchInfo: '',
     composition: '',
     washingCare: '',
@@ -33,13 +35,8 @@ export default function AdminAddProductPage() {
   });
   const [newImageUrl, setNewImageUrl] = useState('');
 
-  const categories = [
-    'Premium Tuxedos',
-    'Premium Suits',
-    'Premium Koti Kurta',
-    'Premium Kurta Pajama',
-    'Premium Bomber Jackets'
-  ];
+  useContentVersion();
+  const categories = collectionOptions(getAdminCollections().list);
 
   const handleAddImage = () => {
     if (newImageUrl && !formData.images.includes(newImageUrl)) {
@@ -65,10 +62,16 @@ export default function AdminAddProductPage() {
     setIsLoading(true);
 
     try {
-      const products = storage.getProducts();
-      
+      const products = productStore.getAll();
+      const productId = formData.id.trim();
+      if (!productId || productId.includes('/')) {
+        alert('Please enter a product ID (letters, numbers, dashes; no slashes).');
+        setIsLoading(false);
+        return;
+      }
+
       // Check if ID already exists
-      if (products.some(p => p.id === formData.id)) {
+      if (products.some(p => p.id === productId)) {
         alert('A product with this ID already exists. Please use a unique ID.');
         setIsLoading(false);
         return;
@@ -76,6 +79,7 @@ export default function AdminAddProductPage() {
 
       const newProduct = {
         ...formData,
+        id: productId,
         price: Number(formData.price),
         stock: Number(formData.stock),
         visibility: visibilityOverride || formData.visibility,
@@ -83,15 +87,11 @@ export default function AdminAddProductPage() {
         updatedAt: new Date().toISOString()
       };
 
-      storage.saveProducts([...products, newProduct]);
+      await productStore.create(newProduct);
       navigate('/admin/products');
     } catch (error: any) {
       console.error('Error saving product:', error);
-      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
-        alert('Storage limit exceeded. The uploaded images are too large. Please use smaller images or image URLs.');
-      } else {
-        alert('Failed to save product. Please try again.');
-      }
+      alert(error?.message || 'Failed to save product. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -137,6 +137,9 @@ export default function AdminAddProductPage() {
                   placeholder="e.g. The Midnight Tuxedo"
                   className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black"
                 />
+                              <p className="text-xs font-sans text-brand-secondary">
+                  List a single piece per product. Do not create sets or bundles. Use only real products and your own photographs.
+                </p>
               </div>
             </div>
 
@@ -154,12 +157,14 @@ export default function AdminAddProductPage() {
               <div className="space-y-2">
                 <label className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Category</label>
                 <select
+                  required
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full bg-brand-bg border border-brand-divider px-4 py-3 font-sans focus:outline-none focus:border-brand-black"
                 >
+                  <option value="" disabled>Select a collection…</option>
                   {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
                   ))}
                 </select>
               </div>
@@ -320,7 +325,7 @@ export default function AdminAddProductPage() {
                   <ImageUploadInput
                     value={formData.image}
                     onChange={(val) => setFormData({ ...formData, image: val })}
-                    placeholder="https://images.unsplash.com/..."
+                    placeholder="/placeholder.svg"
                   />
                   <p className="text-xs text-brand-secondary font-sans mt-2">
                     This image will be used as the main thumbnail across the site. Use a 3:4 aspect ratio for best results.

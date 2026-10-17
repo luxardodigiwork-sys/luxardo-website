@@ -3,29 +3,31 @@ import { Product } from '../../types';
 import { formatCurrency } from '../../utils/currency';
 import { Plus, Search, Edit2, Trash2, ExternalLink, Eye, EyeOff, Star, Image as ImageIcon, Filter, Copy, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { storage } from '../../utils/localStorage';
+import { productStore } from '../../utils/productStore';
+import { useProducts } from '../../context/ProductsContext';
 import { ConfirmModal } from '../../components/admin/ConfirmModal';
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const { products, isLoaded, error } = useProducts();
+  const [actionError, setActionError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterCollection, setFilterCollection] = useState('all');
   const [filterVisibility, setFilterVisibility] = useState('all');
   const [filterStock, setFilterStock] = useState('all');
   const [filterFeatured, setFilterFeatured] = useState('all');
-  const [isLoading, setIsLoading] = useState(true);
+  const isLoading = !isLoaded;
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchProducts = () => {
-      const productsData = storage.getProducts();
-      setProducts(productsData);
-      setIsLoading(false);
-    };
-
-    fetchProducts();
-  }, []);
+  const run = async (action: () => Promise<void>) => {
+    setActionError('');
+    try {
+      await action();
+    } catch (err: any) {
+      console.error('Product update failed:', err);
+      setActionError(err?.message || 'Update failed. Check you are signed in as an admin.');
+    }
+  };
 
   const handleDelete = (id: string) => {
     setItemToDelete(id);
@@ -33,10 +35,9 @@ export default function AdminProductsPage() {
 
   const confirmDelete = () => {
     if (itemToDelete) {
-      const updatedProducts = products.filter(p => p.id !== itemToDelete);
-      storage.saveProducts(updatedProducts);
-      setProducts(updatedProducts);
+      const id = itemToDelete;
       setItemToDelete(null);
+      run(() => productStore.remove(id));
     }
   };
 
@@ -55,31 +56,20 @@ export default function AdminProductsPage() {
       updatedAt: new Date().toISOString()
     };
 
-    const updatedProducts = [duplicatedProduct, ...products];
-    storage.saveProducts(updatedProducts);
-    setProducts(updatedProducts);
+    run(() => productStore.create({ ...duplicatedProduct, stock: 0 })); // a copy starts with no stock; staff set it deliberately
   };
 
   const toggleVisibility = (id: string) => {
-    const updatedProducts = products.map(p => {
-      if (p.id === id) {
-        return { ...p, visibility: p.visibility === 'hidden' ? 'public' : 'hidden' as 'public' | 'hidden' };
-      }
-      return p;
-    });
-    storage.saveProducts(updatedProducts);
-    setProducts(updatedProducts);
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    const visibility: 'public' | 'hidden' = p.visibility === 'hidden' ? 'public' : 'hidden';
+    run(() => productStore.update({ ...p, visibility, updatedAt: new Date().toISOString() }, p.stock));
   };
 
   const toggleFeatured = (id: string) => {
-    const updatedProducts = products.map(p => {
-      if (p.id === id) {
-        return { ...p, featured: !p.featured };
-      }
-      return p;
-    });
-    storage.saveProducts(updatedProducts);
-    setProducts(updatedProducts);
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    run(() => productStore.update({ ...p, featured: !p.featured, updatedAt: new Date().toISOString() }, p.stock));
   };
 
   const collections = useMemo(() => {
@@ -140,6 +130,20 @@ export default function AdminProductsPage() {
           <Plus size={18} /> Add New Product
         </Link>
       </div>
+
+      {error && (
+        <div className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Could not load products from Firestore: {error.message}
+        </div>
+      )}
+      {isLoaded && !error && products.length === 0 && (
+        <div className="border border-brand-divider bg-white p-8 text-center text-sm text-brand-secondary">
+          No products yet. Customers see "Products coming soon" until you add your first real product.
+        </div>
+      )}
+      {actionError && (
+        <div className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">{actionError}</div>
+      )}
 
       <div className="bg-white border border-brand-divider shadow-sm">
         <div className="p-6 border-b border-brand-divider space-y-4">
@@ -292,7 +296,7 @@ export default function AdminProductsPage() {
                       <div className="flex items-center gap-2">
                         <div className={`w-1.5 h-1.5 rounded-full ${product.stock === 0 ? 'bg-red-500' : product.stock && product.stock < 5 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
                         <span className={`font-sans text-xs ${product.stock === 0 ? 'text-red-600' : product.stock && product.stock < 5 ? 'text-amber-600' : 'text-brand-black'}`}>
-                          {product.stock !== undefined ? `${product.stock} in stock` : 'Unlimited'}
+                          {product.stock !== undefined ? `${product.stock} in stock` : 'Stock not set'}
                         </span>
                       </div>
                     </td>
@@ -332,6 +336,7 @@ export default function AdminProductsPage() {
                         <Link 
                           to={`/product/${product.id}`} 
                           target="_blank"
+                          rel="noopener noreferrer"
                           className="p-2 rounded-md text-brand-secondary hover:bg-gray-100 hover:text-brand-black transition-colors"
                           title="View on Site"
                         >

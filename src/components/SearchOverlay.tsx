@@ -1,9 +1,13 @@
+import { collectionLabel } from '../utils/collectionIdentity';
+import OptimizedImage from './OptimizedImage';
+import { formatINR } from '../utils/currency';
+import { PRIME_AVAILABLE } from '../constants/features';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, ArrowRight, Package, Grid, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { storage } from '../utils/localStorage';
-import { COLLECTIONS } from '../constants';
+import { useProducts } from '../context/ProductsContext';
+import { getStorefrontCollections } from '../utils/contentSync';
 import { Product } from '../types';
 
 interface SearchOverlayProps {
@@ -14,21 +18,21 @@ interface SearchOverlayProps {
 const PAGES = [
   { title: 'Home', path: '/', type: 'page' },
   { title: 'All Collections', path: '/collections', type: 'page' },
-  { title: 'Prime Membership', path: '/prime-membership', type: 'page' },
+  ...(PRIME_AVAILABLE ? [{ title: 'Prime Membership', path: '/prime-membership', type: 'page' }] : []),
   { title: 'Craftsmanship', path: '/craftsmanship', type: 'page' },
   { title: 'Our Story', path: '/our-story', type: 'page' },
   { title: 'Contact', path: '/contact', type: 'page' },
 ];
 
 export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
+  const COLLECTIONS = getStorefrontCollections();
   const [query, setQuery] = useState('');
-  const [products, setProducts] = useState<Product[]>([]);
+  const { storefrontProducts: products } = useProducts();
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (isOpen) {
-      setProducts(storage.getProducts());
       setQuery('');
       // Small delay to ensure the element is rendered before focusing
       setTimeout(() => {
@@ -55,18 +59,18 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
 
   // Filter logic
   const normalizedQuery = query.toLowerCase().trim();
-  
-  const filteredProducts = normalizedQuery 
-    ? products.filter(p => 
-        p.name.toLowerCase().includes(normalizedQuery) || 
-        p.category.toLowerCase().includes(normalizedQuery) ||
-        p.description.toLowerCase().includes(normalizedQuery)
+
+  const filteredProducts = normalizedQuery
+    ? products.filter(p =>
+        p.name.toLowerCase().includes(normalizedQuery) ||
+        collectionLabel(p.category, COLLECTIONS).toLowerCase().includes(normalizedQuery) ||
+        (p.description || '').toLowerCase().includes(normalizedQuery)
       ).slice(0, 4)
     : [];
 
   const filteredCollections = normalizedQuery
-    ? COLLECTIONS.filter(c => 
-        c.fullName.toLowerCase().includes(normalizedQuery) || 
+    ? COLLECTIONS.filter(c =>
+        c.fullName.toLowerCase().includes(normalizedQuery) ||
         c.shortName.toLowerCase().includes(normalizedQuery)
       ).slice(0, 3)
     : [];
@@ -93,7 +97,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
           />
 
           {/* Search Panel */}
-          <div 
+          <div
             className="fixed inset-0 z-[101] flex items-start justify-center md:pt-24 md:px-4"
             onClick={onClose}
           >
@@ -106,7 +110,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
               className="w-full h-full md:h-auto md:max-w-[720px] bg-brand-bg md:shadow-2xl md:border border-brand-divider md:rounded-3xl overflow-hidden flex flex-col md:max-h-[75vh]"
             >
               {/* Search Input Area */}
-              <form 
+              <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (filteredProducts.length > 0) {
@@ -128,7 +132,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                   onChange={(e) => setQuery(e.target.value)}
                   className="flex-1 bg-transparent text-lg font-sans text-brand-black placeholder:text-brand-black/30 focus:outline-none"
                 />
-                <button 
+                <button
                   type="button"
                   onClick={onClose}
                   className="p-1.5 hover:bg-gray-100 rounded-full transition-colors ml-4"
@@ -149,7 +153,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    
+
                     {/* Left Column: Products */}
                     <div className="md:col-span-2 space-y-5">
                       {filteredProducts.length > 0 && (
@@ -159,23 +163,23 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                           </h3>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {filteredProducts.map(product => (
-                              <div 
+                              <div
                                 key={product.id}
                                 onClick={() => handleNavigate(`/product/${product.id}`)}
                                 className="group flex gap-4 cursor-pointer p-2 -m-2 hover:bg-white transition-colors rounded-sm"
                               >
                                 <div className="w-16 h-20 bg-brand-divider overflow-hidden flex-shrink-0">
-                                  <img 
-                                    src={product.image} 
+                                  <OptimizedImage
+                                    src={product.image}
                                     alt={product.name}
                                     className="w-full h-full object-cover   transition-all duration-500"
                                     referrerPolicy="no-referrer"
                                   />
                                 </div>
                                 <div className="flex flex-col justify-center">
-                                  <p className="text-[9px] uppercase tracking-[0.2em] font-bold text-brand-secondary mb-1">{product.category}</p>
+                                  <p className="text-[9px] uppercase tracking-[0.2em] font-bold text-brand-secondary mb-1">{collectionLabel(product.category, getStorefrontCollections())}</p>
                                   <h4 className="text-sm font-sans font-medium text-brand-black group-hover:text-brand-secondary transition-colors line-clamp-2 leading-tight">{product.name}</h4>
-                                  <p className="text-xs font-sans text-brand-secondary mt-1.5">₹{product.price.toLocaleString('en-IN')}</p>
+                                  <p className="text-xs font-sans text-brand-secondary mt-1.5">{formatINR(product.price)}</p>
                                 </div>
                               </div>
                             ))}
@@ -193,7 +197,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                           </h3>
                           <div className="space-y-1">
                             {filteredCollections.map(collection => (
-                              <div 
+                              <div
                                 key={collection.id}
                                 onClick={() => handleNavigate(`/collections/${collection.id}`)}
                                 className="group flex items-center justify-between cursor-pointer py-1.5 border-b border-transparent hover:border-brand-divider transition-colors"
@@ -213,7 +217,7 @@ export function SearchOverlay({ isOpen, onClose }: SearchOverlayProps) {
                           </h3>
                           <div className="space-y-1">
                             {filteredPages.map(page => (
-                              <div 
+                              <div
                                 key={page.path}
                                 onClick={() => handleNavigate(page.path)}
                                 className="group flex items-center justify-between cursor-pointer py-1.5 border-b border-transparent hover:border-brand-divider transition-colors"

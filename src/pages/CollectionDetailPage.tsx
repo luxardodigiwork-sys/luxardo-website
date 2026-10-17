@@ -1,38 +1,34 @@
+import { matchesCollection, sortCatalogue, CatalogueSort } from '../utils/collectionIdentity';
+import { photo } from '../utils/optimizedImage';
 import React, { useState } from 'react';
-import { useParams, useOutletContext } from 'react-router-dom';
+import { Link, useParams, useOutletContext } from 'react-router-dom';
 import { SectionHeader } from '../components/SectionHeader';
-import { COLLECTIONS } from '../constants';
-import { storage } from '../utils/localStorage';
+import { getStorefrontCollections } from '../utils/contentSync';
+import { useProducts } from '../context/ProductsContext';
+import { CatalogueStatus } from '../components/CatalogueStatus';
 import { ProductCard } from '../components/ProductCard';
 import { Country } from '../types';
 import { motion } from 'motion/react';
 import { SlidersHorizontal } from 'lucide-react';
 
 export default function CollectionDetailPage() {
+  const COLLECTIONS = getStorefrontCollections();
   const { category } = useParams<{ category: string }>();
   const { selectedCountry } = useOutletContext<{ selectedCountry: Country | null }>();
-  const [sortBy, setSortBy] = useState<'featured' | 'newest' | 'recommended'>('featured');
+  const [sortBy, setSortBy] = useState<CatalogueSort>('featured');
 
-  const collection = COLLECTIONS.find(c => c.id === category);
-  const products = storage.getProducts();
+  const collection = COLLECTIONS.find(c => matchesCollection(category, c));
+  const { storefrontProducts: products, state } = useProducts();
   
-  let filteredProducts = products.filter(p => p.category === collection?.fullName);
-
-  // Sorting logic for luxury curation
-  if (sortBy === 'newest') {
-    // In a real app, this would use a date field. For now, we reverse the array to simulate newest first.
-    filteredProducts = [...filteredProducts].reverse();
-  } else if (sortBy === 'recommended') {
-    // Simulated recommendation logic (e.g., by ID or some other stable factor)
-    filteredProducts = [...filteredProducts].sort((a, b) => a.id.localeCompare(b.id));
-  }
+  if (!collection) return <div className="section-padding min-h-[60vh] text-center"><h1 className="text-3xl font-display">Collection not found</h1><Link to="/collections" className="underline">Browse all collections</Link></div>;
+  const filteredProducts = sortCatalogue(products.filter(product => matchesCollection(product.category, collection)), sortBy);
 
   return (
     <div className="min-h-screen bg-brand-bg">
       {/* Category Banner */}
       <section className="relative h-[50vh] overflow-hidden bg-brand-black">
         <img 
-          src={collection?.image || "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=2000&auto=format&fit=crop"} 
+          {...photo(collection.image || "/placeholder.svg", 'hero')}
           alt={collection?.fullName} 
           className="absolute inset-0 w-full h-full object-cover"
           referrerPolicy="no-referrer"
@@ -71,7 +67,8 @@ export default function CollectionDetailPage() {
               >
                 <option value="featured">Featured</option>
                 <option value="newest">Newest</option>
-                <option value="recommended">Recommended</option>
+                <option value="price-low">Price: low to high</option>
+                <option value="price-high">Price: high to low</option>
               </select>
             </div>
           </div>
@@ -88,9 +85,11 @@ export default function CollectionDetailPage() {
                     />
                   ))}
                 </div>
+              ) : state !== 'ready' ? (
+                <CatalogueStatus state={state} />
               ) : (
                 <div className="py-32 text-center">
-                  <p className="text-xl font-display text-brand-secondary italic">No pieces found in this collection.</p>
+                  <p className="text-xl font-display text-brand-secondary italic">No pieces found in this collection yet.</p>
                   <button className="mt-8 btn-outline" onClick={() => window.history.back()}>Go Back</button>
                 </div>
               )}

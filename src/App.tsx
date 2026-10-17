@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, lazy, Suspense } from "react";
+import { EXPRESS_BACKEND_AVAILABLE } from './constants/features';
 import { Routes, Route, Navigate } from "react-router-dom";
 import { BackendPermissions } from "./types";
 import Lenis from "lenis";
@@ -7,108 +8,77 @@ import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import HomePage from "./pages/HomePage";
-import CollectionsPage from "./pages/CollectionsPage";
-import CollectionDetailPage from "./pages/CollectionDetailPage";
-import PrimePage from "./pages/PrimePage";
-import PrimeMembershipCheckoutPage from "./pages/PrimeMembershipCheckoutPage";
-import PrimeMembershipSuccessPage from "./pages/PrimeMembershipSuccessPage";
-import PrimeMembershipFailedPage from "./pages/PrimeMembershipFailedPage";
-import PrimeDashboardPage from "./pages/PrimeDashboardPage";
-import MembershipTermsPage from "./pages/MembershipTermsPage";
-import CraftsmanshipPage from "./pages/CraftsmanshipPage";
-import OurStoryPage from "./pages/OurStoryPage";
-import WholesalePage from "./pages/WholesalePage";
-import ContactPage from "./pages/ContactPage";
-import FAQPage from "./pages/FAQPage";
-import ShippingPolicyPage from "./pages/ShippingPolicyPage";
-import ReturnsPolicyPage from "./pages/ReturnsPolicyPage";
-import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
-import TermsPage from "./pages/TermsPage";
-import CartPage from "./pages/CartPage";
-import CheckoutPage from "./pages/CheckoutPage";
-import OrderConfirmationPage from "./pages/OrderConfirmationPage";
-import TrackOrderPage from "./pages/TrackOrderPage";
-import AccountPage from "./pages/AccountPage";
-import OrderDetailsPage from "./pages/OrderDetailsPage";
-import LoginPage from "./pages/LoginPage";
-import ProductPage from "./pages/ProductPage";
-import BespokeRequestPage from "./pages/BespokeRequestPage";
-import StyleConsultationPage from "./pages/StyleConsultationPage";
-import FabricLibraryPage from "./pages/FabricLibraryPage";
+const CollectionsPage = lazy(() => import("./pages/CollectionsPage"));
+const CollectionDetailPage = lazy(() => import("./pages/CollectionDetailPage"));
+const PrimePage = lazy(() => import("./pages/PrimePage"));
+const PrimeMembershipCheckoutPage = lazy(() => import("./pages/PrimeMembershipCheckoutPage"));
+const PrimeMembershipSuccessPage = lazy(() => import("./pages/PrimeMembershipSuccessPage"));
+const PrimeMembershipFailedPage = lazy(() => import("./pages/PrimeMembershipFailedPage"));
+const PrimeDashboardPage = lazy(() => import("./pages/PrimeDashboardPage"));
+const MembershipTermsPage = lazy(() => import("./pages/MembershipTermsPage"));
+const CraftsmanshipPage = lazy(() => import("./pages/CraftsmanshipPage"));
+const OurStoryPage = lazy(() => import("./pages/OurStoryPage"));
+const WholesalePage = lazy(() => import("./pages/WholesalePage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const FAQPage = lazy(() => import("./pages/FAQPage"));
+const ShippingPolicyPage = lazy(() => import("./pages/ShippingPolicyPage"));
+const ReturnsPolicyPage = lazy(() => import("./pages/ReturnsPolicyPage"));
+const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
+const CartPage = lazy(() => import("./pages/CartPage"));
+const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
+const OrderConfirmationPage = lazy(() => import("./pages/OrderConfirmationPage"));
+const TrackOrderPage = lazy(() => import("./pages/TrackOrderPage"));
+const AccountPage = lazy(() => import("./pages/AccountPage"));
+const OrderDetailsPage = lazy(() => import("./pages/OrderDetailsPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const ProductPage = lazy(() => import("./pages/ProductPage"));
+const BespokeRequestPage = lazy(() => import("./pages/BespokeRequestPage"));
+const StyleConsultationPage = lazy(() => import("./pages/StyleConsultationPage"));
+const FabricLibraryPage = lazy(() => import("./pages/FabricLibraryPage"));
 
 import { WishlistProvider } from "./context/WishlistContext";
-import { CountryProvider, useCountry } from "./context/CountryContext";
-import { FirstVisitModal } from "./components/FirstVisitModal";
+import { CountryProvider } from "./context/CountryContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
-function CountryModalBridge() {
-  const { showModal, setCountry } = useCountry();
-  if (!showModal) return null;
-  return <FirstVisitModal onSelect={setCountry} />;
-}
 import { CartProvider } from "./context/CartContext";
+import { ProductsProvider } from "./context/ProductsContext";
+import { PRIME_AVAILABLE } from "./constants/features";
 
-import RegisterPage from "./pages/RegisterPage";
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 
 // Admin imports
-import AdminLoginPage from "./pages/admin/AdminLoginPage";
-import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
-import AdminDispatchPage from "./pages/admin/AdminDispatchPage";
-import AdminOrderDetailsPage from "./pages/admin/AdminOrderDetailsPage";
-import AdminProductsPage from "./pages/admin/AdminProductsPage";
-import AdminCollectionsPage from "./pages/admin/AdminCollectionsPage";
-import AdminAddProductPage from "./pages/admin/AdminAddProductPage";
-import AdminEditProductPage from "./pages/admin/AdminEditProductPage";
-import AdminContentPage from "./pages/admin/AdminContentPage";
-import AdminMediaPage from "./pages/admin/AdminMediaPage";
-import AdminPoliciesPage from "./pages/admin/AdminPoliciesPage";
-import AdminPrimeContentPage from "./pages/admin/AdminPrimeContentPage";
-import AdminBespokeRequestsPage from "./pages/admin/AdminBespokeRequestsPage";
-import AdminPrimeMembersPage from "./pages/admin/AdminPrimeMembersPage";
-import AdminBackendManagementPage from "./pages/admin/BackendManagementPage";
-import AdminPartnersPage from "./pages/admin/AdminPartnersPage";
-import AdminContactMessagesPage from "./pages/admin/AdminContactMessagesPage";
-import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
-import DispatchDashboardPage from "./pages/dispatch/DispatchDashboardPage";
-import BackendGatewayPage from "./pages/BackendGatewayPage";
+const AdminDashboardPage = lazy(() => import("./pages/admin/AdminDashboardPage"));
+const AdminDispatchPage = lazy(() => import("./pages/admin/AdminDispatchPage"));
+const AdminOrderDetailsPage = lazy(() => import("./pages/admin/AdminOrderDetailsPage"));
+const AdminProductsPage = lazy(() => import("./pages/admin/AdminProductsPage"));
+const AdminCollectionsPage = lazy(() => import("./pages/admin/AdminCollectionsPage"));
+const AdminAddProductPage = lazy(() => import("./pages/admin/AdminAddProductPage"));
+const AdminEditProductPage = lazy(() => import("./pages/admin/AdminEditProductPage"));
+const AdminContentPage = lazy(() => import("./pages/admin/AdminContentPage"));
+const AdminMediaPage = lazy(() => import("./pages/admin/AdminMediaPage"));
+const AdminPoliciesPage = lazy(() => import("./pages/admin/AdminPoliciesPage"));
+const AdminPrimeContentPage = lazy(() => import("./pages/admin/AdminPrimeContentPage"));
+const AdminBespokeRequestsPage = lazy(() => import("./pages/admin/AdminBespokeRequestsPage"));
+const AdminPrimeMembersPage = lazy(() => import("./pages/admin/AdminPrimeMembersPage"));
+const AdminBackendManagementPage = lazy(() => import("./pages/admin/BackendManagementPage"));
+const AdminPartnersPage = lazy(() => import("./pages/admin/AdminPartnersPage"));
+const AdminContactMessagesPage = lazy(() => import("./pages/admin/AdminContactMessagesPage"));
+const AdminSettingsPage = lazy(() => import("./pages/admin/AdminSettingsPage"));
+const DispatchDashboardPage = lazy(() => import("./pages/dispatch/DispatchDashboardPage"));
 import DispatchLayout from "./components/dispatch/DispatchLayout";
 
 import AdminLayout from "./components/admin/AdminLayout";
 
 import OwnerLayout from "./components/owner/OwnerLayout";
-import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
-import AnalysisLayout from "./components/analysis/AnalysisLayout";
-import AnalysisDashboardPage from "./pages/analysis/AnalysisDashboardPage";
-
-const ProtectedBackendRoute = ({
-  role,
-  permission,
-  children,
-}: {
-  role: string;
-  permission?: string;
-  children: React.ReactNode;
-}) => {
-  const { user, isAuthReady } = useAuth();
-
-  if (!isAuthReady) {
-    return (
-      <div className="min-h-screen bg-brand-bg flex items-center justify-center">
-        Loading...
-      </div>
-    );
-  }
-
-  const isSuperAdmin = user && ["super_admin", "admin"].includes(user.role);
-  const hasRole = user && user.role === role;
-  const hasPermission = !permission || user?.permissions?.[permission];
-
-  if (!user || (!isSuperAdmin && (!hasRole || !hasPermission))) {
-    return <Navigate to="/backend" replace />;
-  }
-
-  return <>{children}</>;
-};
+const OwnerDashboardPage = lazy(() => import("./pages/owner/OwnerDashboardPage"));
+import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
+const StaffLoginPage = lazy(() => import("./pages/StaffLoginPage"));
+const AdminStaffPage = lazy(() => import("./pages/admin/AdminStaffPage"));
+const AdminNewsletterPage = lazy(() => import("./pages/admin/AdminNewsletterPage"));
+const AdminPhotoOptimizerPage = lazy(() => import("./pages/admin/AdminPhotoOptimizerPage"));
+import CookieConsent from "./components/CookieConsent";
+import { CHECKOUT_ENABLED } from "./constants/features";
 
 export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -159,14 +129,17 @@ export default function App() {
   return (
     <AuthProvider>
       <CountryProvider>
-        <CountryModalBridge />
+      <ProductsProvider>
       <CartProvider>
         <WishlistProvider>
+          <CookieConsent />
+          <Suspense fallback={<div role="status" className="p-8 text-center">Loading page...</div>}>
           <Routes>
-            <Route path="/admin/login" element={<AdminLoginPage />} />
+            <Route path="/backend/login" element={<StaffLoginPage />} />
+            <Route path="/admin/login" element={<Navigate to="/backend/login" replace />} />
 
             <Route path="/admin">
-              <Route element={<AdminLayout />}>
+              <Route element={<ProtectedAdminRoute><AdminLayout /></ProtectedAdminRoute>}>
                 <Route
                   index
                   element={<Navigate to="/admin/dashboard" replace />}
@@ -182,6 +155,8 @@ export default function App() {
                 />
                 <Route path="content" element={<AdminContentPage />} />
                 <Route path="media" element={<AdminMediaPage />} />
+                <Route path="photo-optimizer" element={<AdminPhotoOptimizerPage />} />
+                <Route path="newsletter" element={<AdminNewsletterPage />} />
                 <Route
                   path="prime-content"
                   element={<AdminPrimeContentPage />}
@@ -202,25 +177,23 @@ export default function App() {
                 />
                 <Route
                   path="backend-management"
-                  element={<AdminBackendManagementPage />}
+                  element={EXPRESS_BACKEND_AVAILABLE ? <AdminBackendManagementPage /> : <Navigate to="/admin" replace />}
                 />
+                <Route path="staff" element={<AdminStaffPage />} />
                 <Route path="settings" element={<AdminSettingsPage />} />
               </Route>
             </Route>
 
             <Route
               path="/dispatch/login"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/dispatch"
               element={
-                <ProtectedBackendRoute
-                  role="dispatch"
-                  permission="dispatch_actions"
-                >
+                <ProtectedAdminRoute area="dispatch">
                   <DispatchLayout />
-                </ProtectedBackendRoute>
+                </ProtectedAdminRoute>
               }
             >
               <Route
@@ -230,33 +203,30 @@ export default function App() {
               <Route path="dashboard" element={<DispatchDashboardPage />} />
             </Route>
 
-            <Route path="/backend" element={<BackendGatewayPage />} />
+            <Route path="/backend" element={<Navigate to="/backend/login" replace />} />
             <Route
               path="/admin-access"
               caseSensitive={false}
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/ADMIN-ACCESS"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/analysis/login"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/owner/login"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/owner"
               element={
-                <ProtectedBackendRoute
-                  role="owner"
-                  permission="backend_management"
-                >
+                <ProtectedAdminRoute area="owner">
                   <OwnerLayout />
-                </ProtectedBackendRoute>
+                </ProtectedAdminRoute>
               }
             >
               <Route
@@ -266,23 +236,8 @@ export default function App() {
               <Route path="dashboard" element={<OwnerDashboardPage />} />
               <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
             </Route>
-            <Route
-              path="/analysis"
-              element={
-                <ProtectedBackendRoute
-                  role="analysis"
-                  permission="analysis_reports"
-                >
-                  <AnalysisLayout />
-                </ProtectedBackendRoute>
-              }
-            >
-              <Route
-                index
-                element={<Navigate to="/analysis/dashboard" replace />}
-              />
-              <Route path="dashboard" element={<AnalysisDashboardPage />} />
-            </Route>
+            {/* Analysis area is disabled for now (only admin, owner and dispatch are active). */}
+            <Route path="/analysis/*" element={<Navigate to="/backend/login" replace />} />
 
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />
@@ -291,6 +246,8 @@ export default function App() {
                 path="collections/:category"
                 element={<CollectionDetailPage />}
               />
+              {PRIME_AVAILABLE ? (
+                <>
               <Route path="prime-membership" element={<PrimePage />} />
               <Route
                 path="prime-dashboard"
@@ -310,11 +267,8 @@ export default function App() {
               />
               <Route
                 path="prime-membership/success"
-                element={
-                  <ProtectedRoute>
-                    <PrimeMembershipSuccessPage />
-                  </ProtectedRoute>
-                }
+                // No payment can complete while Prime checkout is disabled; never show a fake success page.
+                element={<Navigate to="/prime-membership" replace />}
               />
               <Route
                 path="prime-membership/failed"
@@ -352,6 +306,16 @@ export default function App() {
                 path="private-client-services/*"
                 element={<Navigate to="/prime-membership" replace />}
               />
+                </>
+              ) : (
+                <>
+                  {/* Prime is unavailable until after launch: every Prime URL goes to the home page. */}
+                  <Route path="prime-membership/*" element={<Navigate to="/" replace />} />
+                  <Route path="prime-dashboard" element={<Navigate to="/" replace />} />
+                  <Route path="policies/membership-terms" element={<Navigate to="/" replace />} />
+                  <Route path="private-client-services/*" element={<Navigate to="/" replace />} />
+                </>
+              )}
               <Route path="craftsmanship" element={<CraftsmanshipPage />} />
               <Route path="our-story" element={<OurStoryPage />} />
               <Route path="wholesale" element={<WholesalePage />} />
@@ -368,9 +332,13 @@ export default function App() {
               <Route
                 path="checkout"
                 element={
-                  <ProtectedRoute>
-                    <CheckoutPage />
-                  </ProtectedRoute>
+                  CHECKOUT_ENABLED ? (
+                    <ProtectedRoute>
+                      <CheckoutPage />
+                    </ProtectedRoute>
+                  ) : (
+                    <Navigate to="/cart" replace />
+                  )
                 }
               />
               <Route
@@ -396,12 +364,14 @@ export default function App() {
                 }
               />
               <Route path="login" element={<LoginPage />} />
-              <Route path="register" element={<RegisterPage />} />
+              <Route path="register" element={<Navigate to="/login" replace />} />
               <Route path="product/:id" element={<ProductPage />} />
             </Route>
           </Routes>
+          </Suspense>
         </WishlistProvider>
       </CartProvider>
+      </ProductsProvider>
       </CountryProvider>
     </AuthProvider>
   );

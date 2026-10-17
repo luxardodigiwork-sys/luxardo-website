@@ -203,25 +203,13 @@ export default function AnalysisDashboardPage() {
     };
   }, [favorites]);
 
-  const websiteAnalysis = useMemo(() => {
-    // Mock data for website reach since we don't have a real analytics backend
-    // In a real app, this would come from Google Analytics or similar
-    const now = new Date();
-    const today = startOfDay(now);
-    
-    // Use active users/orders as a proxy for engagement
-    const activeUsersToday = users.filter(u => u.createdAt && isAfter(new Date(u.createdAt), today)).length + 
-                             orders.filter(o => o.createdAt && isAfter(new Date(o.createdAt), today)).length * 3;
-                             
-    const estimatedReach = Math.max(120, activeUsersToday * 15 + Math.floor(Math.random() * 50));
-    const bounceRate = (35 + Math.random() * 10).toFixed(1);
-    const avgSessionDuration = "2m 45s";
-    
+  // Real counts only. There is no web-analytics backend, so reach / bounce rate / session length are NOT shown
+  // (they were previously invented from random numbers).
+  const todayActivity = useMemo(() => {
+    const today = startOfDay(new Date());
     return {
-      dailyReach: estimatedReach,
-      bounceRate: `${bounceRate}%`,
-      avgSessionDuration,
-      activeUsersToday
+      newCustomersToday: users.filter((u) => u.createdAt && isAfter(new Date(u.createdAt), today)).length,
+      ordersToday: orders.filter((o) => o.createdAt && isAfter(new Date(o.createdAt), today)).length,
     };
   }, [users, orders]);
 
@@ -257,22 +245,16 @@ export default function AnalysisDashboardPage() {
           label="Total Orders" 
           value={stats.totalOrders} 
           icon={ShoppingBag} 
-          trend="+12%" 
-          trendUp={true}
         />
         <InsightCard 
           label="Revenue" 
           value={formatCurrency(stats.totalRevenue)} 
           icon={DollarSign} 
-          trend="+8.4%" 
-          trendUp={true}
         />
         <InsightCard 
           label="Conversion" 
           value={`${stats.conversionRate}%`} 
           icon={TrendingUp} 
-          trend="-0.5%" 
-          trendUp={false}
         />
         <InsightCard 
           label="Active Customers" 
@@ -322,36 +304,21 @@ export default function AnalysisDashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Website Analysis */}
-        <Section title="Website Analysis" icon={Globe} className="lg:col-span-3">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="p-6 bg-brand-bg border border-brand-divider rounded-lg">
-              <div className="flex items-center gap-3 mb-2">
-                <Activity size={18} className="text-brand-secondary" />
-                <h4 className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Daily Reach (Est.)</h4>
-              </div>
-              <p className="text-3xl font-display font-bold">{websiteAnalysis.dailyReach}</p>
-              <p className="text-xs text-green-600 mt-2 flex items-center gap-1"><ArrowUpRight size={12}/> +12% vs yesterday</p>
-            </div>
+        <Section title="Today" icon={Globe} className="lg:col-span-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="p-6 bg-brand-bg border border-brand-divider rounded-lg">
               <div className="flex items-center gap-3 mb-2">
                 <Users size={18} className="text-brand-secondary" />
-                <h4 className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Active Users Today</h4>
+                <h4 className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">New Customers Today</h4>
               </div>
-              <p className="text-3xl font-display font-bold">{websiteAnalysis.activeUsersToday}</p>
+              <p className="text-3xl font-display font-bold">{todayActivity.newCustomersToday}</p>
             </div>
             <div className="p-6 bg-brand-bg border border-brand-divider rounded-lg">
               <div className="flex items-center gap-3 mb-2">
-                <TrendingUp size={18} className="text-brand-secondary" />
-                <h4 className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Bounce Rate</h4>
+                <Activity size={18} className="text-brand-secondary" />
+                <h4 className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Orders Today</h4>
               </div>
-              <p className="text-3xl font-display font-bold">{websiteAnalysis.bounceRate}</p>
-            </div>
-            <div className="p-6 bg-brand-bg border border-brand-divider rounded-lg">
-              <div className="flex items-center gap-3 mb-2">
-                <Clock size={18} className="text-brand-secondary" />
-                <h4 className="text-[10px] uppercase tracking-widest font-bold text-brand-secondary">Avg Session</h4>
-              </div>
-              <p className="text-3xl font-display font-bold">{websiteAnalysis.avgSessionDuration}</p>
+              <p className="text-3xl font-display font-bold">{todayActivity.ordersToday}</p>
             </div>
           </div>
         </Section>
@@ -511,7 +478,7 @@ export default function AnalysisDashboardPage() {
                       <td className="py-4">{u.country || 'N/A'}</td>
                       <td className="py-4 capitalize">
                         <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-wider ${
-                          u.role === 'admin' || u.role === 'super_admin' ? 'bg-brand-black text-white' : 'bg-gray-200 text-brand-black'
+                          u.role === 'admin' ? 'bg-brand-black text-white' : 'bg-gray-200 text-brand-black'
                         }`}>
                           {u.role}
                         </span>

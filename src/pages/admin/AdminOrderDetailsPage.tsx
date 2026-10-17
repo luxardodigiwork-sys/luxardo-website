@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, Package, CheckCircle2, Box, Send, ShieldCheck } from 'lucide-react';
-import { storage } from '../../utils/localStorage';
+import { persistOrders, useAdminOrders } from '../../utils/orderStore';
 import { Order } from '../../types';
-import { formatCurrency } from '../../utils/currency';
+import { formatINR } from '../../utils/currency';
 
 export default function AdminOrderDetailsPage() {
   const { id } = useParams();
@@ -22,11 +22,13 @@ export default function AdminOrderDetailsPage() {
   // Determine the base path for navigation
   const basePath = location.pathname.split('/')[1];
 
+  const { orders: liveOrders, isLoaded: ordersLoaded } = useAdminOrders();
+
   useEffect(() => {
     const fetchOrder = () => {
-      if (!id) return;
+      if (!id || !ordersLoaded) return;
       try {
-        const orders = storage.getOrders();
+        const orders = liveOrders;
         const foundOrder = orders.find(o => o.id === id);
         if (foundOrder) {
           setOrder(foundOrder);
@@ -46,13 +48,13 @@ export default function AdminOrderDetailsPage() {
     };
 
     fetchOrder();
-  }, [id, navigate, basePath]);
+  }, [id, navigate, basePath, liveOrders, ordersLoaded]);
 
   const handleSaveDispatchDetails = () => {
     if (!order) return;
     setIsUpdating(true);
     try {
-      const orders = storage.getOrders();
+      const orders = liveOrders;
       const updatedOrders = orders.map(o => 
         o.id === order.id ? { 
           ...o, 
@@ -63,7 +65,7 @@ export default function AdminOrderDetailsPage() {
           trackingUrl
         } : o
       );
-      storage.saveOrders(updatedOrders);
+      persistOrders(updatedOrders);
       setOrder({ 
         ...order, 
         trackingId: trackingInput,
@@ -80,19 +82,19 @@ export default function AdminOrderDetailsPage() {
   };
 
   const handleResendInvoice = () => {
-    setInvoiceSent(true);
-    setTimeout(() => setInvoiceSent(false), 3000);
+    // No invoice generator exists yet (GST registration/treatment is unconfirmed): never pretend one was sent.
+    alert('Invoice generation is not set up yet. It requires the owner\'s GST/invoice details.');
   };
 
   const handleStatusChange = async (newStatus: Order['status']) => {
     if (!order) return;
     setIsUpdating(true);
     try {
-      const orders = storage.getOrders();
+      const orders = liveOrders;
       const updatedOrders = orders.map(o => 
         o.id === order.id ? { ...o, status: newStatus } : o
       );
-      storage.saveOrders(updatedOrders);
+      persistOrders(updatedOrders);
       setOrder({ ...order, status: newStatus });
     } catch (error) {
       console.error('Error updating status:', error);
@@ -106,11 +108,11 @@ export default function AdminOrderDetailsPage() {
     if (!order) return;
     setIsUpdating(true);
     try {
-      const orders = storage.getOrders();
+      const orders = liveOrders;
       const updatedOrders = orders.map(o => 
         o.id === order.id ? { ...o, verificationStatus: newStatus } : o
       );
-      storage.saveOrders(updatedOrders);
+      persistOrders(updatedOrders);
       setOrder({ ...order, verificationStatus: newStatus });
     } catch (error) {
       console.error('Error updating verification status:', error);
@@ -178,12 +180,12 @@ export default function AdminOrderDetailsPage() {
                         {item.category || 'Uncategorized'}
                       </p>
                       <p className="text-xs text-brand-secondary mt-2">
-                        Qty: <span className="text-brand-black font-medium">{item.quantity}</span> × {formatCurrency(item.price)}
+                        Qty: <span className="text-brand-black font-medium">{item.quantity}</span> × {formatINR(item.price)}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-sans font-medium text-brand-black">{formatCurrency(item.price * item.quantity)}</p>
+                    <p className="font-sans font-medium text-brand-black">{formatINR(item.price * item.quantity)}</p>
                   </div>
                 </div>
               ))}
@@ -191,7 +193,7 @@ export default function AdminOrderDetailsPage() {
             <div className="pt-4 border-t border-brand-divider space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-brand-secondary">Subtotal</span>
-                <span className="text-brand-black">{formatCurrency(order.totalAmount)}</span>
+                <span className="text-brand-black">{formatINR(order.totalAmount)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-brand-secondary">Shipping</span>
@@ -199,7 +201,7 @@ export default function AdminOrderDetailsPage() {
               </div>
               <div className="flex justify-between text-base font-bold pt-4 mt-2 border-t border-brand-divider">
                 <span className="text-brand-black">Total</span>
-                <span className="text-brand-black">{formatCurrency(order.totalAmount)}</span>
+                <span className="text-brand-black">{formatINR(order.totalAmount)}</span>
               </div>
             </div>
           </div>
@@ -262,6 +264,28 @@ export default function AdminOrderDetailsPage() {
             </p>
           </div>
 
+          {(order.cancellationRequest || order.returnRequest || order.needsRefund) && (
+            <div className="border border-amber-300 bg-amber-50 p-5 space-y-2 text-sm text-amber-900">
+              {order.cancellationRequest && (
+                <p>
+                  <strong>Cancellation requested</strong> by the customer on {new Date(order.cancellationRequest.requestedAt).toLocaleString('en-IN')}
+                  {order.cancellationRequest.reason ? `: "${order.cancellationRequest.reason}"` : '.'}
+                  {' '}To approve, set the status to Cancelled (stock is restored) and refund the payment in the Razorpay dashboard. Nothing is refunded automatically.
+                </p>
+              )}
+              {order.returnRequest && (
+                <p>
+                  <strong>Return requested</strong> on {new Date(order.returnRequest.requestedAt).toLocaleString('en-IN')}
+                  {order.returnRequest.reason ? `: "${order.returnRequest.reason}"` : '.'}
+                  {' '}Review the goods, then set the status to Returned and refund manually in the Razorpay dashboard (target within 7 days). Nothing is refunded automatically.
+                </p>
+              )}
+              {order.needsRefund && (
+                <p><strong>Refund due:</strong> this order was paid and is cancelled or on hold. Issue the refund manually in the Razorpay dashboard ({order.statusReason || 'see order history'}).</p>
+              )}
+            </div>
+          )}
+
           {/* Payment & Status */}
           <div className="bg-white border border-brand-divider p-6 shadow-sm space-y-6">
             <h2 className="text-sm uppercase tracking-widest font-bold text-brand-secondary border-b border-brand-divider pb-4">
@@ -272,12 +296,12 @@ export default function AdminOrderDetailsPage() {
                 <div>
                   <p className="text-brand-secondary text-xs mb-2">Payment Status</p>
                   <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] uppercase tracking-widest font-bold border ${
-                    (order.paymentStatus || 'paid') === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    (order.paymentStatus || 'pending') === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                     order.paymentStatus === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
                     order.paymentStatus === 'refunded' ? 'bg-gray-50 text-gray-700 border-gray-200' :
                     'bg-amber-50 text-amber-700 border-amber-200'
                   }`}>
-                    {order.paymentStatus || 'Paid'}
+                    {order.paymentStatus || 'pending'}
                   </span>
                 </div>
                 <div>

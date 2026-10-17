@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+# Back-office and customer-private pages are not for search engines
+Disallow: /admin
+Disallow: /backend
+Disallow: /owner
+Disallow: /dispatch
+Disallow: /analysis
+Disallow: /account
+Disallow: /checkout
+Disallow: /order-confirmation

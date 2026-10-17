@@ -65,105 +65,12 @@ export default function PrimeMembershipCheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadRazorpayScript = () => {
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Prime membership checkout is DISABLED until after launch. This page deliberately contains no
+  // payment code: no Razorpay script, no payment endpoint calls, no order creation. When re-enabled it
+  // must use a server-priced, signature-verified flow like product checkout (functions/src).
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
-
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      // 1. Load Razorpay script
-      const res = await loadRazorpayScript();
-      if (!res) {
-        setError('Razorpay SDK failed to load. Are you online?');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // 2. Create order on backend
-      const orderResponse = await fetch('/api/payment/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: displayFee })
-      });
-
-      const orderData = await orderResponse.json();
-
-      if (!orderResponse.ok || !orderData.order) {
-        setError(orderData.error || 'Failed to initialize payment. Please try again.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // 3. Open Razorpay Checkout
-      const options = {
-        key: orderData.keyId,
-        amount: orderData.order.amount,
-        currency: orderData.order.currency,
-        name: "LUXARDO FASHION",
-        description: "Prime Membership",
-        order_id: orderData.order.id,
-        handler: async function (response: any) {
-          try {
-            // 4. Verify payment on backend
-            const verifyRes = await fetch('/api/payment/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature
-              })
-            });
-
-            const verifyData = await verifyRes.json();
-
-            if (verifyData.success) {
-              // Simulate successful payment
-              navigate('/prime-membership/success');
-            } else {
-              setError('Payment verification failed.');
-              setIsSubmitting(false);
-            }
-          } catch (err) {
-            console.error('Verification error:', err);
-            setError('Payment verification failed.');
-            setIsSubmitting(false);
-          }
-        },
-        prefill: {
-          name: formData.fullName,
-          email: formData.email,
-          contact: formData.phone
-        },
-        theme: {
-          color: "#000000"
-        }
-      };
-
-      const paymentObject = new (window as any).Razorpay(options);
-      paymentObject.on('payment.failed', function (response: any) {
-        setError(response.error.description || 'Payment failed');
-        setIsSubmitting(false);
-      });
-      paymentObject.open();
-
-    } catch (error) {
-      console.error('Error placing order:', error);
-      setError('Failed to process payment. Please try again.');
-      setIsSubmitting(false);
-    }
+    setError('Prime membership purchases will open after launch. Please contact us to join in the meantime.');
   };
 
   return (
@@ -193,10 +100,6 @@ export default function PrimeMembershipCheckoutPage() {
               <div className="flex justify-between">
                 <span>Membership Fee</span>
                 <span className="text-brand-black">{formatCurrency(displayFee)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Taxes</span>
-                <span>Included</span>
               </div>
             </div>
             
@@ -346,7 +249,7 @@ export default function PrimeMembershipCheckoutPage() {
                 <div className="flex items-center gap-4">
                   <div className="w-4 h-4 rounded-full border-4 border-brand-black" />
                   <span className="font-sans font-medium text-sm">
-                    {selectedCountry?.code === 'IN' ? 'Razorpay (India)' : 'Stripe (International)'}
+                    Online payment (opens after launch)
                   </span>
                 </div>
                 <div className="flex gap-2">
@@ -357,13 +260,14 @@ export default function PrimeMembershipCheckoutPage() {
 
               <button 
                 type="submit" 
-                disabled={!isFormValid || isSubmitting}
+                disabled
+                aria-disabled="true"
                 className="btn-primary w-full md:w-auto md:px-16 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? 'PROCESSING...' : 'PROCEED TO SECURE PAYMENT'}
+                AVAILABLE AFTER LAUNCH
               </button>
               <p className="text-[11px] uppercase tracking-[0.25em] font-bold text-brand-secondary mt-6">
-                Your payment will be processed securely.
+                Prime membership purchases open after launch.
               </p>
             </div>
 

@@ -66,7 +66,7 @@ export default function PrimeMembershipSuccessPage() {
 
         <div className="mt-12 text-center">
           <p className="text-sm font-sans text-brand-secondary">
-            A confirmation email has been sent to your registered address.
+            Your membership details are available in your account.
           </p>
         </div>
       </div>

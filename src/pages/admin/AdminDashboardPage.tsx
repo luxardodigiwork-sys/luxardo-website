@@ -1,22 +1,30 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Users, ShoppingBag, IndianRupee, Package, Settings, CheckCircle2, AlertCircle, Clock, Truck, Mail, Plus, FileText, Shield, Image as ImageIcon, Layers, Crown, Send, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '../../utils/currency';
 import { useAuth } from '../../context/AuthContext';
 import { storage } from '../../utils/localStorage';
+import { useProducts } from '../../context/ProductsContext';
+import { useAdminOrders } from '../../utils/orderStore';
+import { watchEnquiries } from '../../utils/enquiries';
 
 export default function AdminDashboardPage() {
   const { isAuthReady } = useAuth();
+  const { products: liveProducts } = useProducts();
+  const { orders: liveOrders } = useAdminOrders();
+
+  // Pending wholesale enquiries, live from Firestore (admin only)
+  const [wholesaleCount, setWholesaleCount] = useState(0);
+  useEffect(() => watchEnquiries('wholesaleInquiries', (rows) => setWholesaleCount(rows.filter((r) => (r.status || 'pending') === 'pending').length), () => setWholesaleCount(0)), []);
 
   const dashboardData = useMemo(() => {
     if (!isAuthReady) return null;
 
     try {
       const data = storage.getDashboardStats();
-      const orders = storage.getOrders();
-      const products = storage.getProducts();
-      const wholesaleInquiries = storage.getWholesaleInquiries();
+      const orders = liveOrders;
+      const products = liveProducts;
       
       const today = new Date();
       const todayString = today.toDateString();
@@ -83,24 +91,23 @@ export default function AdminDashboardPage() {
           deliveredOrders,
           activePrimeMembers: data.activeMembers,
           totalProducts: products.length,
-          wholesaleInquiries: wholesaleInquiries.length,
+          wholesaleInquiries: wholesaleCount,
           orderStatuses
         },
         alerts: newAlerts,
         recentOrders: data.recentOrders,
-        recentActivity: [
-          { id: 1, text: 'New order #LX-8291 placed', time: '10 mins ago' },
-          { id: 2, text: 'Product "Midnight Blue Bandhgala" added', time: '1 hour ago' },
-          { id: 3, text: 'Order #LX-8285 shipped', time: '2 hours ago' },
-          { id: 4, text: 'Alexander Wright activated Prime membership', time: '3 hours ago' },
-          { id: 5, text: 'Shipping policy updated', time: '5 hours ago' },
-        ]
+        // Real activity only: the latest orders from Firestore (no sample/fabricated entries).
+        recentActivity: orders.slice(0, 5).map((o) => ({
+          id: o.id,
+          text: `Order #${o.id.slice(-8).toUpperCase()}: ${o.paymentStatus === 'paid' || o.paymentStatus === 'confirmed' ? 'paid' : 'awaiting payment'} (${String(o.status).replace(/_/g, ' ')})`,
+          time: new Date(o.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+        })),
       };
     } catch (err) {
       console.error('Dashboard fetch error:', err);
       return null;
     }
-  }, [isAuthReady]);
+  }, [isAuthReady, liveProducts, liveOrders, wholesaleCount]);
 
   if (!isAuthReady || !dashboardData) {
     return (
@@ -227,6 +234,9 @@ export default function AdminDashboardPage() {
       <section>
         <h2 className="text-[11px] font-bold uppercase tracking-widest text-brand-black mb-6 border-b border-brand-divider pb-2">Recent Activity</h2>
         <div className="bg-white border border-brand-divider p-6 flex flex-col max-w-3xl">
+          {recentActivity.length === 0 && (
+            <p className="text-sm text-brand-secondary">No orders yet.</p>
+          )}
           {recentActivity.map((activity) => (
             <div key={activity.id} className="flex gap-4 border-b border-brand-divider last:border-0 py-4 first:pt-0 last:pb-0 group hover:bg-brand-bg/30 transition-colors -mx-2 px-2 rounded-2xl">
               <div className="w-1.5 h-1.5 mt-2 rounded-full bg-brand-divider group-hover:bg-brand-black transition-colors shrink-0" />

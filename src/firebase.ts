@@ -1,22 +1,32 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { connectAuthEmulator, getAuth, signInWithCustomToken } from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
+import { buildFirebaseConfig } from "./utils/firebaseConfig";
 
-// Aapki direct API keys yahan set hain
-const firebaseConfig = {
-  apiKey: "AIzaSyAfqktiFGPeb4gxk83SzeEb6XhVGBDwrsY",
-  authDomain: "LUXARDO FASHION-fashion-website.firebaseapp.com",
-  projectId: "LUXARDO FASHION-fashion-website",
-  storageBucket: "LUXARDO FASHION-fashion-website.firebasestorage.app",
-  messagingSenderId: "654297681314",
-  appId: "1:654297681314:web:64381a856ae8d3f36236fb",
-  measurementId: "G-4B6F1EXHKT"
-};
+// Config comes from VITE_FIREBASE_* env vars (see .env.example). Nothing is hardcoded.
+const { config, problems } = buildFirebaseConfig(import.meta.env as Record<string, string | undefined>);
 
-// Initialize Firebase Tools
-const app = initializeApp(firebaseConfig);
+/** Non-empty when the build is missing/has invalid Firebase settings; main.tsx then refuses to start the app. */
+export const firebaseConfigProblems: string[] = problems;
+
+// Inert placeholders keep module initialisation from throwing; they are never used when problems exist.
+const app = initializeApp(problems.length ? { apiKey: "unset", projectId: "unset", appId: "unset" } : config);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Local end-to-end tests only: a build made with `--mode e2e` and VITE_FIREBASE_EMULATOR=true talks to the local Firestore
+// emulator. A normal `vite build` (mode "production") can never connect to an emulator.
+if (import.meta.env.VITE_FIREBASE_EMULATOR === "true" && import.meta.env.MODE !== "production") {
+  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  // Lets the browser tests sign in as a staff user (custom token from the Auth emulator). Absent from production builds.
+  (window as unknown as Record<string, unknown>).__luxardoE2E = { signInWithCustomToken: (t: string) => signInWithCustomToken(auth, t) };
+}
 export const storage = getStorage(app);
+
+// Must match `REGION` in functions/src/index.ts.
+export const FUNCTIONS_REGION = "asia-south1";
+export const functions = getFunctions(app, FUNCTIONS_REGION);

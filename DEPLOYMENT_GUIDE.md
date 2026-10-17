@@ -1,240 +1,62 @@
-# Firebase Migration Deployment Guide
+# Deployment Guide (safe, environment-specific)
 
-## 🚀 Deploy करने से पहले:
+## 1. Clean-checkout validation
 
-### 1. Firebase Rules Deploy करें
 ```bash
-# Firestore security rules को update करें
-firebase deploy --only firestore:rules
-
-# Verify rules deployed
-firebase firestore:indexes
-```
-
-### 2. Backend Code Deploy करें
-```bash
-# Build और verify करें
+npm ci
+npm --prefix functions ci
+npx tsc --noEmit
+npm run test:unit
 npm run build
-
-# Test locally
-npm run dev
-
-# Deploy to production
-firebase deploy --only hosting
-# या
-vercel deploy (if using Vercel)
+npm --prefix functions run build
+npm run test:rules
+npm run test:orders
+npm run test:publish
+npm run test:notify
+npm run test:functions
 ```
 
-### 3. Verify Deployment
+Tests use isolated emulator project IDs (`rules-test`, `orders-test`, `publish-test`, `notify-test`, `demo-notify`). Never point tests at production. Java 21+ is required by the current Firebase CLI/emulator toolchain.
+
+## 2. Build configuration
+
+- Supply `VITE_FIREBASE_*` from the selected Firebase web app. Do not invent IDs.
+- Optional settings: `VITE_GA_MEASUREMENT_ID`, `VITE_META_PIXEL_ID`, `VITE_SENTRY_DSN`, `VITE_ERROR_REPORT_URL`; blank values must not break the build.
+- `VITE_CHECKOUT_ENABLED=false` by default and for this launch-blocker PR. Enabling checkout needs separate approval after staging verification.
+- Never put server secrets (Razorpay secrets, Resend API key, service-account private keys) in `VITE_*`.
+
+## 3. Separate deployments
+
+Hosting is manual GitHub Actions and deploys Hosting only. Pull requests and pushes run checks only. Configure GitHub `staging` and `production` Environments and their variables/secrets. Production requires manual approval and typed confirmation.
+
+After review, deploy backend/security to staging separately:
+
 ```bash
-✅ Firestore rules deployed and activated
-✅ Collections created automatically (orders, users, carts, etc.)
-✅ No TypeScript errors in build
-✅ All Firebase imports working
+firebase deploy --only functions,firestore:rules,storage,firestore:indexes --project staging
 ```
 
----
+Never omit `--project`. Do not deploy production as part of this task.
 
-## 📋 Deployment Checklist
+## 4. Resend
 
-### Pre-Deployment
-- [ ] Run `npm run build` - confirms no errors ✅
-- [ ] Check Firestore is enabled in Firebase Console
-- [ ] Verify Authentication is enabled (Email/Password or Google)
-- [ ] Check firestore.rules file exists ✅
+The backend consumes `mail` via Resend. Configure Functions secret `RESEND_API_KEY`, `MAIL_FROM` using a verified sender/domain, and `OWNER_NOTIFY_EMAIL`. Do not install a second mail sender on the same queue; consumers can conflict or deliver twice. Do not remove existing production extensions without a separate migration plan.
 
-### During Deployment
-```bash
-# Deploy rules first (most critical)
-firebase deploy --only firestore:rules
+## 5. Verification boundaries
 
-# Deploy code second
-firebase deploy --only hosting
+Local/emulator tests prove code behavior only against isolated emulators. They do not prove live Google/phone OTP, Razorpay credentials/webhooks, Resend sender verification/delivery, IAM, live deployment of rules/functions/indexes, or domain DNS/TLS. Verify each separately on staging before production approval.
 
-# Or with Vercel
-vercel deploy --prod
-```
+## 6. Razorpay order reconciliation (manual, never blind retry)
 
-### Post-Deployment Verification
-- [ ] Visit https://yoursite.com/checkout → Should NOT redirect to /backend
-- [ ] Login with test account → Add to cart → Confirm in Firestore
-- [ ] Place order → Check /orders collection in Firestore
-- [ ] Logout → Cart should be cleared in Firestore
-- [ ] Check browser console for errors
+Orders marked `rzpOrderCreationState=reconciliation_required` have an ambiguous provider outcome. The checkout retry path intentionally does not create another Razorpay order. A trained operator must reconcile using the same Razorpay account/mode and the order's unique receipt, amount, currency, creation time and notes:
 
----
+1. Search/fetch provider Orders using `razorpayReceipt` (legacy orders may use the full order ID) and `notes.orderId` and verify the amount/currency and metadata. Do not infer failure from a network timeout.
+2. If exactly one matching provider order exists, use a reviewed Admin SDK repair procedure to atomically attach its ID only if the order is still pending, no provider ID is already accepted, and the attempt remains in reconciliation state.
+3. If the provider result is still uncertain or more than one candidate exists, keep the order pending and escalate; do not create another provider order.
+4. Only after the provider confirms no order exists may an authorized operator use a reviewed transactional cancellation/release procedure. Preserve stock release-once and recheck payment state in the transaction.
 
-## 🔍 Firestore Console Checks
+This repository does not automatically run this repair procedure. Emulator tests cannot verify live Razorpay records.
 
-After deployment, verify in Firebase Console:
 
-### Collections Created
-```
-✅ /users/{userId} - Should have test user profiles
-✅ /carts/{userId} - Should have cart data
-✅ /orders/{orderId} - Should have placed orders
-✅ /userPreferences/{userId} - Should have language/country settings
-✅ /wishlists/{userId} - Should have saved items
-```
+## 7. Expiry and cancellation guards
 
-### Security Rules Deployed
-```firestore
-✅ Products can be read publicly
-✅ Orders require userId
-✅ Users can only access own data
-```
-
----
-
-## 🐛 Troubleshooting
-
-### "Permission denied" on checkout
-```
-❌ Problem: Firestore rules not deployed
-✅ Solution: 
-   firebase deploy --only firestore:rules
-```
-
-### Orders not saving
-```
-❌ Problem: userId not included in order
-✅ Solution: 
-   Verify CheckoutPage.tsx line includes userId: currentUser.uid
-   Check auth.currentUser is not null
-```
-
-### Cart not persisting after login
-```
-❌ Problem: Not switching from sessionStorage to Firestore
-✅ Solution:
-   Check firebaseStorage.saveCart() is being called
-   Check Firestore carts/{uid} collection exists
-```
-
-### Data visible in old localStorage, not in Firestore
-```
-❌ Problem: Users still have old cached data
-✅ Solution:
-   First login will trigger migration
-   Browser DevTools → Application → Clear Site Data
-   Or tell users to clear browser cache
-```
-
----
-
-## 📊 Monitoring After Deployment
-
-### Key Metrics to Check
-- [ ] /orders collection growing (new orders being created)
-- [ ] /carts collection entries (users saving carts)
-- [ ] Authentication sign-ups increasing
-- [ ] Firestore read/write operations normal
-
-### Firebase Console → Firestore → Monitor
-```
-Reads:  Check normal (not spiking)
-Writes: Check normal (not spiking)
-Deletes: Check normal during logout
-```
-
----
-
-## 🔐 Security Best Practices
-
-### Keep Firestore Rules Updated
-```firestore
-❌ Don't use "allow read, write: if true"
-✅ Use specific user auth checks
-✅ Enforce userId in orders
-✅ Limit admin write access
-```
-
-### Monitor Firebase Quota
-- [ ] Firestore storage limits
-- [ ] Real-time listener count
-- [ ] Read/write operation costs
-
----
-
-## 📱 Testing After Deployment
-
-### Test Scenarios
-```
-1. Anonymous user
-   → Browse products ✓
-   → Add to cart (sessionStorage) ✓
-   → Login (cart migrates to Firestore) ✓
-
-2. Logged-in user
-   → Login ✓
-   → Add to cart (saved in Firestore) ✓
-   → Change language (saved in userPreferences) ✓
-   → Logout (data cleared) ✓
-   → Re-login (data restored from Firestore) ✓
-
-3. Order flow
-   → Checkout page loads (not redirecting to admin) ✓
-   → Fill form → Place order (saves to /orders) ✓
-   → Order confirmation appears ✓
-   → Verify in Firestore /orders collection ✓
-
-4. Admin flow
-   → Admin login → /admin/dashboard (separate auth) ✓
-   → View orders (can see all /orders) ✓
-   → No conflicts with customer checkout ✓
-```
-
----
-
-## 🎯 Rollback Plan
-
-If issues arise:
-
-### Immediate Rollback
-```bash
-# Revert Firestore rules if they're the issue
-firebase deploy --only firestore:rules (from previous version)
-
-# Revert deployed code if needed
-git revert HEAD
-npm run build
-firebase deploy --only hosting
-```
-
-### Data Safety
-```
-❌ Don't delete Firestore collections
-✅ Keep orders and user data intact
-✅ New deployments won't affect old data
-✅ localStorage fallback still works for local caching
-```
-
----
-
-## ✅ Sign-off Checklist
-
-Before considering migration complete:
-
-- [ ] Build succeeds (npm run build) ✅
-- [ ] Firestore rules deployed ✅
-- [ ] No TypeScript errors ✅
-- [ ] Orders can be created and viewed ✅
-- [ ] Cart works for logged-in users ✅
-- [ ] Admin panel separate from checkout ✅
-- [ ] Users can login and logout ✅
-- [ ] Preferences persist across sessions ✅
-- [ ] Anonymous users not redirected ✅
-- [ ] No console errors in production ✅
-
----
-
-## 📞 Emergency Contact
-
-If deployment fails:
-1. Check Firebase Console for errors
-2. Run: `firebase logs:read` 
-3. Verify firestore.rules syntax
-4. Check browser console (DevTools → Console)
-5. Verify Firebase credentials in src/firebase.ts
-
-Good luck! 🚀
+Deploy the updated orders composite index including `rzpOrderCreationState`; wait for it to be ready before verifying the sweep. Only ready unpaid orders expire automatically. Creating/reconciliation/legacy-without-state orders remain reserved and need operator review; do not bulk-backfill them as ready. Unresolved reservations still count toward the per-user unpaid-order cap. Admin cancellation checks shipment state, tracking and dispatch evidence inside the same transaction that restores stock; a dispatched order must use the returns/refund workflow instead.

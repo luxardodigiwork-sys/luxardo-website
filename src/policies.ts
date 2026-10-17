@@ -1,28 +1,33 @@
+/**
+ * Bump POLICY_VERSION whenever any policy text below changes. Browser-stored admin overrides saved under an
+ * older version are ignored, so updated text always reaches every visitor (see utils/policyStore.ts).
+ */
+export const POLICY_VERSION = '2026-10-11.2';
+
 export const SHIPPING_POLICY = `
 # Shipping Policy
 
-This Shipping Policy applies to all orders placed on the LUXARDO FASHION Fashion website. It explains our processing timelines, shipping methods, international delivery terms, and the responsibilities of both LUXARDO FASHION Fashion and the customer.
+This Shipping Policy applies to all orders placed on the LUXARDO FASHION Fashion website. It explains our processing timelines, shipping methods, delivery terms, and the responsibilities of both LUXARDO FASHION Fashion and the customer.
 
 ## 1. Order Processing and Fulfillment
-- **Ready-to-Stitch Fabric Orders:** These orders are processed within 2-3 business days after payment is confirmed.
-- **Prime Member Orders:** Prime members receive expedited handling and their orders are typically dispatched within 24 hours of order confirmation.
+- **Ready-to-Stitch Fabric Orders:** These orders are processed after payment is confirmed. You can follow your order's status in your account.
 - **Bespoke Consultations & Custom Orders:** Production starts only after the private consultation is complete and measurements are finalized. Estimated dispatch timelines are discussed case by case and may range from 4-6 weeks.
-- **Order Confirmation:** A confirmation email is sent once an order is accepted. Acceptance is subject to verification of availability, payment authorization, and compliance with our quality requirements.
+- **Order Confirmation:** Once your payment is confirmed, your order appears on the confirmation page and under My Orders in your account. Acceptance is subject to verification of availability, payment authorization, and compliance with our quality requirements.
 
 ## 2. Shipping Methods and Carriers
 - We dispatch orders through trusted courier partners chosen for reliability and secure handling.
 - Shipping service selection is made by LUXARDO FASHION Fashion based on destination, package weight, and value.
-- Customers will receive an email with a tracking number and tracking instructions once the order is shipped.
+- Once your order ships, the courier name and tracking number, when available, appear on your order's tracking page in your account.
 
 ## 3. Delivery Timeline Expectations
-- **Domestic India:** 3-5 business days from dispatch.
-- **International:** 7-14 business days from dispatch, subject to customs clearance and local carrier processes.
-- **Estimated Delivery:** Delivery timelines are estimates and are not guaranteed. Delays may occur due to weather, customs inspections, public holidays, or carrier operational issues.
+- **Delivery area:** We currently deliver to addresses within India only.
+- **Domestic India:** Delivery time depends on your location and the courier service.
+- **Shipping charges:** Shipping is free on orders of ₹7,499 or more. For orders below ₹7,499, shipping is ₹199.
+- **Estimated Delivery:** Delivery timelines are estimates and are not guaranteed. Delays may occur due to weather, public holidays, or carrier operational issues.
 
-## 4. Customs, Duties, and Import Taxes
-- International orders may be subject to import duties, taxes, customs fees, and clearance charges imposed by the destination country.
-- These charges are the sole responsibility of the recipient and are not included in the product price or shipping fee.
-- LUXARDO FASHION has no control over customs processing times or fee assessments, and we recommend customers contact their local customs authority for clarification.
+## 4. Delivery Area
+- Orders can currently be placed only for delivery to addresses within India. We do not ship outside India at this time.
+- Some pin codes may not be serviceable by our courier partners; if your pin code cannot be served, we will contact you before dispatch.
 
 ## 5. Address Accuracy and Change Requests
 - Customers are responsible for providing complete and accurate shipping address details at checkout.
@@ -35,7 +40,7 @@ This Shipping Policy applies to all orders placed on the LUXARDO FASHION Fashion
 - LUXARDO FASHION Fashion will work with the carrier to investigate, but claims resolution may depend on the carrier's policies.
 
 ## 7. Shipping Restrictions and Exclusions
-- Certain products may be restricted from shipping to specific countries due to customs regulations, import restrictions, or carrier limitations.
+- Certain pin codes may be restricted or unserviceable due to carrier limitations.
 - LUXARDO FASHION Fashion reserves the right to cancel or modify orders if shipping restrictions apply.
 
 ## 8. Force Majeure
@@ -52,10 +57,10 @@ LUXARDO FASHION offers a clear returns process for Ready-to-Stitch items while m
 
 ## 1. Applicability
 - This policy applies only to standard Ready-to-Stitch fabric orders that are eligible for return.
-- Bespoke orders, made-to-measure commissions, and Prime membership fees are not eligible for return except in cases of manufacturing defect or significant service failure as determined by LUXARDO FASHION Fashion.
+- Bespoke orders and made-to-measure commissions are not eligible for return except in cases of manufacturing defect or significant service failure as determined by LUXARDO FASHION Fashion.
 
 ## 2. Return Eligibility
-- Returns must be initiated within 14 days of delivery.
+- Returns must be initiated within 7 days of delivery.
 - Returned items must be in their original condition: uncut, unused, unaltered, and with all tags, packaging, and accessories intact.
 - Any item that has been stitched, cut, washed, or altered is not eligible for return.
 - Items returned without original packaging, product labels, or shipping materials may be denied.
@@ -63,7 +68,6 @@ LUXARDO FASHION offers a clear returns process for Ready-to-Stitch items while m
 ## 3. Non-Returnable Items
 The following items are strictly non-returnable:
 - Bespoke or custom-made garments.
-- Prime membership fees and service subscriptions.
 - Personalized or monogrammed products.
 - Items damaged by the customer after delivery.
 
@@ -78,7 +82,7 @@ The following items are strictly non-returnable:
 - We recommend insuring the return shipment for its full value.
 
 ## 6. Refund Processing
-- Once received and inspected, approved returns are refunded within 10-14 business days.
+- Once a return is received and inspected, we aim to issue the approved refund within 7 days. Refunds are processed by our team and are not automatic.
 - Refunds are issued to the original payment method unless otherwise agreed.
 - Original shipping fees are non-refundable unless the return is due to a defect, damage, or shipping error.
 
@@ -86,13 +90,11 @@ The following items are strictly non-returnable:
 - Exchanges are subject to availability and may require additional charges if the replacement item has a higher value.
 - If an exchange is not possible, LUXARDO FASHION Fashion may offer store credit or a refund, depending on the circumstance.
 
-## 8. Prime Member Notes
-- Prime Member subscription fees are non-refundable.
-- Prime membership benefits do not alter the standard eligibility requirements for physical product returns.
-
-## 9. Cancellation Before Dispatch
-- If you wish to cancel a standard order before it is dispatched, contact connect@luxardofashion.com immediately.
-- Cancellations may not be accepted once the order has shipped.
+## 8. Cancellation
+- You can request cancellation within 24 hours of placing an order, from the order page in your account, as long as the order has not been packed or shipped.
+- An order that has not been paid is cancelled straight away. For a paid order, your request is reviewed by our team and is not confirmed until we approve it; eligibility depends on the order and payment status.
+- Approved cancellations of paid orders are refunded to the original payment method. We aim to issue the refund within 7 days; refunds are processed by our team and are not automatic.
+- After 24 hours, or once the order has been packed or shipped, cancellation is not available online. For help, contact connect@luxardofashion.com.
 `;
 
 export const PRIVACY_POLICY = `
@@ -104,13 +106,13 @@ This Privacy Policy explains how LUXARDO FASHION Fashion collects, uses, stores,
 We collect necessary information to fulfill orders and provide personalized service:
 - Contact information: name, email address, phone number.
 - Shipping and billing details: delivery address, contact address, payment details.
-- Style preferences and measurement data for Prime Members and bespoke services.
+- Style preferences and measurement data for bespoke services.
 - Order history and customer service interactions.
 
 ## 2. How We Use Your Information
 We use your data for the following purposes:
 - To process orders, arrange shipping, and manage returns.
-- To maintain your account and Prime membership status.
+- To maintain your account.
 - To communicate order updates, service information, and exclusive offers.
 - To improve our services, website, and product selection.
 
@@ -158,7 +160,7 @@ For privacy questions or requests, contact connect@luxardofashion.com.
 export const TERMS_POLICY = `
 # Terms & Conditions
 
-These Terms & Conditions govern your use of the LUXARDO FASHION Fashion website and the purchase of Ready-to-Stitch products, membership services, and bespoke experiences.
+These Terms & Conditions govern your use of the LUXARDO FASHION Fashion website and the purchase of Ready-to-Stitch products and bespoke experiences.
 
 ## 1. Scope of Services
 - LUXARDO FASHION Fashion sells ready-to-stitch fabric, semi-stitched panels, and related luxury textile services.
@@ -170,7 +172,7 @@ These Terms & Conditions govern your use of the LUXARDO FASHION Fashion website 
 - We reserve the right to decline or cancel any order for any reason, including suspected fraud or violation of our brand standards.
 
 ## 3. Payment and Pricing
-- Product prices are displayed in the applicable currency and exclude shipping, duties, or taxes unless stated otherwise.
+- Product prices are displayed and charged in Indian rupees (INR). Shipping is free on orders of ₹7,499 or more; for orders below ₹7,499 it is ₹199.
 - All payments must be authorized and received before an order is processed.
 - In the event of a pricing or typographical error, LUXARDO FASHION Fashion may cancel the order and notify the customer.
 
@@ -181,12 +183,11 @@ These Terms & Conditions govern your use of the LUXARDO FASHION Fashion website 
 
 ## 5. Returns and Cancellations
 - Returns are governed by the Returns Policy.
-- Cancellations may be allowed prior to dispatch at LUXARDO FASHION Fashion's discretion.
-- Custom orders, bespoke commissions, and memberships are generally non-refundable.
+- Cancellation requests are accepted within 24 hours of placing an order, subject to the order and payment status (see the Returns Policy).
+- Custom orders and bespoke commissions are generally non-refundable.
 
 ## 6. User Conduct and Account Responsibility
 - Users must provide accurate information and maintain the security of their account.
-- Sharing or transferring membership benefits is prohibited and may result in termination of service.
 - Any fraudulent activity may lead to account suspension, cancellation of orders, and legal action.
 
 ## 7. Intellectual Property
