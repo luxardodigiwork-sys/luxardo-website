@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { COLLECTIONS } from '../constants';
+import { getStorefrontCollections } from '../utils/contentSync';
 import { Search, X } from 'lucide-react';
-import { storage } from '../utils/localStorage';
+import { useProducts } from '../context/ProductsContext';
+import { CatalogueStatus } from '../components/CatalogueStatus';
 import { ProductCard } from '../components/ProductCard';
 import { useAuth } from '../context/AuthContext';
 
 export default function CollectionsPage() {
+  const COLLECTIONS = getStorefrontCollections();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [conditionFilter, setConditionFilter] = useState<'All' | 'Newly' | 'Regular' | 'Limited Edition'>('All');
@@ -21,7 +23,7 @@ export default function CollectionsPage() {
     descriptor: col.descriptor
   }));
 
-  const allProducts = storage.getProducts();
+  const { storefrontProducts: allProducts, state } = useProducts();
 
   const filteredProducts = useMemo(() => {
     let result = [...allProducts];
@@ -131,6 +133,8 @@ export default function CollectionsPage() {
                   </div>
                 ))}
               </div>
+            ) : state !== 'ready' ? (
+              <CatalogueStatus state={state} />
             ) : (
               <div className="py-48 text-center bg-white">
                 <p className="text-xl font-sans uppercase tracking-widest text-gray-500 mb-8">

@@ -3,6 +3,7 @@ import { SectionHeader } from '../components/SectionHeader';
 import { motion } from 'motion/react';
 import { Globe, ArrowRight, CheckCircle2, ShieldCheck, Award } from 'lucide-react';
 import { storage } from '../utils/localStorage';
+import { submitWholesale } from '../utils/enquiries';
 import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -43,8 +44,7 @@ export default function WholesalePage() {
       }
     }
 
-    const data = {
-      id: Date.now(),
+    const result = await submitWholesale({
       full_name: formData.get('full_name'),
       company_name: formData.get('company_name'),
       email: formData.get('email'),
@@ -55,23 +55,11 @@ export default function WholesalePage() {
       monthly_volume: formData.get('monthly_volume'),
       message: formData.get('message'),
       image: imageBase64,
-      status: 'pending',
-      created_at: new Date().toISOString()
-    };
-
-    try {
-      // Simulate network request
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      storage.addWholesaleInquiry(data);
-      
-      setSubmitted(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
-      setError('A network error occurred. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
+    });
+    setLoading(false);
+    if (result.ok === false) { setError(result.error); return; }
+    setSubmitted(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (submitted) {

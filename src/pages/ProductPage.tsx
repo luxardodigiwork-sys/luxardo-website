@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { useOutletContext, Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Country } from '../types';
-import { storage } from '../utils/localStorage';
+import { useProducts } from '../context/ProductsContext';
+import { SHIPPING_NOTE, TAX_NOTE } from '../constants/pricing';
+import { LOW_STOCK_ALERTS_ENABLED } from '../constants/features';
+import { Product } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronDown, 
@@ -18,11 +21,35 @@ import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currency';
+import { track } from '../utils/analytics';
 import { db, auth } from '../firebase';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
+  const { storefrontProducts: products, isLoaded, error } = useProducts();
+  const found = products.find(p => p.id === id);
+
+  if (!found) {
+    return (
+      <div className="section-padding min-h-[60vh] flex flex-col items-center justify-center text-center gap-4">
+        {isLoaded && error && products.length === 0 ? (
+          <p className="text-xl font-semibold">We could not load this product. Please try again shortly.</p>
+        ) : isLoaded ? (
+          <>
+            <p className="text-xl font-semibold">Product not found</p>
+            <a href="/collections" className="underline text-sm">Browse collections</a>
+          </>
+        ) : (
+          <p className="text-brand-secondary">Loading...</p>
+        )}
+      </div>
+    );
+  }
+  return <ProductDetail key={found.id} product={found} products={products} />;
+}
+
+function ProductDetail({ product, products }: { product: Product; products: Product[] }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { selectedCountry } = useOutletContext<{ selectedCountry: Country | null }>();
@@ -30,8 +57,6 @@ export default function ProductPage() {
   const { addToCart } = useCart();
   const { isLoggedIn } = useAuth();
   
-  const products = storage.getProducts();
-  const product = products.find(p => p.id === id) || products[0];
 
   const [openSection, setOpenSection] = useState<string | null>('description');
   const [isAdding, setIsAdding] = useState(false);
@@ -123,6 +148,10 @@ export default function ProductPage() {
   const [hasSubscribed, setHasSubscribed] = useState(false);
 
   React.useEffect(() => {
+    track('view_item', { value: product.price, items: [{ id: product.id, name: product.name, price: product.price }] });
+  }, [product.id]);
+
+  React.useEffect(() => {
     const checkSubscription = async () => {
       if (isLoggedIn && auth.currentUser) {
         try {
@@ -177,7 +206,11 @@ export default function ProductPage() {
     }
   };
 
+  const availableStock = typeof product.stock === 'number' ? product.stock : 0;
+  const outOfStock = availableStock <= 0;
+
   const handleAddToCart = () => {
+    if (outOfStock) return;
     if (!selectedSize) {
       setSizeError(true);
       setTimeout(() => setSizeError(false), 3000);
@@ -279,7 +312,7 @@ export default function ProductPage() {
                   {formatCurrency(product.price)}
                 </p>
                 <p className="text-[13px] font-sans text-gray-500">
-                  Tax included. <span className="underline cursor-pointer hover:text-black">Shipping</span> calculated at checkout.
+                  {[SHIPPING_NOTE, TAX_NOTE].filter(Boolean).join('. ')}.
                 </p>
               </div>
 
@@ -315,7 +348,7 @@ export default function ProductPage() {
                     What is my size?
                   </button>
                   <span className="text-[11px] font-sans text-brand-secondary font-medium">
-                    Available Stock: {product.stock !== undefined ? product.stock : 10}
+                    {outOfStock ? 'Out of stock' : `Available Stock: ${availableStock}`}
                   </span>
                 </div>
               </div>
@@ -332,7 +365,7 @@ export default function ProductPage() {
                   </button>
                   <span className="w-12 text-center font-sans font-medium text-lg">{quantity}</span>
                   <button 
-                    onClick={() => setQuantity(Math.min(quantity + 1, product.stock !== undefined ? product.stock : 10))}
+                    onClick={() => setQuantity(Math.max(1, Math.min(quantity + 1, availableStock)))}
                     className="p-3 hover:bg-brand-divider transition-colors"
                   >
                     <Plus className="w-4 h-4" />
@@ -351,10 +384,10 @@ export default function ProductPage() {
                 <div className="flex gap-4">
                   <button 
                     onClick={handleAddToCart}
-                    disabled={isAdding}
-                    className="btn-primary flex-1 py-5"
+                    disabled={isAdding || outOfStock}
+                    className="btn-primary flex-1 py-5 disabled:opacity-50"
                   >
-                    {isAdding ? 'ADDING...' : `ADD ${quantity} TO CART`}
+                    {outOfStock ? 'OUT OF STOCK' : isAdding ? 'ADDING...' : `ADD ${quantity} TO CART`}
                   </button>
                   <button 
                     onClick={handleWishlistToggle}
@@ -373,6 +406,7 @@ export default function ProductPage() {
                 </div>
                 
                 <div className="space-y-2">
+                  {LOW_STOCK_ALERTS_ENABLED && (<>
                   <button
                     onClick={handleNotifyLowStock}
                     disabled={isNotifying}
@@ -390,6 +424,7 @@ export default function ProductPage() {
                       {notificationMessage}
                     </p>
                   )}
+                  </>)}
                   {addedMessage && (
                     <p className="text-[11px] font-sans text-center text-emerald-600 font-bold animate-in fade-in slide-in-from-top-1">
                       ✓ {addedMessage}
@@ -405,11 +440,11 @@ export default function ProductPage() {
                 <div className="border-t border-gray-200">
                   {[
                     { id: 'description', title: 'Details', content: product.description },
-                    { id: 'format', title: 'Garment Format', content: product.garmentFormat || 'This item is delivered as a premium ready-to-stitch fabric set in our signature presentation box. Please note that stitching is not included.' },
+                    { id: 'format', title: 'Garment Format', content: product.garmentFormat || 'This item is delivered as ready-to-stitch fabric. Please note that stitching is not included.' },
                     { id: 'composition', title: 'Composition', content: product.composition || `Fabric Origin: ${product.fabricOrigin || 'Imported'}. Premium blend selected for structure and comfort.` },
                     { id: 'washing', title: 'Washing care', content: product.washingCare || 'Dry clean only. Iron on low heat. Do not bleach.' },
-                    { id: 'shipping', title: 'Shipping', content: product.shipping || 'Standard orders are processed within 3-5 business days.' },
-                    { id: 'returns', title: 'Returns', content: product.returns || 'Items can be returned within 14 days in original condition.' }
+                    { id: 'shipping', title: 'Shipping', content: product.shipping || `${SHIPPING_NOTE}. Delivery time depends on your location and the courier.` },
+                    { id: 'returns', title: 'Returns', content: product.returns || 'Items can be returned within 7 days of delivery in original condition.' }
                   ].map((section) => (
                     <div key={section.id} className="border-b border-gray-200">
                       <button 

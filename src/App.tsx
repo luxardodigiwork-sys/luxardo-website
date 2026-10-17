@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { EXPRESS_BACKEND_AVAILABLE } from './constants/features';
 import { Routes, Route, Navigate } from "react-router-dom";
 import { BackendPermissions } from "./types";
 import Lenis from "lenis";
@@ -47,11 +48,12 @@ function CountryModalBridge() {
   return <FirstVisitModal onSelect={setCountry} />;
 }
 import { CartProvider } from "./context/CartContext";
+import { ProductsProvider } from "./context/ProductsContext";
+import { PRIME_AVAILABLE } from "./constants/features";
 
 import RegisterPage from "./pages/RegisterPage";
 
 // Admin imports
-import AdminLoginPage from "./pages/admin/AdminLoginPage";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
 import AdminDispatchPage from "./pages/admin/AdminDispatchPage";
 import AdminOrderDetailsPage from "./pages/admin/AdminOrderDetailsPage";
@@ -70,45 +72,17 @@ import AdminPartnersPage from "./pages/admin/AdminPartnersPage";
 import AdminContactMessagesPage from "./pages/admin/AdminContactMessagesPage";
 import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
 import DispatchDashboardPage from "./pages/dispatch/DispatchDashboardPage";
-import BackendGatewayPage from "./pages/BackendGatewayPage";
 import DispatchLayout from "./components/dispatch/DispatchLayout";
 
 import AdminLayout from "./components/admin/AdminLayout";
 
 import OwnerLayout from "./components/owner/OwnerLayout";
 import OwnerDashboardPage from "./pages/owner/OwnerDashboardPage";
-import AnalysisLayout from "./components/analysis/AnalysisLayout";
-import AnalysisDashboardPage from "./pages/analysis/AnalysisDashboardPage";
-
-const ProtectedBackendRoute = ({
-  role,
-  permission,
-  children,
-}: {
-  role: string;
-  permission?: string;
-  children: React.ReactNode;
-}) => {
-  const { user, isAuthReady } = useAuth();
-
-  if (!isAuthReady) {
-    return (
-      <div className="min-h-screen bg-brand-bg flex items-center justify-center">
-        Loading...
-      </div>
-    );
-  }
-
-  const isSuperAdmin = user && ["super_admin", "admin"].includes(user.role);
-  const hasRole = user && user.role === role;
-  const hasPermission = !permission || user?.permissions?.[permission];
-
-  if (!user || (!isSuperAdmin && (!hasRole || !hasPermission))) {
-    return <Navigate to="/backend" replace />;
-  }
-
-  return <>{children}</>;
-};
+import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
+import StaffLoginPage from "./pages/StaffLoginPage";
+import AdminStaffPage from "./pages/admin/AdminStaffPage";
+import CookieConsent from "./components/CookieConsent";
+import { CHECKOUT_ENABLED } from "./constants/features";
 
 export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -160,13 +134,16 @@ export default function App() {
     <AuthProvider>
       <CountryProvider>
         <CountryModalBridge />
+      <ProductsProvider>
       <CartProvider>
         <WishlistProvider>
+          <CookieConsent />
           <Routes>
-            <Route path="/admin/login" element={<AdminLoginPage />} />
+            <Route path="/backend/login" element={<StaffLoginPage />} />
+            <Route path="/admin/login" element={<Navigate to="/backend/login" replace />} />
 
             <Route path="/admin">
-              <Route element={<AdminLayout />}>
+              <Route element={<ProtectedAdminRoute><AdminLayout /></ProtectedAdminRoute>}>
                 <Route
                   index
                   element={<Navigate to="/admin/dashboard" replace />}
@@ -202,25 +179,23 @@ export default function App() {
                 />
                 <Route
                   path="backend-management"
-                  element={<AdminBackendManagementPage />}
+                  element={EXPRESS_BACKEND_AVAILABLE ? <AdminBackendManagementPage /> : <Navigate to="/admin" replace />}
                 />
+                <Route path="staff" element={<AdminStaffPage />} />
                 <Route path="settings" element={<AdminSettingsPage />} />
               </Route>
             </Route>
 
             <Route
               path="/dispatch/login"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/dispatch"
               element={
-                <ProtectedBackendRoute
-                  role="dispatch"
-                  permission="dispatch_actions"
-                >
+                <ProtectedAdminRoute area="dispatch">
                   <DispatchLayout />
-                </ProtectedBackendRoute>
+                </ProtectedAdminRoute>
               }
             >
               <Route
@@ -230,33 +205,30 @@ export default function App() {
               <Route path="dashboard" element={<DispatchDashboardPage />} />
             </Route>
 
-            <Route path="/backend" element={<BackendGatewayPage />} />
+            <Route path="/backend" element={<Navigate to="/backend/login" replace />} />
             <Route
               path="/admin-access"
               caseSensitive={false}
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/ADMIN-ACCESS"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/analysis/login"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/owner/login"
-              element={<Navigate to="/backend" replace />}
+              element={<Navigate to="/backend/login" replace />}
             />
             <Route
               path="/owner"
               element={
-                <ProtectedBackendRoute
-                  role="owner"
-                  permission="backend_management"
-                >
+                <ProtectedAdminRoute area="owner">
                   <OwnerLayout />
-                </ProtectedBackendRoute>
+                </ProtectedAdminRoute>
               }
             >
               <Route
@@ -266,23 +238,8 @@ export default function App() {
               <Route path="dashboard" element={<OwnerDashboardPage />} />
               <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
             </Route>
-            <Route
-              path="/analysis"
-              element={
-                <ProtectedBackendRoute
-                  role="analysis"
-                  permission="analysis_reports"
-                >
-                  <AnalysisLayout />
-                </ProtectedBackendRoute>
-              }
-            >
-              <Route
-                index
-                element={<Navigate to="/analysis/dashboard" replace />}
-              />
-              <Route path="dashboard" element={<AnalysisDashboardPage />} />
-            </Route>
+            {/* Analysis area is disabled for now (only admin, owner and dispatch are active). */}
+            <Route path="/analysis/*" element={<Navigate to="/backend/login" replace />} />
 
             <Route path="/" element={<Layout />}>
               <Route index element={<HomePage />} />
@@ -291,6 +248,8 @@ export default function App() {
                 path="collections/:category"
                 element={<CollectionDetailPage />}
               />
+              {PRIME_AVAILABLE ? (
+                <>
               <Route path="prime-membership" element={<PrimePage />} />
               <Route
                 path="prime-dashboard"
@@ -310,11 +269,8 @@ export default function App() {
               />
               <Route
                 path="prime-membership/success"
-                element={
-                  <ProtectedRoute>
-                    <PrimeMembershipSuccessPage />
-                  </ProtectedRoute>
-                }
+                // No payment can complete while Prime checkout is disabled; never show a fake success page.
+                element={<Navigate to="/prime-membership" replace />}
               />
               <Route
                 path="prime-membership/failed"
@@ -352,6 +308,16 @@ export default function App() {
                 path="private-client-services/*"
                 element={<Navigate to="/prime-membership" replace />}
               />
+                </>
+              ) : (
+                <>
+                  {/* Prime is unavailable until after launch: every Prime URL goes to the home page. */}
+                  <Route path="prime-membership/*" element={<Navigate to="/" replace />} />
+                  <Route path="prime-dashboard" element={<Navigate to="/" replace />} />
+                  <Route path="policies/membership-terms" element={<Navigate to="/" replace />} />
+                  <Route path="private-client-services/*" element={<Navigate to="/" replace />} />
+                </>
+              )}
               <Route path="craftsmanship" element={<CraftsmanshipPage />} />
               <Route path="our-story" element={<OurStoryPage />} />
               <Route path="wholesale" element={<WholesalePage />} />
@@ -368,9 +334,13 @@ export default function App() {
               <Route
                 path="checkout"
                 element={
-                  <ProtectedRoute>
-                    <CheckoutPage />
-                  </ProtectedRoute>
+                  CHECKOUT_ENABLED ? (
+                    <ProtectedRoute>
+                      <CheckoutPage />
+                    </ProtectedRoute>
+                  ) : (
+                    <Navigate to="/cart" replace />
+                  )
                 }
               />
               <Route
@@ -396,12 +366,13 @@ export default function App() {
                 }
               />
               <Route path="login" element={<LoginPage />} />
-              <Route path="register" element={<RegisterPage />} />
+              <Route path="register" element={<Navigate to="/login" replace />} />
               <Route path="product/:id" element={<ProductPage />} />
             </Route>
           </Routes>
         </WishlistProvider>
       </CartProvider>
+      </ProductsProvider>
       </CountryProvider>
     </AuthProvider>
   );

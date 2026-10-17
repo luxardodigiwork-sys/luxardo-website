@@ -6,41 +6,41 @@ const processSteps = [
   {
     title: 'Imported Fabric Selection',
     text: 'Every LUXARDO FASHION garment begins with carefully selected imported fabrics chosen for texture, durability, and refined appearance.',
-    img: 'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=1000&auto=format&fit=crop',
+    img: '/placeholder.svg',
   },
   {
     title: 'Design Development',
     text: 'Our design studio develops modern ethnic silhouettes that balance tradition and contemporary structure.',
-    img: 'https://images.unsplash.com/photo-1558655146-d09347e92766?q=80&w=1000&auto=format&fit=crop',
+    img: '/placeholder.svg',
   },
   {
     title: 'Expert Refinement',
     text: 'Designs are meticulously refined to ensure the perfect fit and aesthetic balance before moving to production.',
-    img: 'https://images.unsplash.com/photo-1598532163257-ae3c6b2524b6?q=80&w=1000&auto=format&fit=crop',
+    img: '/placeholder.svg',
   },
   {
     title: 'Production Execution',
     text: 'Experienced production teams translate refined designs into structured garments with disciplined tailoring techniques.',
-    img: 'https://images.unsplash.com/photo-1605007493699-af65834f8a00?q=80&w=1000&auto=format&fit=crop',
+    img: '/placeholder.svg',
   },
   {
     title: 'Finishing Inspection',
     text: 'Every garment passes through careful inspection to ensure finishing standards meet LUXARDO FASHION expectations.',
-    img: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1000&auto=format&fit=crop',
+    img: '/placeholder.svg',
   },
   {
     title: 'Presentation Packaging',
     text: 'Each piece is carefully packed in our signature presentation box, reflecting our commitment to luxury at every touchpoint.',
-    img: 'https://images.unsplash.com/photo-1607083206968-13611e3d76db?q=80&w=1000&auto=format&fit=crop',
+    img: '/placeholder.svg',
   },
   {
     title: 'Final Dispatch Check',
     text: 'A final verification ensures every detail is perfect before the garment is dispatched to its new home.',
-    img: 'https://images.unsplash.com/photo-1556740734-7f96267b118a?q=80&w=1000&auto=format&fit=crop',
+    img: '/placeholder.svg',
   }
 ];
 
-export const LUXARDO FASHIONProcess: React.FC = () => {
+export const LuxardoProcess: React.FC = () => {
   return (
     <section className="section-padding bg-brand-white">
       <SectionHeader 

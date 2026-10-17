@@ -6,6 +6,7 @@ import { verifyBeforeUpdateEmail } from 'firebase/auth';
 import { storage } from '../../utils/localStorage';
 import { BackendSettings } from '../../types';
 import { ALL_COUNTRIES } from '../../countries';
+import { EXPRESS_BACKEND_AVAILABLE } from '../../constants/features';
 
 export default function AdminSettingsPage() {
   const { user } = useAuth();
@@ -20,53 +21,12 @@ export default function AdminSettingsPage() {
   const [isSavingCourier, setIsSavingCourier] = useState(false);
   const [courierMessage, setCourierMessage] = useState('');
 
-  const [razorpaySettings, setRazorpaySettings] = useState({ keyId: '', secretKey: '', mode: 'test' });
-  const [isSavingRazorpay, setIsSavingRazorpay] = useState(false);
-  const [razorpayMessage, setRazorpayMessage] = useState('');
-
   const [isSavingVisibility, setIsSavingVisibility] = useState(false);
   const [visibilityMessage, setVisibilityMessage] = useState('');
 
   useEffect(() => {
     setBackendSettings(storage.getBackendSettings());
-    fetchRazorpaySettings();
   }, []);
-
-  const fetchRazorpaySettings = async () => {
-    try {
-      const res = await fetch('/api/settings/razorpay_settings');
-      const data = await res.json();
-      if (data.value) {
-        setRazorpaySettings(data.value);
-      }
-    } catch (err) {
-      console.error('Failed to fetch Razorpay settings', err);
-    }
-  };
-
-  const handleSaveRazorpaySettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSavingRazorpay(true);
-    setRazorpayMessage('');
-    try {
-      const res = await fetch('/api/settings/razorpay_settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: razorpaySettings })
-      });
-      if (res.ok) {
-        setRazorpayMessage('Razorpay settings saved successfully.');
-        setTimeout(() => setRazorpayMessage(''), 3000);
-      } else {
-        throw new Error('Failed to save');
-      }
-    } catch (err) {
-      console.error(err);
-      setError('Failed to save Razorpay settings');
-    } finally {
-      setIsSavingRazorpay(false);
-    }
-  };
 
   const handleRequestEmailChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,6 +158,7 @@ export default function AdminSettingsPage() {
         <p className="text-brand-secondary font-sans mt-2 text-sm">Manage your master account credentials and integrations</p>
       </div>
 
+      {EXPRESS_BACKEND_AVAILABLE ? (
       <div className="bg-white border border-brand-divider p-8">
         <div className="flex items-center gap-3 mb-6">
           <ShieldCheck className="text-brand-black" size={24} />
@@ -292,6 +253,12 @@ export default function AdminSettingsPage() {
           )}
         </div>
       </div>
+      ) : (
+        <div className="bg-white border border-brand-divider p-8">
+          <h2 className="text-lg font-display uppercase tracking-widest mb-2">Account Security</h2>
+          <p className="text-sm text-brand-secondary">Admin sign-in is managed through Firebase Authentication (Google/phone). Change the sign-in account from the Firebase Console.</p>
+        </div>
+      )}
 
       {/* Website Visibility Section */}
       {backendSettings && (
@@ -361,80 +328,21 @@ export default function AdminSettingsPage() {
         </div>
       )}
 
-      {/* Razorpay Integration Section */}
+      {/* Razorpay: keys are server-side secrets and are intentionally NOT editable here. */}
       <div className="bg-white border border-brand-divider p-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <CreditCard className="text-brand-black" size={24} />
-            <h2 className="text-lg font-display uppercase tracking-widest">Razorpay Integration</h2>
-          </div>
-          {razorpayMessage && (
-            <span className="text-green-600 text-sm font-medium flex items-center gap-2">
-              <ShieldCheck size={16} /> {razorpayMessage}
-            </span>
-          )}
+        <div className="flex items-center gap-3 mb-4">
+          <CreditCard className="text-brand-black" size={24} />
+          <h2 className="text-lg font-display uppercase tracking-widest">Payments (Razorpay)</h2>
         </div>
-
-        <form onSubmit={handleSaveRazorpaySettings} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-            <div className="space-y-2">
-              <label className="block text-xs uppercase tracking-wider text-brand-secondary">
-                Mode
-              </label>
-              <select
-                value={razorpaySettings.mode}
-                onChange={(e) => setRazorpaySettings({ ...razorpaySettings, mode: e.target.value })}
-                className="w-full border border-brand-divider p-3 focus:outline-none focus:border-brand-black transition-colors bg-white"
-              >
-                <option value="test">Test Mode</option>
-                <option value="live">Live Mode</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-xs uppercase tracking-wider text-brand-secondary">
-                Key ID
-              </label>
-              <input
-                type="text"
-                value={razorpaySettings.keyId}
-                onChange={(e) => setRazorpaySettings({ ...razorpaySettings, keyId: e.target.value })}
-                className="w-full border border-brand-divider p-3 focus:outline-none focus:border-brand-black transition-colors"
-                placeholder="rzp_test_..."
-                required
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <label className="block text-xs uppercase tracking-wider text-brand-secondary">
-                Secret Key
-              </label>
-              <input
-                type="password"
-                value={razorpaySettings.secretKey}
-                onChange={(e) => setRazorpaySettings({ ...razorpaySettings, secretKey: e.target.value })}
-                className="w-full border border-brand-divider p-3 focus:outline-none focus:border-brand-black transition-colors"
-                placeholder="Enter Secret Key"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-brand-divider flex justify-end">
-            <button 
-              type="submit" 
-              disabled={isSavingRazorpay} 
-              className="btn-primary py-3 px-8 flex items-center gap-2 disabled:opacity-50"
-            >
-              <Save size={18} />
-              {isSavingRazorpay ? 'SAVING...' : 'SAVE RAZORPAY SETTINGS'}
-            </button>
-          </div>
-        </form>
+        <p className="text-sm text-brand-secondary leading-relaxed">
+          Payment keys are never stored in the website or its database. They are configured as secrets on the
+          payment backend (Firebase Functions secrets <code>RAZORPAY_KEY_SECRET</code> and <code>RAZORPAY_WEBHOOK_SECRET</code>,
+          and parameter <code>RAZORPAY_KEY_ID</code>). Rotate or change them from the Firebase/Razorpay consoles.
+        </p>
       </div>
 
       {/* Courier Integration Section */}
-      {backendSettings && (
+      {EXPRESS_BACKEND_AVAILABLE && backendSettings && (
         <div className="bg-white border border-brand-divider p-8">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">

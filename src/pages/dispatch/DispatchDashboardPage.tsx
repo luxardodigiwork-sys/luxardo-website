@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { EXPRESS_BACKEND_AVAILABLE } from '../../constants/features';
 import { 
   Package, 
   Search, 
@@ -31,7 +32,7 @@ import {
   Settings
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { storage } from '../../utils/localStorage';
+import { persistOrders, useAdminOrders } from '../../utils/orderStore';
 import { Order } from '../../types';
 import { formatCurrency } from '../../utils/currency';
 import { useAuth } from '../../context/AuthContext';
@@ -42,7 +43,7 @@ type SortOption = 'newest' | 'oldest' | 'dispatch_ready' | 'shipped' | 'delivere
 
 export default function DispatchDashboardPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin';
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,23 +73,21 @@ export default function DispatchDashboardPage() {
     setSortBy('newest');
   };
 
-  useEffect(() => {
-    const fetchOrders = () => {
-      try {
-        const data = storage.getOrders();
-        // Sort by date descending
-        setOrders(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-      } catch (error) {
-        console.error('Error fetching orders:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const { orders: liveOrders, isLoaded: ordersLoaded } = useAdminOrders();
 
-    fetchOrders();
-  }, []);
+  useEffect(() => {
+    setOrders([...liveOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    setIsLoading(!ordersLoaded);
+  }, [liveOrders, ordersLoaded]);
 
   // Stabilize selectedOrderDetails for useEffect
+  // Staff timeline = customer-facing history plus the staff-only internal log (tagged), oldest first.
+  const staffTimeline = useMemo(() => {
+    const o = selectedOrderDetails;
+    if (!o) return [] as Array<{ status: string; timestamp: string; note?: string; internal: boolean }>;
+    return [...(o.statusHistory || []).map((h) => ({ ...h, internal: false })), ...(o.internalLog || []).map((h) => ({ ...h, internal: true }))]
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  }, [selectedOrderDetails]);
   const selectedOrderDetailsId = selectedOrderDetails?.id;
   const selectedOrderDetailsData = useMemo(() => {
     if (!selectedOrderDetails) return null;
@@ -137,21 +136,22 @@ export default function DispatchDashboardPage() {
             }
           }
           
-          // If verificationStatus is changing, add to history
+          // Verification is an internal workflow: it goes to the staff-only log, never into the customer timeline
+          const newLog = [...(order.internalLog || [])];
           if (updates.verificationStatus && updates.verificationStatus !== order.verificationStatus) {
-            newHistory.push({
+            newLog.push({
               status: updates.verificationStatus,
               timestamp: new Date().toISOString(),
               note: `Verification status updated to ${updates.verificationStatus.replace('_', ' ')}`
             });
           }
 
-          const updatedOrder = { ...order, ...updates, statusHistory: newHistory };
+          const updatedOrder = { ...order, ...updates, statusHistory: newHistory, internalLog: newLog };
           return updatedOrder;
         }
         return order;
       });
-      storage.saveOrders(updatedOrders);
+      persistOrders(updatedOrders);
       setOrders(updatedOrders);
       
       // Update selectedOrderDetails if it's the one being updated
@@ -178,27 +178,28 @@ export default function DispatchDashboardPage() {
             newHistory.push({
               status: updates.status,
               timestamp: new Date().toISOString(),
-              note: `Bulk status update to ${updates.status.replace('_', ' ')}`
+              note: `Status updated to ${updates.status.replace('_', ' ')}`
             });
             if (updates.status === 'shipped' && !order.dispatchDate) {
               updates.dispatchDate = new Date().toISOString().split('T')[0];
             }
           }
           
+          const newLog = [...(order.internalLog || [])];
           if (updates.verificationStatus && updates.verificationStatus !== order.verificationStatus) {
-            newHistory.push({
+            newLog.push({
               status: updates.verificationStatus,
               timestamp: new Date().toISOString(),
               note: `Bulk verification status update to ${updates.verificationStatus.replace('_', ' ')}`
             });
           }
 
-          return { ...order, ...updates, statusHistory: newHistory };
+          return { ...order, ...updates, statusHistory: newHistory, internalLog: newLog };
         }
         return order;
       });
 
-      storage.saveOrders(updatedOrders);
+      persistOrders(updatedOrders);
       setOrders(updatedOrders);
       setSelectedOrderIds(new Set());
       alert(`Successfully updated ${selectedOrderIds.size} orders`);
@@ -827,7 +828,7 @@ export default function DispatchDashboardPage() {
                             <Box size={18} />
                           </button>
                         )}
-                        {order.status === 'packed' && (
+                        {EXPRESS_BACKEND_AVAILABLE && order.status === 'packed' && (
                           <button
                             onClick={async () => {
                               if (confirm('Create DTDC Shipment for this order?')) {
@@ -1067,13 +1068,13 @@ export default function DispatchDashboardPage() {
                       <Clock size={14} /> Status Timeline
                     </h4>
                     <div className="space-y-4 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-px before:bg-gray-200">
-                      {selectedOrderDetails.statusHistory && selectedOrderDetails.statusHistory.length > 0 ? (
-                        selectedOrderDetails.statusHistory.map((history, idx) => (
+                      {staffTimeline.length > 0 ? (
+                        staffTimeline.map((history, idx) => (
                           <div key={idx} className="relative pl-8">
                             <div className="absolute left-0 top-1.5 w-[23px] h-[23px] bg-white border-2 border-black rounded-full flex items-center justify-center z-10">
                               <div className="w-1.5 h-1.5 bg-black rounded-full" />
                             </div>
-                            <p className="text-[10px] font-bold text-gray-900 uppercase tracking-widest">{history.status.replace('_', ' ')}</p>
+                            <p className="text-[10px] font-bold text-gray-900 uppercase tracking-widest">{history.status.replace('_', ' ')}{history.internal ? ' · internal' : ''}</p>
                             <p className="text-[9px] text-gray-400 mt-0.5">
                               {new Date(history.timestamp).toLocaleString('en-GB', { 
                                 day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
@@ -1251,6 +1252,7 @@ export default function DispatchDashboardPage() {
                       >
                         <Box size={16} /> Pack
                       </button>
+                      {EXPRESS_BACKEND_AVAILABLE && (
                       <button
                         onClick={async () => {
                           if (confirm('Create DTDC Shipment for this order?')) {
@@ -1294,6 +1296,7 @@ export default function DispatchDashboardPage() {
                       >
                         <Send size={16} /> DTDC Ship
                       </button>
+                      )}
                       <button
                         onClick={() => {
                           if (confirm('Are you sure you want to mark this order as Delivered?')) {

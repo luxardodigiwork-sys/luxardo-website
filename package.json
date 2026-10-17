@@ -9,7 +9,14 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:rules": "firebase emulators:exec --config firebase.rules-test.json --only firestore,storage --project rules-test \"node --test tests/rules.test.mjs\"",
+    "test:unit": "node --import tsx --test tests/core.test.ts tests/client.test.ts tests/errorReporter.test.ts tests/optimizedImage.test.ts tests/mailstaff.test.ts tests/analytics.test.ts tests/enquiries.test.ts tests/contentRemount.test.ts tests/legacyPayments.test.ts tests/orderInternal.test.ts",
+    "test:orders": "firebase emulators:exec --config firebase.rules-test.json --only firestore --project orders-test \"node --import tsx --test tests/orders.test.ts\"",
+    "test:publish": "firebase emulators:exec --config firebase.rules-test.json --only firestore --project publish-test \"node --import tsx --test tests/contentPublish.test.ts\"",
+    "test:notify": "firebase emulators:exec --config firebase.rules-test.json --only firestore --project notify-test \"node --import tsx --test tests/enquiryNotify.test.ts\"",
+    "test:functions": "npm --prefix functions run build && node tests/functionsEmulatorEnv.mjs && env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy firebase emulators:exec --config firebase.functions-test.json --only functions,firestore --project demo-notify \"node tests/functionsEmulator.mjs\"",
+    "test": "npm run test:unit && npm run test:rules && npm run test:orders && npm run test:notify && npm run test:publish"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
@@ -40,6 +47,7 @@
     "vite": "^6.2.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^4.17.21",
@@ -48,6 +56,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.21",
+    "firebase-tools": "^15.33.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

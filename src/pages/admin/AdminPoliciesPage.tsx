@@ -1,3 +1,6 @@
+import { publishPolicies, describePublishError, useSyncStatus } from '../../utils/contentSync';
+import { SyncBanner } from '../../components/admin/SyncBanner';
+import { SyncGate } from '../../components/admin/SyncGate';
 import React, { useState, useEffect } from 'react';
 import { storage } from '../../utils/localStorage';
 import { Save, CheckCircle2, RotateCcw, FileText } from 'lucide-react';
@@ -63,13 +66,15 @@ const TextArea = ({ className, ...props }: React.TextareaHTMLAttributes<HTMLText
   />
 );
 
-export default function AdminPoliciesPage() {
+function AdminPoliciesPageEditor() {
   const [policies, setPolicies] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const { status: syncStatus, retry: retrySync } = useSyncStatus();
+  const canSave = syncStatus === 'ready';
 
   useEffect(() => {
     const fetchPolicies = () => {
@@ -84,32 +89,41 @@ export default function AdminPoliciesPage() {
     fetchPolicies();
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!canSave) return;
     setIsSaving(true);
     storage.savePolicies(policies);
-    
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    localStorage.setItem('LUXARDO FASHION_policies_last_saved', now);
-    
-    setTimeout(() => {
-      setIsSaving(false);
-      setShowSuccess(true);
+    try {
+      await publishPolicies(); // Firestore: customers see the published policy text
+      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      localStorage.setItem('LUXARDO FASHION_policies_last_saved', now);
       setLastSaved(now);
+      setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-    }, 800);
+    } catch (error: any) {
+      alert(describePublishError(error) || (error?.code === 'permission-denied' ? 'You do not have permission to publish policies. Please sign in as an admin.' : 'Could not publish the policies. Please try again.'));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleReset = () => {
+    if (!canSave) return;
     setIsResetModalOpen(true);
   };
 
-  const confirmReset = () => {
-    localStorage.removeItem('LUXARDO FASHION_policies');
+  const confirmReset = async () => {
+    storage.resetPolicies();
     const data = storage.getPolicies();
     setPolicies(data);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
     setIsResetModalOpen(false);
+    try {
+      await publishPolicies();
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (error: any) {
+      alert(describePublishError(error) || 'Reset on this device only; could not publish. Please try again.');
+    }
   };
 
   const updatePolicy = (key: string, field: string, value: string) => {
@@ -126,6 +140,7 @@ export default function AdminPoliciesPage() {
 
   return (
     <div className="max-w-6xl mx-auto pb-32 px-4 md:px-0">
+      <SyncBanner status={syncStatus} retry={retrySync} />
       {/* Sticky Header */}
       <div className="sticky top-0 z-30 bg-brand-bg/90 backdrop-blur-xl border-b border-brand-divider -mx-4 px-6 py-8 mb-16 transition-all shadow-sm">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
@@ -149,13 +164,14 @@ export default function AdminPoliciesPage() {
           <div className="flex gap-4 w-full md:w-auto">
             <button 
               onClick={handleReset}
+              disabled={!canSave}
               className="btn-outline flex-1 md:flex-none flex items-center justify-center gap-2"
             >
               <RotateCcw size={14} /> Reset
             </button>
             <button 
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || !canSave}
               className="btn-primary flex-1 md:flex-none flex items-center justify-center gap-3 min-w-[200px]"
             >
               {showSuccess ? <CheckCircle2 size={16} /> : <Save size={16} />}
@@ -163,6 +179,11 @@ export default function AdminPoliciesPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="mb-10 border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+        Edits made here are saved in this browser only, as a preview. Customers see the policy text built into the
+        website until policy editing is connected to the database.
       </div>
 
       <motion.div 
@@ -233,7 +254,7 @@ export default function AdminPoliciesPage() {
         </div>
         <button 
           onClick={handleSave}
-          disabled={isSaving}
+          disabled={isSaving || !canSave}
           className="flex items-center gap-3 px-16 py-5 bg-brand-black text-brand-white hover:bg-brand-secondary transition-all text-[11px] font-bold uppercase tracking-[0.25em] disabled:opacity-50 shadow-2xl shadow-brand-black/20 group"
         >
           <Save size={18} className="group-hover:scale-110 transition-transform" />
@@ -250,5 +271,13 @@ export default function AdminPoliciesPage() {
         onCancel={() => setIsResetModalOpen(false)}
       />
     </div>
+  );
+}
+
+export default function AdminPoliciesPage() {
+  return (
+    <SyncGate>
+      <AdminPoliciesPageEditor />
+    </SyncGate>
   );
 }

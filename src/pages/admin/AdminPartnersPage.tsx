@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { storage } from '../../utils/localStorage';
+import { setEnquiryStatus, watchEnquiries } from '../../utils/enquiries';
 import { 
   Users, Search, Filter, Mail, Phone, Globe, 
   Clock, CheckCircle2, XCircle, AlertCircle,
@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 interface WholesaleApplication {
-  id: number;
+  id: string;
   full_name: string;
   company_name: string;
   email: string;
@@ -31,39 +31,25 @@ export default function AdminPartnersPage() {
   const [selectedApp, setSelectedApp] = useState<WholesaleApplication | null>(null);
 
   useEffect(() => {
-    fetchApplications();
+    // Live list from Firestore (admin only): wholesale enquiries sent from the website.
+    return watchEnquiries('wholesaleInquiries', (rows) => {
+      setApplications(rows as WholesaleApplication[]);
+      setLoading(false);
+    }, (err) => {
+      console.error('Failed to fetch applications:', err);
+      setLoading(false);
+    });
   }, []);
 
-  const fetchApplications = async () => {
+  const updateStatus = async (id: string, status: string) => {
     try {
-      // Simulate network request
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const data = storage.getWholesaleInquiries();
-      setApplications(data);
-    } catch (err) {
-      console.error('Failed to fetch applications:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateStatus = async (id: number, status: string) => {
-    try {
-      // Simulate network request
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      const inquiries = storage.getWholesaleInquiries();
-      const updatedInquiries = inquiries.map(inq => 
-        inq.id === id ? { ...inq, status } : inq
-      );
-      storage.saveWholesaleInquiries(updatedInquiries);
-      
-      fetchApplications();
+      await setEnquiryStatus('wholesaleInquiries', id, status);
       if (selectedApp?.id === id) {
         setSelectedApp(prev => prev ? { ...prev, status: status as any } : null);
       }
     } catch (err) {
       console.error('Failed to update status:', err);
+      alert('Could not update the status. Please try again.');
     }
   };
 

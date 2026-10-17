@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, X, Search, ShoppingBag, User, Globe, 
   Instagram, Facebook, Twitter, ArrowRight, Plus, Minus
@@ -6,8 +6,12 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Country, Language } from '../types';
-import { COUNTRIES, LANGUAGES, COLLECTIONS } from '../constants';
+import { COUNTRIES, LANGUAGES } from '../constants';
+import { getStorefrontCollections, useContentVersion } from '../utils/contentSync';
+import { canApplyContentUpdateNow, isEditableElement } from '../utils/contentRemount';
+import { subscribeNewsletter } from '../utils/enquiries';
 import { ALL_COUNTRIES } from '../countries';
+import { PRIME_AVAILABLE } from '../constants/features';
 import Logo from './Logo';
 import { FirstVisitModal } from './FirstVisitModal';
 import { SearchOverlay } from './SearchOverlay';
@@ -32,8 +36,37 @@ function ScrollToTopOnMount() {
 }
 
 export default function Layout() {
+  const contentVersion = useContentVersion();
+  const routerLocation = useLocation();
+  // Synced content re-renders the page by remounting it, but never while the visitor is typing or on a checkout/account page
+  // (that would erase input and in-flight state). Such an update is held and applied on the next navigation.
+  const [appliedVersion, setAppliedVersion] = useState(0);
+  const userTyped = useRef(false);
+  useEffect(() => {
+    const mark = (e: Event) => { if (isEditableElement(e.target as Element)) userTyped.current = true; };
+    document.addEventListener('input', mark, true);
+    return () => document.removeEventListener('input', mark, true);
+  }, []);
+  useEffect(() => { userTyped.current = false; setAppliedVersion(contentVersion); }, [routerLocation.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (contentVersion === appliedVersion) return;
+    if (canApplyContentUpdateNow({ pathname: routerLocation.pathname, userTyped: userTyped.current, fieldFocused: isEditableElement(document.activeElement) })) {
+      setAppliedVersion(contentVersion);
+    }
+  }, [contentVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterMsg, setNewsletterMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const onNewsletter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const r = await subscribeNewsletter(newsletterEmail);
+    if (r.ok === false) { setNewsletterMsg({ ok: false, text: r.error }); return; }
+    setNewsletterEmail('');
+    setNewsletterMsg({ ok: true, text: 'Thank you for subscribing.' });
+  };
   const siteContent = storage.getSiteContent();
   const [footerContent, setFooterContent] = useState(siteContent.footer);
+  // Footer text published from Admin -> Site Content arrives after the first render (see useContentVersion).
+  useEffect(() => { setFooterContent(storage.getSiteContent().footer); }, [contentVersion]);
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<Language>('English (US)');
   const [showRegionModal, setShowRegionModal] = useState(false);
@@ -312,11 +345,11 @@ export default function Layout() {
     { name: 'CRAFTSMANSHIP', path: '/craftsmanship' },
     { name: 'COLLECTIONS', path: '/collections' },
     { name: 'PARTNER WITH US', path: '/wholesale' },
-    { name: 'PRIME MEMBER', path: '/prime-membership' },
+    ...(PRIME_AVAILABLE ? [{ name: 'PRIME MEMBER', path: '/prime-membership' }] : []),
     { name: 'CONTACT', path: '/contact' }
   ];
 
-  const collectionItems = COLLECTIONS.map(col => ({
+  const collectionItems = getStorefrontCollections().map(col => ({
     name: col.shortName,
     path: `/collections/${col.id}`
   }));
@@ -627,7 +660,7 @@ export default function Layout() {
             className="h-full min-h-screen"
           >
             <ScrollToTopOnMount />
-            <Outlet context={{ selectedCountry, selectedLanguage }} />
+            <Outlet key={appliedVersion} context={{ selectedCountry, selectedLanguage }} />
           </motion.div>
         </AnimatePresence>
       </main>
@@ -652,7 +685,7 @@ export default function Layout() {
             </button>
             <div className={`overflow-hidden transition-all duration-300 md:!max-h-none md:!opacity-100 md:!mt-8 ${openFooterSection === 'maison' ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
               <ul className="space-y-3 md:space-y-4 text-xs md:text-sm font-sans text-brand-white/60">
-                <li><Link to="/prime-membership" className="hover:text-brand-white transition-colors">Prime Member</Link></li>
+                {PRIME_AVAILABLE && <li><Link to="/prime-membership" className="hover:text-brand-white transition-colors">Prime Member</Link></li>}
                 <li><Link to="/craftsmanship" className="hover:text-brand-white transition-colors">Craftsmanship</Link></li>
                 <li><Link to="/our-story" className="hover:text-brand-white transition-colors">Our Story</Link></li>
                 <li><Link to="/contact" className="hover:text-brand-white transition-colors">Contact</Link></li>
@@ -677,7 +710,7 @@ export default function Layout() {
                 <li><Link to="/policies/returns" className="hover:text-brand-white transition-colors">Returns Policy</Link></li>
                 <li><Link to="/policies/privacy" className="hover:text-brand-white transition-colors">Privacy Policy</Link></li>
                 <li><Link to="/policies/terms" className="hover:text-brand-white transition-colors">Terms & Conditions</Link></li>
-                <li><Link to="/policies/membership-terms" className="hover:text-brand-white transition-colors">Membership Terms</Link></li>
+                {PRIME_AVAILABLE && <li><Link to="/policies/membership-terms" className="hover:text-brand-white transition-colors">Membership Terms</Link></li>}
               </ul>
             </div>
           </div>
@@ -685,12 +718,13 @@ export default function Layout() {
           <div className="flex flex-col py-8 md:py-0 space-y-8 md:space-y-12">
             <div className="space-y-6 md:space-y-8">
               <h4 className="text-[10px] md:text-[11px] uppercase tracking-[0.25em] font-bold text-brand-white">Newsletter</h4>
-              <div className="flex border-b border-brand-white/20 pb-3 md:pb-4 group">
-                <input type="email" placeholder="Email Address" className="bg-transparent w-full text-xs md:text-sm font-sans text-brand-white focus:outline-none placeholder:text-brand-white/40" />
-                <button className="text-brand-white hover:text-brand-white/60 transition-colors">
+              <form onSubmit={onNewsletter} className="flex border-b border-brand-white/20 pb-3 md:pb-4 group">
+                <input type="email" required value={newsletterEmail} onChange={(e) => setNewsletterEmail(e.target.value)} placeholder="Email Address" aria-label="Email address for newsletter" className="bg-transparent w-full text-xs md:text-sm font-sans text-brand-white focus:outline-none placeholder:text-brand-white/40" />
+                <button type="submit" aria-label="Subscribe" className="text-brand-white hover:text-brand-white/60 transition-colors">
                   <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
                 </button>
-              </div>
+              </form>
+              {newsletterMsg && <p role="status" className={`text-xs ${newsletterMsg.ok ? 'text-brand-white/70' : 'text-red-300'}`}>{newsletterMsg.text}</p>}
             </div>
 
             <div className="space-y-3 md:space-y-4">

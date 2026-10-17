@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PRIME_AVAILABLE } from '../constants/features';
 import { SectionHeader } from '../components/SectionHeader';
 import { Plus, Minus, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -33,7 +34,7 @@ export default function FAQPage() {
       items: [
         { 
           q: 'What comes in a standard order?', 
-          a: 'A standard order includes our signature ready-to-stitch garment package. This consists of pre-cut fabric panels for your chosen design, all necessary linings, buttons, and trimmings, presented in our premium luxury box.' 
+          a: 'A standard order includes our signature ready-to-stitch garment package. This consists of pre-cut fabric panels for your chosen design, all necessary linings, buttons, and trimmings.' 
         },
         { 
           q: 'Is stitching included?', 
@@ -49,12 +50,12 @@ export default function FAQPage() {
       category: "Shipping & Delivery",
       items: [
         { 
-          q: 'Do you ship internationally?', 
-          a: 'Yes, LUXARDO FASHION ships to over 50 countries globally. International shipping rates and delivery timelines are calculated at checkout based on your specific location.' 
+          q: 'Where do you deliver?', 
+          a: 'We currently deliver across India only. Shipping is free on orders of ₹7,499 or more and ₹199 on smaller orders.' 
         },
         { 
           q: 'What is the processing time for orders?', 
-          a: 'Standard orders are processed within 2-3 business days. Prime Member orders receive priority processing and are typically dispatched within 24 hours.' 
+          a: 'Orders are processed after payment is confirmed. You can follow your order\'s status in your account.' 
         }
       ]
     }
@@ -64,7 +65,7 @@ export default function FAQPage() {
     <div className="min-h-screen bg-brand-bg text-brand-black">
       {/* Hero Section */}
       <section className="section-padding bg-brand-black text-brand-white text-center relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center " />
+        <div className="absolute inset-0 opacity-20 bg-[url('/placeholder.svg')] bg-cover bg-center " />
         <div className="absolute inset-0 bg-brand-black/80" />
         
         <div className="relative z-10 max-w-4xl mx-auto space-y-12 py-20">
@@ -90,7 +91,7 @@ export default function FAQPage() {
         </div>
 
         <div className="space-y-20">
-          {faqs.map((category, catIndex) => (
+          {faqs.filter((c) => PRIME_AVAILABLE || c.category !== 'Prime Member').map((category, catIndex) => (
             <div key={catIndex} className="space-y-10">
               <h2 className="text-[11px] uppercase tracking-[0.3em] font-bold text-brand-secondary border-b border-brand-divider pb-4">
                 {category.category}

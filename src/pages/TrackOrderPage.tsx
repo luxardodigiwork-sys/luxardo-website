@@ -1,129 +1,40 @@
 import React, { useState, useEffect } from 'react';
+import { formatINR } from '../utils/currency';
 import { useParams, Link } from 'react-router-dom';
 import { SectionHeader } from '../components/SectionHeader';
-import { Package, Truck, CheckCircle, Clock, MapPin } from 'lucide-react';
-import { storage } from '../utils/localStorage';
+import { Package, Truck, CheckCircle, Clock } from 'lucide-react';
+import { buildTrackingEvents } from '../utils/trackingEvents';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
 import { Order } from '../types';
-
-interface TrackingEvent {
-  date: string;
-  time: string;
-  location: string;
-  status: string;
-  description: string;
-}
 
 export default function TrackOrderPage() {
   const { orderId } = useParams();
   const [order, setOrder] = useState<Order | null>(null);
-  const [trackingEvents, setTrackingEvents] = useState<TrackingEvent[]>([]);
-  const [estimatedDelivery, setEstimatedDelivery] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const { user, isAuthReady } = useAuth();
 
+  // Firestore is the only order source; rules let a customer read just their own orders.
   useEffect(() => {
-    if (orderId) {
-      const orders = storage.getOrders();
-      const foundOrder = orders.find(o => o.id === orderId);
-      if (foundOrder) {
-        setOrder(foundOrder);
-        generateMockTracking(foundOrder);
-      }
-    }
-  }, [orderId]);
+    if (!orderId || !isAuthReady) return;
+    if (!user) { setLoaded(true); return; }
+    let cancelled = false;
+    getDoc(doc(db, 'orders', orderId))
+      .then((snap) => {
+        if (cancelled) return;
+        if (snap.exists() && snap.data().userId === user.id) setOrder({ id: snap.id, ...snap.data() } as unknown as Order);
+      })
+      .catch((err) => console.error('Failed to load order:', err))
+      .finally(() => { if (!cancelled) setLoaded(true); });
+    return () => { cancelled = true; };
+  }, [orderId, isAuthReady, user]);
 
-  const generateMockTracking = (order: Order) => {
-    const events: TrackingEvent[] = [];
-    const orderDate = new Date(order.createdAt);
-    
-    // Estimated delivery is order date + 5 days
-    const estDelivery = new Date(orderDate);
-    estDelivery.setDate(estDelivery.getDate() + 5);
-    setEstimatedDelivery(estDelivery.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }));
+  const trackingEvents = order ? buildTrackingEvents(order as any) : [];
 
-    // Always add placed event
-    events.push({
-      date: orderDate.toLocaleDateString(),
-      time: orderDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      location: 'System',
-      status: 'Order Received',
-      description: 'Your order has been placed and is waiting to be processed.'
-    });
-
-    if (['processing', 'packed', 'shipped', 'delivered'].includes(order.status)) {
-      const processDate = new Date(orderDate);
-      processDate.setHours(processDate.getHours() + 12);
-      events.unshift({
-        date: processDate.toLocaleDateString(),
-        time: processDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        location: 'LUXARDO FASHION Production Facility',
-        status: 'Processing',
-        description: 'Your order is being reviewed by our tailoring team.'
-      });
-    }
-
-    if (['packed', 'shipped', 'delivered'].includes(order.status)) {
-      const packedDate = new Date(orderDate);
-      packedDate.setDate(packedDate.getDate() + 1);
-      packedDate.setHours(14, 30);
-      events.unshift({
-        date: packedDate.toLocaleDateString(),
-        time: packedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        location: 'LUXARDO FASHION Dispatch Facility',
-        status: 'Packed',
-        description: 'Order carefully packed and ready for courier pickup.'
-      });
-    }
-
-    if (order.status === 'shipped' || order.status === 'delivered') {
-      const dispatchDate = order.dispatchDate ? new Date(order.dispatchDate) : new Date(orderDate.getTime() + 2 * 24 * 60 * 60 * 1000);
-      
-      events.unshift({
-        date: dispatchDate.toLocaleDateString(),
-        time: dispatchDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        location: 'Courier Hub, Mumbai',
-        status: 'Shipped',
-        description: 'Shipment handed over to logistics partner.'
-      });
-
-      const transitDate1 = new Date(dispatchDate);
-      transitDate1.setHours(transitDate1.getHours() + 18);
-      events.unshift({
-        date: transitDate1.toLocaleDateString(),
-        time: transitDate1.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        location: 'Regional Sorting Center',
-        status: 'In Transit',
-        description: 'Shipment in transit to destination facility.'
-      });
-
-      // Show some mid-transit updates if the status is active and sufficient time has passed
-      const now = new Date();
-      if ((order.status === 'shipped' && now.getTime() > transitDate1.getTime() + 24 * 60 * 60 * 1000) || order.status === 'delivered') {
-         const outForDeliveryDate = new Date(transitDate1);
-         outForDeliveryDate.setDate(outForDeliveryDate.getDate() + 1);
-         outForDeliveryDate.setHours(8, 15);
-         events.unshift({
-            date: outForDeliveryDate.toLocaleDateString(),
-            time: outForDeliveryDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            location: order.shippingAddress?.city || 'Local Delivery Center',
-            status: 'Out for Delivery',
-            description: 'Shipment is out for delivery.'
-         });
-      }
-    }
-
-    if (order.status === 'delivered') {
-      const deliveryDate = new Date(orderDate);
-      deliveryDate.setDate(deliveryDate.getDate() + 4);
-      events.unshift({
-        date: deliveryDate.toLocaleDateString(),
-        time: deliveryDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        location: order.shippingAddress?.city || 'Destination',
-        status: 'Delivered',
-        description: 'Shipment delivered securely.'
-      });
-    }
-
-    setTrackingEvents(events);
-  };
+  if (!loaded) {
+    return <div className="section-padding min-h-[70vh] flex items-center justify-center"><p className="text-brand-secondary">Loading...</p></div>;
+  }
 
   if (!order) {
     return (
@@ -150,14 +61,6 @@ export default function TrackOrderPage() {
       />
 
       <div className="mt-12 space-y-12">
-        {/* Estimated Delivery Banner */}
-        {order.status !== 'delivered' && order.status !== 'cancelled' && order.status !== 'returned' && estimatedDelivery && (
-          <div className="bg-brand-black text-brand-white p-6 md:p-8 text-center">
-            <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-2">Estimated Delivery</p>
-            <p className="text-xl md:text-2xl font-display uppercase tracking-wider">{estimatedDelivery}</p>
-          </div>
-        )}
-
         {/* Tracking Timeline Graphic */}
         <div className="bg-brand-bg p-8 md:p-12 border border-brand-divider">
           <div className="relative">
@@ -209,11 +112,7 @@ export default function TrackOrderPage() {
                       <span className="text-xs text-brand-secondary">{event.time}</span>
                     </div>
                     <h4 className="text-sm font-bold text-brand-black">{event.status}</h4>
-                    <p className="text-xs text-brand-secondary mt-1">{event.description}</p>
-                    <div className="flex items-center gap-1 mt-2 text-xs text-brand-secondary">
-                      <MapPin size={10} />
-                      <span className="uppercase tracking-wider">{event.location}</span>
-                    </div>
+                    {event.description && <p className="text-xs text-brand-secondary mt-1">{event.description}</p>}
                   </div>
                 </div>
               ))}
@@ -255,13 +154,13 @@ export default function TrackOrderPage() {
                       <p className="text-sm font-medium">{item.name}</p>
                       <p className="text-xs font-sans text-brand-secondary">Qty: {item.quantity}</p>
                     </div>
-                    <p className="text-sm font-medium">₹{(item.price * item.quantity).toLocaleString()}</p>
+                    <p className="text-sm font-medium">{formatINR(item.price * item.quantity)}</p>
                   </div>
                 ))}
               </div>
               <div className="pt-4 border-t border-brand-divider flex justify-between items-center">
                 <span className="text-[11px] uppercase tracking-widest font-bold">Total</span>
-                <span className="text-lg font-medium">₹{order.totalAmount.toLocaleString()}</span>
+                <span className="text-lg font-medium">{formatINR(order.totalAmount)}</span>
               </div>
             </div>
           </div>

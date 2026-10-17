@@ -5,31 +5,35 @@ import { auth } from '../firebase';
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
+  linkWithPhoneNumber,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  User as FirebaseUser,
   ConfirmationResult,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ALL_COUNTRIES } from '../countries';
+import { getLoginStep, authErrorMessage } from '../utils/loginFlow';
 
 declare global { interface Window { recaptchaVerifier?: RecaptchaVerifier; } }
-
-type Step = 'phone' | 'otp' | 'profile';
-
-// Test accounts — hidden from UI, only work when exact number is entered
-const TEST_ACCOUNTS: Record<string, { otp: string; role: string; name: string; email: string }> = {
-  '+915799957999': { otp: '999755', role: 'customer', name: 'Test User', email: 'testuser@LUXARDO FASHION.com' },
-  '+915700057000': { otp: '999755', role: 'admin', name: 'Test Admin', email: 'testadmin@LUXARDO FASHION.com' },
-};
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthReady, login } = useAuth();
-  const from = (location.state as any)?.from?.pathname || '/';
+  const fromLoc = (location.state as any)?.from;
+  const from = fromLoc?.pathname ? `${fromLoc.pathname}${fromLoc.search || ''}` : '/';
 
-  const [step, setStep] = useState<Step>('phone');
+  // Real auth state drives the screen (see utils/loginFlow.ts): phone verification cannot be skipped.
+  const [fbUser, setFbUser] = useState<FirebaseUser | null>(auth.currentUser);
+  useEffect(() => onAuthStateChanged(auth, (u) => setFbUser(u)), []);
+  const flowStep = getLoginStep({ firebaseUser: fbUser, hasProfile: !!user });
+
+  const [phase, setPhase] = useState<'enter-phone' | 'enter-otp'>('enter-phone');
   const [countryCode, setCountryCode] = useState('+91');
-  const [countryFlag, setCountryFlag] = useState('\u{1F1EE}\u{1F1F3}');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
@@ -37,45 +41,54 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [profile, setProfile] = useState({ firstName: '', lastName: '', email: '', gender: '', age: '' });
   const recaptchaRef = useRef<HTMLDivElement>(null);
-  const [isTestAccount, setIsTestAccount] = useState(false);
-  const [testAccountData, setTestAccountData] = useState<typeof TEST_ACCOUNTS[string] | null>(null);
+
+  // Fully signed in, phone verified, profile saved: go where the customer was heading.
+  useEffect(() => {
+    if (isAuthReady && flowStep === 'done') navigate(from, { replace: true });
+  }, [isAuthReady, flowStep]);
+
+  // Pre-fill the profile from a Google account.
+  useEffect(() => {
+    if (fbUser && !fbUser.isAnonymous) {
+      const [first = '', ...rest] = (fbUser.displayName || '').split(' ');
+      setProfile((p) => ({ ...p, firstName: p.firstName || first, lastName: p.lastName || rest.join(' '), email: p.email || fbUser.email || '' }));
+    }
+  }, [fbUser]);
 
   useEffect(() => {
-    if (isAuthReady && user) navigate(from, { replace: true });
-  }, [user, isAuthReady]);
-
-  useEffect(() => {
-    if (step === 'phone' && !isTestAccount) {
+    if ((flowStep === 'start' || flowStep === 'link-phone') && phase === 'enter-phone') {
       try {
         if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); }
         window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'normal' });
         window.recaptchaVerifier.render();
       } catch (e) { console.error('Recaptcha error:', e); }
     }
-  }, [step]);
+  }, [flowStep, phase]);
+
+  const handleGoogle = async () => {
+    setError(''); setLoading(true);
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+      // onAuthStateChanged moves us to the "verify your phone" step (or onward if a phone is already linked).
+    } catch (err) {
+      setError(authErrorMessage(err));
+    } finally { setLoading(false); }
+  };
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
       const fullPhone = `${countryCode}${phone.replace(/^0+/, '')}`;
-
-      // Check if this is a test account
-      const testData = TEST_ACCOUNTS[fullPhone];
-      if (testData) {
-        setIsTestAccount(true);
-        setTestAccountData(testData);
-        setStep('otp');
-        setLoading(false);
-        return;
-      }
-
       const verifier = window.recaptchaVerifier!;
-      const result = await signInWithPhoneNumber(auth, fullPhone, verifier);
+      // Signed in with Google but no phone yet: LINK the phone to this same account (no second account is created).
+      const result = auth.currentUser && !auth.currentUser.isAnonymous
+        ? await linkWithPhoneNumber(auth.currentUser, fullPhone, verifier)
+        : await signInWithPhoneNumber(auth, fullPhone, verifier);
       setConfirmation(result);
-      setStep('otp');
-    } catch (err: any) {
-      setError('OTP bhejne me error. Phone number check karo.');
+      setPhase('enter-otp');
+    } catch (err) {
+      setError(authErrorMessage(err));
     } finally { setLoading(false); }
   };
 
@@ -83,44 +96,22 @@ export default function LoginPage() {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
-      // Test account bypass
-      if (isTestAccount && testAccountData) {
-        if (otp === testAccountData.otp) {
-          const testId = `test-${testAccountData.role}-${Date.now()}`;
-          login({
-            id: testId,
-            name: testAccountData.name,
-            email: testAccountData.email,
-            role: testAccountData.role,
-            isPrimeMember: false,
-            phone: `${countryCode}${phone}`,
-          });
-          if (testAccountData.role === 'admin') {
-            navigate('/admin/dashboard', { replace: true });
-          } else {
-            navigate(from, { replace: true });
-          }
-          setLoading(false);
-          return;
-        } else {
-          setError('OTP galat hai. Dobara try karo.');
-          setLoading(false);
-          return;
-        }
-      }
-
       const result = await confirmation!.confirm(otp);
       const uid = result.user.uid;
+      // The server only accepts tokens that carry the verified phone number, so refresh the token now.
+      await result.user.getIdToken(true);
       const userDoc = await getDoc(doc(db, 'customers', uid));
       if (userDoc.exists()) {
         const data = userDoc.data();
-        login({ id: uid, name: data.firstName + ' ' + data.lastName, email: data.email || '', role: 'customer', isPrimeMember: data.isPrimeMember || false, phone: data.phone });
-        navigate(from, { replace: true });
-      } else {
-        setStep('profile');
+        const verifiedPhone = result.user.phoneNumber || data.phone;
+        if (data.phone !== verifiedPhone) await setDoc(doc(db, 'customers', uid), { phone: verifiedPhone }, { merge: true });
+        login({ id: uid, name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || 'User', email: data.email || '', role: 'customer', isPrimeMember: false, phone: verifiedPhone });
       }
-    } catch (err: any) {
-      setError('OTP galat hai. Dobara try karo.');
+      setPhase('enter-phone');
+      setOtp('');
+      // If there is no profile yet, getLoginStep now returns "profile" and the profile form appears.
+    } catch (err) {
+      setError(authErrorMessage(err));
     } finally { setLoading(false); }
   };
 
@@ -128,25 +119,30 @@ export default function LoginPage() {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
-      const uid = auth.currentUser!.uid;
-      const fullPhone = `${countryCode}${phone}`;
+      const current = auth.currentUser!;
+      const verifiedPhone = current.phoneNumber;
+      if (!verifiedPhone) throw new Error('phone-not-verified');
       const customerData = {
         firstName: profile.firstName,
         lastName: profile.lastName,
         email: profile.email,
         gender: profile.gender,
         age: profile.age,
-        phone: fullPhone,
+        phone: verifiedPhone,
         role: 'customer',
         isPrimeMember: false,
         createdAt: new Date().toISOString(),
       };
-      await setDoc(doc(db, 'customers', uid), customerData);
-      login({ id: uid, name: `${profile.firstName} ${profile.lastName}`, email: profile.email, role: 'customer', isPrimeMember: false, phone: fullPhone });
-      navigate(from, { replace: true });
-    } catch (err: any) {
-      setError('Profile save karne me error.');
+      await setDoc(doc(db, 'customers', current.uid), customerData);
+      login({ id: current.uid, name: `${profile.firstName} ${profile.lastName}`, email: profile.email, role: 'customer', isPrimeMember: false, phone: verifiedPhone });
+    } catch (err) {
+      setError('We could not save your profile. Please try again.');
     } finally { setLoading(false); }
+  };
+
+  const handleUseDifferentAccount = async () => {
+    await signOut(auth);
+    setPhase('enter-phone'); setOtp(''); setConfirmation(null); setError('');
   };
 
   const COUNTRY_CODES = ALL_COUNTRIES.filter(c => (c as any).dialCode).map(c => ({ code: (c as any).dialCode, flag: (c as any).flag || '', name: c.name }));
@@ -156,14 +152,31 @@ export default function LoginPage() {
       <div className="bg-white p-10 shadow-sm border border-gray-100 w-full max-w-md">
         <h2 className="font-display uppercase tracking-[0.3em] text-xl mb-2 text-center">LUXARDO FASHION</h2>
         <p className="text-xs text-gray-400 tracking-widest uppercase text-center mb-8">
-          {step === 'phone' && 'Enter your mobile number'}
-          {step === 'otp' && 'Enter OTP'}
-          {step === 'profile' && 'Complete your profile'}
+          {(flowStep === 'start' || flowStep === 'link-phone') && phase === 'enter-phone' && (flowStep === 'link-phone' ? 'Verify your mobile number' : 'Sign in')}
+          {(flowStep === 'start' || flowStep === 'link-phone') && phase === 'enter-otp' && 'Enter OTP'}
+          {flowStep === 'profile' && 'Complete your profile'}
         </p>
 
         {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
 
-        {step === 'phone' && (
+        {flowStep === 'link-phone' && phase === 'enter-phone' && (
+          <p className="text-sm text-gray-500 mb-4 text-center">
+            You are signed in{fbUser?.email ? ` as ${fbUser.email}` : ''}. To place an order, please verify your mobile number with a one-time code.
+          </p>
+        )}
+
+        {flowStep === 'start' && phase === 'enter-phone' && (
+          <>
+            <button type="button" onClick={handleGoogle} disabled={loading}
+              className="w-full border border-gray-300 py-3 text-xs uppercase tracking-widest hover:bg-gray-50 transition-all disabled:opacity-50 mb-2">
+              Continue with Google
+            </button>
+            <p className="text-[11px] text-gray-400 text-center mb-5">You will verify your mobile number with a one-time code before ordering.</p>
+            <div className="flex items-center gap-3 mb-5"><span className="flex-1 h-px bg-gray-200" /><span className="text-[10px] uppercase tracking-widest text-gray-400">or use your mobile number</span><span className="flex-1 h-px bg-gray-200" /></div>
+          </>
+        )}
+
+        {(flowStep === 'start' || flowStep === 'link-phone') && phase === 'enter-phone' && (
           <form onSubmit={handleSendOTP}>
             <div className="flex gap-2 mb-4">
               <select
@@ -187,7 +200,7 @@ export default function LoginPage() {
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
                 required
-                className="flex-1 border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:border-black"
+                className="min-w-0 flex-1 border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:border-black"
               />
             </div>
             <div id="recaptcha-container" ref={recaptchaRef} className="mb-4 flex justify-center"></div>
@@ -195,10 +208,15 @@ export default function LoginPage() {
               className="w-full bg-black text-white py-4 text-xs uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50">
               {loading ? 'Sending...' : 'Send OTP'}
             </button>
+            {flowStep === 'link-phone' && (
+              <button type="button" onClick={handleUseDifferentAccount} className="w-full mt-3 text-xs text-gray-400 underline">
+                Use a different account
+              </button>
+            )}
           </form>
         )}
 
-        {step === 'otp' && (
+        {(flowStep === 'start' || flowStep === 'link-phone') && phase === 'enter-otp' && (
           <form onSubmit={handleVerifyOTP}>
             <p className="text-sm text-gray-500 mb-4 text-center">OTP sent to {countryCode} {phone}</p>
             <input
@@ -210,14 +228,14 @@ export default function LoginPage() {
               className="w-full bg-black text-white py-4 text-xs uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50">
               {loading ? 'Verifying...' : 'Verify OTP'}
             </button>
-            <button type="button" onClick={() => { setStep('phone'); setIsTestAccount(false); setTestAccountData(null); }}
+            <button type="button" onClick={() => { setPhase('enter-phone'); setOtp(''); setError(''); }}
               className="w-full mt-3 text-xs text-gray-400 underline">
               Change number
             </button>
           </form>
         )}
 
-        {step === 'profile' && (
+        {flowStep === 'profile' && (
           <form onSubmit={handleProfileSubmit}>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <input placeholder="First name" value={profile.firstName} onChange={e => setProfile(p => ({...p, firstName: e.target.value}))} required
@@ -239,7 +257,7 @@ export default function LoginPage() {
               </select>
             </div>
             <div className="border border-gray-100 px-4 py-3 text-sm text-gray-400 mb-4 bg-gray-50">
-              {'\u{1F4F1}'} {countryCode} {phone} (verified)
+              {'\u{1F4F1}'} {auth.currentUser?.phoneNumber} (verified)
             </div>
             <button type="submit" disabled={loading}
               className="w-full bg-black text-white py-4 text-xs uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50">

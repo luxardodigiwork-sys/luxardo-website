@@ -1,3 +1,6 @@
+import { publishCollections, describePublishError, getAdminCollections, useSyncStatus } from '../../utils/contentSync';
+import { SyncBanner } from '../../components/admin/SyncBanner';
+import { SyncGate } from '../../components/admin/SyncGate';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Save, Plus, Edit2, Trash2, Image as ImageIcon, Check, X } from 'lucide-react';
@@ -16,85 +19,24 @@ interface Collection {
   sortOrder: number;
 }
 
-const DEFAULT_COLLECTIONS: Collection[] = [
-  {
-    id: 'tuxedos',
-    name: 'Premium Tuxedos',
-    slug: 'tuxedos',
-    shortDescription: 'Make a statement at your next formal event.',
-    longDescription: 'Our Premium Tuxedos are designed for those who demand the best. Impeccable tailoring and luxurious fabrics ensure you look your absolute best.',
-    bannerImageUrl: 'https://images.unsplash.com/photo-1593030761757-71fae46af504?auto=format&fit=crop&q=80&w=2000',
-    heroImageUrl: 'https://images.unsplash.com/photo-1593030761757-71fae46af504?auto=format&fit=crop&q=80&w=800',
-    isVisible: true,
-    sortOrder: 1,
-  },
-  {
-    id: 'suits',
-    name: 'Premium Suits',
-    slug: 'suits',
-    shortDescription: 'Structured silhouettes and sharp lines for the discerning modern gentleman.',
-    longDescription: 'The Suit collection is an exercise in discipline. We strip away the unnecessary to reveal the power of perfect proportions and superior construction.',
-    bannerImageUrl: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&q=80&w=2000',
-    heroImageUrl: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?auto=format&fit=crop&q=80&w=800',
-    isVisible: true,
-    sortOrder: 2,
-  },
-  {
-    id: 'koti-kurta',
-    name: 'Premium Koti Kurta',
-    slug: 'koti-kurta',
-    shortDescription: 'A refined fusion of traditional silhouettes and contemporary tailoring.',
-    longDescription: 'Koti Kurta sets bridge the gap between ceremony and celebration. They offer a versatile elegance that transitions seamlessly from formal rituals to social gatherings.',
-    bannerImageUrl: 'https://images.unsplash.com/photo-1621335829175-95f437384d7c?auto=format&fit=crop&q=80&w=2000',
-    heroImageUrl: 'https://images.unsplash.com/photo-1621335829175-95f437384d7c?auto=format&fit=crop&q=80&w=800',
-    isVisible: true,
-    sortOrder: 3,
-  },
-  {
-    id: 'kurta-pajama',
-    name: 'Premium Kurta Pajama',
-    slug: 'kurta-pajama',
-    shortDescription: 'Timeless elegance redefined through meticulous craftsmanship and selected fabrics.',
-    longDescription: 'The Kurta Pajama sets represent the soul of LUXARDO FASHION. Each piece is a dialogue between heritage and modernity, designed for the man who values quiet confidence.',
-    bannerImageUrl: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=2000',
-    heroImageUrl: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=800',
-    isVisible: true,
-    sortOrder: 4,
-  },
-  {
-    id: 'bomber-jackets',
-    name: 'Premium Bomber Jackets',
-    slug: 'bomber-jackets',
-    shortDescription: 'Elevated casual wear featuring precision finishing and premium materials.',
-    longDescription: 'The Bomber Jackets redefine luxury leisure. They are designed for the man whose life is in constant motion but whose standards never waver.',
-    bannerImageUrl: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&q=80&w=2000',
-    heroImageUrl: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&q=80&w=800',
-    isVisible: true,
-    sortOrder: 5,
-  },
-];
-
-export default function AdminCollectionsPage() {
+function AdminCollectionsPageEditor() {
   const [collections, setCollections] = useState<Collection[]>([]);
+  const [isDefaultList, setIsDefaultList] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState<Collection | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const { status: syncStatus, retry: retrySync } = useSyncStatus();
+  const canSave = syncStatus === 'ready';
 
+  // Load only after the server copy has been read: before that the local copy may be stale, and nothing is seeded or published.
   useEffect(() => {
-    const stored = localStorage.getItem('LUXARDO FASHION_admin_collections');
-    if (stored) {
-      try {
-        setCollections(JSON.parse(stored));
-      } catch (e) {
-        setCollections(DEFAULT_COLLECTIONS);
-      }
-    } else {
-      setCollections(DEFAULT_COLLECTIONS);
-      localStorage.setItem('LUXARDO FASHION_admin_collections', JSON.stringify(DEFAULT_COLLECTIONS));
-    }
-  }, []);
+    if (syncStatus !== 'ready') return;
+    const { list, isDefault } = getAdminCollections();
+    setCollections(list);
+    setIsDefaultList(isDefault);
+  }, [syncStatus]);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -129,8 +71,8 @@ export default function AdminCollectionsPage() {
     setFormData(null);
   };
 
-  const handleSave = () => {
-    if (!formData) return;
+  const handleSave = async () => {
+    if (!formData || !canSave) return;
 
     let updatedCollections;
     if (isAdding) {
@@ -145,18 +87,25 @@ export default function AdminCollectionsPage() {
     updatedCollections.sort((a, b) => a.sortOrder - b.sortOrder);
 
     try {
-      localStorage.setItem('LUXARDO FASHION_admin_collections', JSON.stringify(updatedCollections));
+      await publishCollections(updatedCollections); // Firestore: this is what every visitor sees
       setCollections(updatedCollections);
+      setIsDefaultList(false);
       setEditingId(null);
       setIsAdding(false);
       setFormData(null);
     } catch (error: any) {
       console.error('Error saving collections:', error);
-      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
+      const publishMsg = describePublishError(error);
+      if (publishMsg) {
+        alert(publishMsg);
+      } else if (error?.code === 'permission-denied') {
+        alert('You do not have permission to publish collections. Please sign in as an admin.');
+      } else if (error?.name === 'QuotaExceededError' || String(error?.message || '').includes('quota')) {
         alert('Storage limit exceeded. The uploaded images are too large. Please use smaller images or image URLs.');
       } else {
-        alert('Failed to save collection.');
+        alert(String(error?.message || 'Failed to save collection.'));
       }
+      return;
     }
     showToast(isAdding ? 'Collection added successfully' : 'Collection saved successfully');
   };
@@ -165,11 +114,19 @@ export default function AdminCollectionsPage() {
     setItemToDelete(id);
   };
 
-  const confirmDelete = () => {
-    if (itemToDelete) {
+  const confirmDelete = async () => {
+    if (itemToDelete && canSave) {
       const updatedCollections = collections.filter(c => c.id !== itemToDelete);
+      try {
+        await publishCollections(updatedCollections, { allowEmpty: true }); // the admin explicitly confirmed this delete
+      } catch (error) {
+        console.error('Error deleting collection:', error);
+        alert(describePublishError(error) || 'Could not delete the collection. Please try again.');
+        setItemToDelete(null);
+        return;
+      }
       setCollections(updatedCollections);
-      localStorage.setItem('LUXARDO FASHION_admin_collections', JSON.stringify(updatedCollections));
+      setIsDefaultList(false);
       showToast('Collection deleted successfully');
       setItemToDelete(null);
     }
@@ -192,6 +149,14 @@ export default function AdminCollectionsPage() {
 
   return (
     <div className="max-w-7xl mx-auto pb-20">
+      <SyncBanner status={syncStatus} retry={retrySync} />
+      {isDefaultList && canSave && (
+        <div role="note" className="mb-6 border border-amber-300 bg-amber-50 text-amber-900 px-4 py-3 text-sm font-sans">
+          No collections have been published yet, so the site is showing its built-in starter collections (shown below, with their current web addresses).
+          Nothing is published until you press Save. Their names describe stitched garments; this store sells Ready-to-Stitch fabric, so edit, hide or delete
+          them to match your fabric catalogue. Keep the web address (slug) of any collection that customers or products already use.
+        </div>
+      )}
       {/* Toast Notification */}
       {toast && (
         <div className={`fixed bottom-4 right-4 px-6 py-3 rounded-none shadow-lg z-50 flex items-center gap-3 ${
@@ -235,7 +200,8 @@ export default function AdminCollectionsPage() {
                   </button>
                   <button 
                     onClick={handleSave}
-                    className="px-4 py-2 text-sm font-sans tracking-widest uppercase bg-brand-black text-white hover:bg-brand-black/90 transition-colors flex items-center gap-2"
+                    disabled={!canSave}
+                    className="px-4 py-2 text-sm font-sans tracking-widest uppercase bg-brand-black text-white hover:bg-brand-black/90 transition-colors flex items-center gap-2 disabled:opacity-50"
                   >
                     <Save size={16} />
                     Save
@@ -378,7 +344,8 @@ export default function AdminCollectionsPage() {
                     </button>
                     <button 
                       onClick={handleSave}
-                      className="px-4 py-2 text-sm font-sans tracking-widest uppercase bg-brand-black text-white hover:bg-brand-black/90 transition-colors flex items-center gap-2"
+                      disabled={!canSave}
+                      className="px-4 py-2 text-sm font-sans tracking-widest uppercase bg-brand-black text-white hover:bg-brand-black/90 transition-colors flex items-center gap-2 disabled:opacity-50"
                     >
                       <Save size={16} />
                       Save
@@ -404,6 +371,8 @@ export default function AdminCollectionsPage() {
                         type="text" 
                         name="slug"
                         value={formData.slug}
+                        readOnly
+                        title="The web address of an existing collection is locked so links and products keep working."
                         onChange={handleChange}
                         className="w-full border border-brand-divider px-4 py-2 font-sans text-sm focus:outline-none focus:border-brand-black transition-colors"
                       />
@@ -557,5 +526,13 @@ export default function AdminCollectionsPage() {
         onCancel={() => setItemToDelete(null)}
       />
     </div>
+  );
+}
+
+export default function AdminCollectionsPage() {
+  return (
+    <SyncGate>
+      <AdminCollectionsPageEditor />
+    </SyncGate>
   );
 }

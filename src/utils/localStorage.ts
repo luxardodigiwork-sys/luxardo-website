@@ -1,8 +1,11 @@
 import { Product, Order, User, MediaItem, BackendUser, BackendSettings } from '../types';
-import { PRODUCTS } from '../constants';
+import { productStore } from './productStore';
+import { orderStore } from './orderStore';
+import { readPolicies, writePolicies, resetPolicies } from './policyStore';
 import { DEFAULT_SITE_CONTENT } from '../constants/homeContent';
 import { DEFAULT_PRIME_CONTENT } from '../constants/primeContent';
 import { 
+  POLICY_VERSION,
   SHIPPING_POLICY, 
   RETURNS_POLICY, 
   PRIVACY_POLICY, 
@@ -19,118 +22,23 @@ const KEYS = {
   PRIME_CONTENT: 'LUXARDO FASHION_prime_content',
   POLICIES: 'LUXARDO FASHION_policies',
   DASHBOARD_STATS: 'LUXARDO FASHION_dashboard_stats',
-  DUMMY_ADMIN: 'LUXARDO FASHION_dummy_admin',
   MEDIA: 'LUXARDO FASHION_media',
   BACKEND_USERS: 'LUXARDO FASHION_backend_users',
   BACKEND_SETTINGS: 'LUXARDO FASHION_backend_settings',
   PRIME_GLOBAL_SETTINGS: 'LUXARDO FASHION_prime_global_settings'
 };
 
-// Initial mock users
-const INITIAL_USERS: User[] = [
-  {
-    id: 'user1',
-    name: 'Rahul Sharma',
-    email: 'rahul@example.com',
-    role: 'customer',
-    isPrimeMember: true,
-    membershipActivation: new Date(Date.now() - 86400000 * 30).toISOString(),
-    membershipExpiry: new Date(Date.now() + 86400000 * 335).toISOString(),
-    createdAt: new Date(Date.now() - 86400000 * 60).toISOString(),
-    primePrivileges: {
-      consultation: true,
-      bespoke: true,
-      fabricLibrary: true,
-      prioritySupport: true
-    }
-  },
-  {
-    id: 'user2',
-    name: 'Priya Patel',
-    email: 'priya@example.com',
-    role: 'customer',
-    isPrimeMember: false,
-    createdAt: new Date(Date.now() - 86400000 * 15).toISOString()
-  },
-  {
-    id: 'user3',
-    name: 'Amit Verma',
-    email: 'amit@example.com',
-    role: 'customer',
-    isPrimeMember: true,
-    membershipActivation: new Date(Date.now() - 86400000 * 366).toISOString(),
-    membershipExpiry: new Date(Date.now() - 86400000).toISOString(),
-    createdAt: new Date(Date.now() - 86400000 * 400).toISOString(),
-    primePrivileges: {
-      consultation: true,
-      bespoke: false,
-      fabricLibrary: true,
-      prioritySupport: false
-    }
-  }
+// No mock customers are seeded. Real customers live in Firestore (`customers`); this browser-local list
+// only holds Prime-membership admin edits and starts empty.
+// Earlier builds seeded three fake customers into browser storage; they are filtered out on read.
+const LEGACY_SEEDED_USERS: { id: string; email: string }[] = [
+  { id: 'user1', email: 'rahul@example.com' },
+  { id: 'user2', email: 'priya@example.com' },
+  { id: 'user3', email: 'amit@example.com' },
 ];
+const isLegacySeededUser = (u: { id?: string; email?: string }) =>
+  LEGACY_SEEDED_USERS.some((l) => l.id === u.id && l.email === u.email);
 
-// Initial mock orders
-const INITIAL_ORDERS: Order[] = [
-  {
-    id: 'ORD-001',
-    userId: 'user1',
-    userName: 'Rahul Sharma',
-    userEmail: 'rahul@example.com',
-    items: [
-      { 
-        productId: 'k1', 
-        name: 'Royal Ivory Kurta Set', 
-        quantity: 1, 
-        price: 45000,
-        image: 'https://picsum.photos/seed/kurta1/800/1200',
-        category: 'Kurta Editions'
-      }
-    ],
-    totalAmount: 45000,
-    status: 'delivered',
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    shippingAddress: {
-      fullName: 'Rahul Sharma',
-      email: 'rahul@example.com',
-      phone: '+91 98765 43210',
-      addressLine1: '123, MG Road',
-      city: 'Mumbai',
-      state: 'Maharashtra',
-      postalCode: '400001',
-      country: 'India'
-    }
-  },
-  {
-    id: 'ORD-002',
-    userId: 'user2',
-    userName: 'Priya Patel',
-    userEmail: 'priya@example.com',
-    items: [
-      { 
-        productId: 'b1', 
-        name: 'Midnight Velvet Bandhgala', 
-        quantity: 1, 
-        price: 85000,
-        image: 'https://picsum.photos/seed/bandhgala1/800/1200',
-        category: 'Formal Tailoring'
-      }
-    ],
-    totalAmount: 85000,
-    status: 'processing',
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    shippingAddress: {
-      fullName: 'Priya Patel',
-      email: 'priya@example.com',
-      phone: '+91 98765 43210',
-      addressLine1: '456, Jubilee Hills',
-      city: 'Hyderabad',
-      state: 'Telangana',
-      postalCode: '500033',
-      country: 'India'
-    }
-  }
-];
 
 // Initial Policies
 const INITIAL_POLICIES = {
@@ -177,179 +85,30 @@ const DEFAULT_BACKEND_SETTINGS: BackendSettings = {
   }
 };
 
-const INITIAL_BACKEND_USERS: BackendUser[] = [
-  {
-    id: 'dispatch-1',
-    fullName: 'Arjun Singh',
-    username: 'arjun_dispatch',
-    email: 'arjun@LUXARDO FASHION.com',
-    password: 'dispatch123',
-    role: 'dispatch',
-    status: 'active',
-    accessScope: ['all_orders'],
-    createdAt: new Date().toISOString(),
-    permissions: {
-      dashboard: true,
-      orders: true,
-      products: true,
-      collections: true,
-      media: true,
-      content: true,
-      backend_management: true,
-      settings: true,
-      dispatch_actions: true,
-      accounts_finance: false,
-      analysis_reports: false,
-      customer_details: true,
-      export_data: true,
-      tracking_controls: true,
-      delivery_update_controls: true
-    }
-  }
-];
+// No mock staff accounts are seeded. Real staff are managed on the (Firestore-authenticated) admin side;
+// this list only feeds the dispatch "assign staff" picker and starts empty.
+const LEGACY_SEEDED_STAFF_IDS = ['dispatch-1']; // earlier builds seeded a fake dispatch user into browser storage
 
 export const storage = {
   // Products
-  getProducts: (): Product[] => {
-    const data = localStorage.getItem(KEYS.PRODUCTS);
-    
-    // Force re-seed if categories have changed to the new refined ones
-    const currentProducts: Product[] = data ? JSON.parse(data) : [];
-    const hasNewCategories = currentProducts.some(p => 
-      ['Jodhpuri', 'Casual'].includes(p.category)
-    );
+  // Products live in Firestore (see productStore.ts). This synchronous accessor
+  // returns the live-synced cache so legacy callers keep working; React code should
+  // prefer useProducts() so it re-renders on catalogue changes.
+  getProducts: (): Product[] => productStore.getAll(),
 
-    if (!data || !hasNewCategories) {
-      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(PRODUCTS));
-      return PRODUCTS;
-    }
-    
-    // Ensure images array exists for dual image hover effect
-    let needsUpdate = false;
-    
-    // Deduplicate products by id
-    let uniqueProducts = currentProducts;
-    const uniqueIds = new Set();
-    const deduplicated = [];
-    for (const p of currentProducts) {
-      if (!uniqueIds.has(p.id)) {
-        uniqueIds.add(p.id);
-        deduplicated.push(p);
-      }
-    }
-    
-    if (deduplicated.length !== currentProducts.length) {
-      needsUpdate = true;
-      uniqueProducts = deduplicated;
-    }
-
-    const updatedProducts = uniqueProducts.map(p => {
-      if (!p.images || p.images.length === 0) {
-        const defaultProduct = PRODUCTS.find(dp => dp.id === p.id);
-        if (defaultProduct && defaultProduct.images) {
-          needsUpdate = true;
-          return { ...p, images: defaultProduct.images };
-        }
-      }
-      return p;
-    });
-
-    if (needsUpdate) {
-      localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(updatedProducts));
-      return updatedProducts;
-    }
-
-    return updatedProducts;
-  },
-  saveProducts: (products: Product[]) => {
-    localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(products));
-  },
-
-  // Orders
-  getOrders: (): Order[] => {
-    try {
-      const data = localStorage.getItem(KEYS.ORDERS);
-      if (!data) {
-        localStorage.setItem(KEYS.ORDERS, JSON.stringify(INITIAL_ORDERS));
-        return INITIAL_ORDERS;
-      }
-      return JSON.parse(data);
-    } catch (err) {
-      console.error('Failed to read orders from localStorage, falling back to sessionStorage:', err);
-      try {
-        const sessionData = sessionStorage.getItem(KEYS.ORDERS);
-        if (sessionData) return JSON.parse(sessionData);
-      } catch (err2) {
-        console.error('Failed to read orders from sessionStorage:', err2);
-      }
-      // Final fallback: return initial orders
-      return INITIAL_ORDERS;
-    }
-  },
-  saveOrders: (orders: Order[]) => {
-    try {
-      localStorage.setItem(KEYS.ORDERS, JSON.stringify(orders));
-    } catch (err) {
-      console.error('Failed to save orders to localStorage:', err);
-      try {
-        // Fallback: keep most recent orders only to reduce size
-        const slim = orders.slice(0, 20).map(o => ({
-          id: o.id,
-          userId: o.userId,
-          userName: o.userName,
-          totalAmount: o.totalAmount,
-          status: o.status,
-          paymentStatus: o.paymentStatus,
-          paymentMethod: o.paymentMethod,
-          createdAt: o.createdAt
-        }));
-        localStorage.setItem(KEYS.ORDERS, JSON.stringify(slim));
-      } catch (err2) {
-        console.error('Fallback save to localStorage also failed:', err2);
-        // Last resort: save single most recent order to sessionStorage
-        try {
-          sessionStorage.setItem(KEYS.ORDERS, JSON.stringify(orders.slice(0, 5)));
-        } catch (err3) {
-          console.error('Failed to save orders to sessionStorage:', err3);
-        }
-      }
-    }
-  },
-  addOrder: (order: Order) => {
-    try {
-      const orders = storage.getOrders();
-      // Create a lightweight copy to avoid storing large image blobs/urls repeatedly
-      const lightweightOrder: Order = {
-        ...order,
-        items: order.items.map(item => {
-          const { image, ...rest } = item as any;
-          return rest as any;
-        })
-      };
-      orders.unshift(lightweightOrder);
-      storage.saveOrders(orders);
-    } catch (err) {
-      console.error('Failed to add order to localStorage:', err);
-      try {
-        // Try saving the full order to sessionStorage as a fallback
-        const existing = sessionStorage.getItem(KEYS.ORDERS);
-        const arr = existing ? JSON.parse(existing) : [];
-        arr.unshift(order);
-        sessionStorage.setItem(KEYS.ORDERS, JSON.stringify(arr.slice(0, 10)));
-      } catch (err2) {
-        console.error('Failed to save order to sessionStorage fallback:', err2);
-      }
-    }
-  },
+  // Orders live in Firestore (see orderStore.ts); there is no local order database any more.
+  // This read-only accessor returns the live admin cache (empty for non-admins).
+  getOrders: (): Order[] => orderStore.getAll(),
 
   // Users
   getUsers: (): User[] => {
     const data = localStorage.getItem(KEYS.USERS);
-    if (!data) {
-      localStorage.setItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
-      return INITIAL_USERS;
+    if (!data) return [];
+    try {
+      return (JSON.parse(data) as User[]).filter((u) => !isLegacySeededUser(u));
+    } catch {
+      return [];
     }
-    return JSON.parse(data);
   },
   saveUsers: (users: User[]) => {
     localStorage.setItem(KEYS.USERS, JSON.stringify(users));
@@ -457,28 +216,11 @@ export const storage = {
   },
 
   // Policies
-  getPolicies: () => {
-    const data = localStorage.getItem(KEYS.POLICIES);
-    if (!data) {
-      localStorage.setItem(KEYS.POLICIES, JSON.stringify(INITIAL_POLICIES));
-      return INITIAL_POLICIES;
-    }
-    const parsedData = JSON.parse(data);
-    // Ensure all policies have all required fields
-    const mergedPolicies = { ...INITIAL_POLICIES };
-    Object.keys(mergedPolicies).forEach((key) => {
-      if (parsedData[key]) {
-        mergedPolicies[key as keyof typeof INITIAL_POLICIES] = {
-          ...mergedPolicies[key as keyof typeof INITIAL_POLICIES],
-          ...parsedData[key]
-        };
-      }
-    });
-    return mergedPolicies;
-  },
-  savePolicies: (policies: any) => {
-    localStorage.setItem(KEYS.POLICIES, JSON.stringify(policies));
-  },
+  // Customers always get the shipped defaults; only deliberate admin edits (same POLICY_VERSION) are layered on top.
+  getPolicies: () => readPolicies(INITIAL_POLICIES, localStorage, POLICY_VERSION),
+  savePolicies: (policies: any) => writePolicies(policies, INITIAL_POLICIES, localStorage, POLICY_VERSION),
+  resetPolicies: () => resetPolicies(localStorage),
+
 
   // Bespoke Requests
   getBespokeRequests: (): any[] => {
@@ -540,17 +282,6 @@ export const storage = {
       activeMembers,
       recentOrders: orders.slice(0, 5)
     };
-  },
-
-  // Auth
-  isAdminLoggedIn: () => {
-    return localStorage.getItem(KEYS.DUMMY_ADMIN) === 'true';
-  },
-  loginAdmin: () => {
-    localStorage.setItem(KEYS.DUMMY_ADMIN, 'true');
-  },
-  logoutAdmin: () => {
-    localStorage.removeItem(KEYS.DUMMY_ADMIN);
   },
 
   // Saved Address
@@ -660,7 +391,10 @@ export const storage = {
       }
       return p;
     });
-    if (productsChanged) storage.saveProducts(updatedProducts);
+    if (productsChanged) {
+      const changed = updatedProducts.filter((p, i) => p !== products[i]);
+      productStore.saveMany(changed).catch((err) => console.error('Failed to update product images:', err));
+    }
 
     // 2. Update Site Content
     const siteContent = storage.getSiteContent();
@@ -707,11 +441,15 @@ export const storage = {
   // Backend Management
   getBackendUsers: (): BackendUser[] => {
     const data = localStorage.getItem(KEYS.BACKEND_USERS);
-    if (!data) {
-      localStorage.setItem(KEYS.BACKEND_USERS, JSON.stringify(INITIAL_BACKEND_USERS));
-      return INITIAL_BACKEND_USERS;
+    if (!data) return [];
+    try {
+      // Drop the legacy fake account and never expose any stored password field.
+      return (JSON.parse(data) as BackendUser[])
+        .filter((u) => !LEGACY_SEEDED_STAFF_IDS.includes(u.id))
+        .map(({ password, ...rest }: any) => rest as BackendUser);
+    } catch {
+      return [];
     }
-    return JSON.parse(data);
   },
   saveBackendUsers: (users: BackendUser[]) => {
     localStorage.setItem(KEYS.BACKEND_USERS, JSON.stringify(users));

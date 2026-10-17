@@ -1,145 +1,135 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SectionHeader } from '../components/SectionHeader';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { CheckCircle, Clock } from 'lucide-react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
+import { formatINR } from '../utils/currency';
+import { track } from '../utils/analytics';
 
+/**
+ * Shows the order from Firestore (the single source of truth). "Placed" is only displayed once the
+ * server has verified a captured payment; until then the customer sees "confirming payment".
+ */
 export default function OrderConfirmationPage() {
-  const location = useLocation();
+  const [params] = useSearchParams();
+  const orderId = params.get('order');
   const navigate = useNavigate();
-  const order = location.state?.order;
+  const { isAuthReady, user } = useAuth();
+  const [order, setOrder] = useState<any | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'missing'>('loading');
 
-  // Redirect home if someone opens this page directly
   useEffect(() => {
-    if (!order) {
-      const timer = setTimeout(() => navigate('/'), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [order, navigate]);
+    if (!orderId) { setState('missing'); return; }
+    if (!isAuthReady) return;
+    if (!user) { navigate('/login', { replace: true, state: { from: { pathname: `/order-confirmation`, search: `?order=${orderId}` } } }); return; }
+    return onSnapshot(
+      doc(db, 'orders', orderId),
+      (snap) => { if (snap.exists()) { setOrder({ id: snap.id, ...snap.data() }); setState('ready'); } else setState('missing'); },
+      () => setState('missing'),
+    );
+  }, [orderId, isAuthReady, user, navigate]);
 
-  if (!order) {
+  useEffect(() => {
+    if (!order || order.paymentStatus !== 'paid') return;
+    const key = `LUXARDO_purchase_${order.id}`;
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch {}
+    track('purchase', { transactionId: order.id, value: Number(order.totalAmount) || 0, items: (order.items || []).map((i: any) => ({ id: String(i.productId), name: i.name || i.title, price: i.price, quantity: i.quantity })) });
+  }, [order?.id, order?.paymentStatus]);
+
+  if (state === 'loading') {
+    return <div className="section-padding min-h-[70vh] flex items-center justify-center"><p className="text-brand-secondary">Loading your order...</p></div>;
+  }
+  if (state === 'missing' || !order) {
     return (
       <div className="section-padding min-h-[70vh] max-w-4xl mx-auto text-center flex flex-col items-center justify-center gap-4">
-        <p className="text-lg text-brand-secondary">No order found. Redirecting to home...</p>
+        <p className="text-lg text-brand-secondary">We could not find this order.</p>
+        <Link to="/account" className="btn-outline px-8 py-3">View My Orders</Link>
       </div>
     );
   }
 
-  // Use last 8 chars of Firestore document ID as display order number
-  const displayOrderId = "LX-" + order.id.slice(-8).toUpperCase();
+  const paid = order.paymentStatus === 'paid';
+  const displayOrderId = 'LX-' + order.id.slice(-8).toUpperCase();
 
   return (
     <div className="section-padding max-w-4xl mx-auto min-h-[70vh] text-center">
       <div className="flex justify-center mb-8">
-        <CheckCircle className="w-20 h-20 text-green-600 stroke-[1px]" />
+        {paid ? <CheckCircle className="w-20 h-20 text-green-600 stroke-[1px]" /> : <Clock className="w-20 h-20 text-amber-600 stroke-[1px]" />}
       </div>
 
       <SectionHeader
-        title="Order Placed Successfully!"
+        title={paid ? 'Order Placed Successfully!' : 'Confirming your payment'}
         subtitle={`Order ID: ${displayOrderId}`}
       />
 
       <div className="space-y-10 max-w-2xl mx-auto mt-8">
         <div className="space-y-4">
-          <p className="text-lg font-sans text-brand-black">
-            Thank you for choosing <strong>LUXARDO FASHION</strong>. Your order{' '}
-            <span className="font-bold">{displayOrderId}</span> has been placed and
-            is being prepared with care.
-          </p>
-          <p className="font-sans text-brand-secondary leading-relaxed">
-            We will contact you at{' '}
-            <strong>{order.customer?.phone || order.shippingAddress?.phone}</strong>{' '}
-            to confirm delivery. Shipped via DTDC within 2–3 business days.
-          </p>
+          {paid ? (
+            <p className="text-lg font-sans text-brand-black">
+              Thank you for choosing <strong>LUXARDO FASHION</strong>. Your payment was received and order{' '}
+              <span className="font-bold">{displayOrderId}</span> is being prepared. Your order contains
+              Ready-to-Stitch fabric; stitching is not included.
+            </p>
+          ) : (
+            <p className="text-lg font-sans text-brand-black">
+              We are waiting for confirmation from your bank. This page updates automatically. If money was
+              deducted and this does not update within a few minutes, contact us with order {displayOrderId}.
+            </p>
+          )}
+          {order.status === 'on_hold' && (
+            <p className="text-sm text-red-700">
+              Your payment arrived after the item reservation expired and stock is no longer available.
+              We will contact you to arrange a refund.
+            </p>
+          )}
         </div>
 
-        {/* Order Summary Box */}
         <div className="bg-brand-bg p-8 border border-brand-divider rounded-2xl text-left space-y-6">
-          <h4 className="text-[11px] uppercase tracking-[0.25em] font-bold text-brand-black border-b border-brand-divider pb-4">
-            Order Summary
-          </h4>
-
-          {/* Customer */}
+          <h4 className="text-[11px] uppercase tracking-[0.25em] font-bold text-brand-black border-b border-brand-divider pb-4">Order Summary</h4>
           <div className="space-y-1 text-sm">
             <p className="font-semibold">{order.shippingAddress?.fullName}</p>
             <p className="text-brand-secondary">{order.shippingAddress?.email}</p>
             <p className="text-brand-secondary">{order.shippingAddress?.phone}</p>
           </div>
-
-          {/* Shipping Address */}
           <div className="space-y-1 text-sm border-t border-brand-divider pt-4">
-            <p className="text-[11px] uppercase tracking-widest font-bold text-brand-secondary mb-2">
-              Delivery To
-            </p>
+            <p className="text-[11px] uppercase tracking-widest font-bold text-brand-secondary mb-2">Delivery To</p>
             <p>{order.shippingAddress?.addressLine1}</p>
-            {order.shippingAddress?.addressLine2 && (
-              <p>{order.shippingAddress.addressLine2}</p>
-            )}
-            <p>
-              {order.shippingAddress?.city}, {order.shippingAddress?.state}{' '}
-              – {order.shippingAddress?.postalCode}
-            </p>
+            {order.shippingAddress?.addressLine2 && <p>{order.shippingAddress.addressLine2}</p>}
+            <p>{order.shippingAddress?.city}, {order.shippingAddress?.state} – {order.shippingAddress?.postalCode}</p>
           </div>
-
-          {/* Items */}
-          {order.items && order.items.length > 0 && (
+          {order.items?.length > 0 && (
             <div className="space-y-2 border-t border-brand-divider pt-4">
-              <p className="text-[11px] uppercase tracking-widest font-bold text-brand-secondary mb-2">
-                Items Ordered
-              </p>
+              <p className="text-[11px] uppercase tracking-widest font-bold text-brand-secondary mb-2">Items Ordered</p>
               {order.items.map((item: any, idx: number) => (
                 <div key={idx} className="flex justify-between text-sm">
-                  <span>
-                    {item.title} × {item.quantity}
-                    {item.size && item.size !== 'N/A' ? ` (${item.size})` : ''}
-                  </span>
-                  <span className="font-medium">
-                    ₹{(item.price * item.quantity).toLocaleString('en-IN')}
-                  </span>
+                  <span>{item.title || item.name} × {item.quantity}{item.size ? ` (${item.size})` : ''}</span>
+                  <span className="font-medium">{formatINR(item.price * item.quantity)}</span>
                 </div>
               ))}
             </div>
           )}
-
-          {/* Totals */}
           <div className="space-y-2 border-t border-brand-divider pt-4">
             <div className="flex justify-between text-sm">
               <span className="text-brand-secondary">Shipping</span>
-              <span className="text-green-600 font-medium">Free</span>
+              <span className="text-green-600 font-medium">{(order.shippingAmount ?? 0) === 0 ? 'Free' : formatINR(order.shippingAmount)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-brand-secondary">Payment Method</span>
-              <span className="font-medium">Cash on Delivery (COD)</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-brand-secondary">Estimated Delivery</span>
-              <span className="font-medium">5–7 Business Days</span>
+              <span className="text-brand-secondary">Payment</span>
+              <span className="font-medium">{paid ? 'Paid online (Razorpay)' : 'Awaiting confirmation'}</span>
             </div>
             <div className="flex justify-between text-base font-semibold border-t border-brand-divider pt-3">
               <span>Total</span>
-              <span>₹{order.totalAmount?.toLocaleString('en-IN')}</span>
+              <span>{formatINR(order.totalAmount)}</span>
             </div>
           </div>
         </div>
 
-        {/* Buttons */}
         <div className="flex flex-col md:flex-row gap-4 justify-center pt-4">
-          <Link to="/collections" className="btn-primary px-12 py-4">
-            Continue Shopping
-          </Link>
-          <Link
-            to="/account"
-            className="btn-outline px-12 py-4 text-[11px] uppercase tracking-[0.25em]"
-          >
-            View My Orders
-          </Link>
+          <Link to="/collections" className="btn-primary px-12 py-4">Continue Shopping</Link>
+          <Link to="/account" className="btn-outline px-12 py-4 text-[11px] uppercase tracking-[0.25em]">View My Orders</Link>
         </div>
-
-        <p className="text-xs text-brand-secondary">
-          For queries:{' '}
-          <a href="mailto:support@LUXARDO FASHIONfashion.com" className="underline">
-            support@LUXARDO FASHIONfashion.com
-          </a>
-        </p>
       </div>
     </div>
   );

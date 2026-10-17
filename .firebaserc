@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "LUXARDO FASHION-fashion-website"
+    "staging": "REPLACE_WITH_STAGING_PROJECT_ID",
+    "production": "luxardo-fashion-website"
   }
 }

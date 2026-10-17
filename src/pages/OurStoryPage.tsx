@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PRIME_AVAILABLE } from '../constants/features';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { SectionHeader } from '../components/SectionHeader';
@@ -32,7 +33,7 @@ export default function OurStoryPage() {
             animate={{ opacity: 1, scale: 1 }}
             className="flex justify-center"
           >
-            <img src="https://www.LUXARDO FASHIONfashion.in/Img/LOGOn.png" alt="LUXARDO FASHION" className="h-16 md:h-24 invert brightness-0" />
+            <img src="/logo.png" alt="LUXARDO FASHION" className="h-16 md:h-24 invert brightness-0" />
           </motion.div>
           <div className="space-y-6">
             <motion.p 
@@ -158,9 +159,11 @@ export default function OurStoryPage() {
           <Link to="/collections" className="btn-primary px-16 py-6 flex items-center justify-center gap-4">
             EXPLORE COLLECTIONS <ArrowRight size={18} />
           </Link>
+          {PRIME_AVAILABLE && (
           <Link to="/prime-membership" className="btn-outline px-16 py-6 flex items-center justify-center gap-4">
             REQUEST MEMBERSHIP
           </Link>
+          )}
         </div>
       </section>
     </div>
