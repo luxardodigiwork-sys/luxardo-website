@@ -1,11 +1,7 @@
-name: Firebase Hosting (preview by default; production only by manual approval)
+name: Firebase Hosting (manual deploy; checks on PR/push)
 
-# SAFETY: an ordinary push to main does NOT deploy anything. It only runs checks.
-#  - Pull requests and pushes -> checks only; no deployment.
-#  - Production -> manual "Run workflow" with target=production and the typed confirmation,
-#    and the GitHub Environment "production" (configure required reviewers there yourself).
-# Hosting only: Cloud Functions, Firestore rules and Storage rules are deployed manually with the Firebase CLI
-# (`firebase deploy --only functions,firestore:rules,storage --project staging|production`).
+# Safety: pull requests and ordinary pushes only run checks. Hosting deployment is manual.
+# Functions, Firestore rules, Storage rules and indexes are deployed separately with an explicit project.
 on:
   pull_request:
     branches: [main]
@@ -14,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'staging (preview channel) or production (live site)'
+        description: 'staging or production'
         type: choice
         options: [staging, production]
         default: staging
@@ -34,32 +30,31 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - name: Typecheck
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install root dependencies
+        run: npm ci
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci
+      - name: Frontend typecheck
         run: npx tsc --noEmit
       - name: Unit tests
         run: npm run test:unit
-
-  preview:
-    # Same-repo PRs and manual staging runs only (forks never receive secrets).
-    if: >-
-      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
-      (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
-    needs: check
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - name: Build (staging config)
+      - name: Frontend production build (checkout disabled)
         run: npm run build
         env:
+          VITE_CHECKOUT_ENABLED: 'false'
+          VITE_GA_MEASUREMENT_ID: ${{ vars.STAGING_GA_MEASUREMENT_ID }}
+          VITE_META_PIXEL_ID: ${{ vars.STAGING_META_PIXEL_ID }}
+          VITE_SENTRY_DSN: ${{ vars.STAGING_SENTRY_DSN }}
+          VITE_ERROR_REPORT_URL: ${{ vars.STAGING_ERROR_REPORT_URL }}
           VITE_FIREBASE_API_KEY: ${{ secrets.STAGING_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.STAGING_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.STAGING_FIREBASE_PROJECT_ID }}
@@ -67,13 +62,62 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.STAGING_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.STAGING_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.STAGING_FIREBASE_MEASUREMENT_ID }}
-      - name: Deploy to a temporary preview channel (staging project)
+      - name: Functions build
+        run: npm --prefix functions run build
+      - name: Firestore and Storage rules emulator tests
+        run: npm run test:rules
+      - name: Order, payment and stock emulator tests
+        run: npm run test:orders
+      - name: Content publishing emulator tests
+        run: npm run test:publish
+      - name: Notification emulator tests
+        run: npm run test:notify
+      - name: Functions emulator tests
+        run: npm run test:functions
+
+  preview:
+    # Explicit manual staging deploy only; PRs and pushes do not deploy.
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'staging'
+    needs: check
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npm --prefix functions ci
+      - name: Build staging frontend (checkout disabled)
+        run: npm run build
+        env:
+          VITE_CHECKOUT_ENABLED: 'false'
+          VITE_GA_MEASUREMENT_ID: ${{ vars.STAGING_GA_MEASUREMENT_ID }}
+          VITE_META_PIXEL_ID: ${{ vars.STAGING_META_PIXEL_ID }}
+          VITE_SENTRY_DSN: ${{ vars.STAGING_SENTRY_DSN }}
+          VITE_ERROR_REPORT_URL: ${{ vars.STAGING_ERROR_REPORT_URL }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.STAGING_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.STAGING_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.STAGING_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.STAGING_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.STAGING_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.STAGING_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.STAGING_FIREBASE_MEASUREMENT_ID }}
+      - name: Deploy staging Hosting channel
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.STAGING_FIREBASE_SERVICE_ACCOUNT }}
           projectId: ${{ secrets.STAGING_FIREBASE_PROJECT_ID }}
-          channelId: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'staging-manual' }}
+          channelId: staging-manual
           expires: 7d
 
   production:
@@ -85,12 +129,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
       - run: npm ci
-      - name: Build (production config)
+      - run: npm --prefix functions ci
+      - name: Build production frontend (checkout disabled)
         run: npm run build
         env:
+          VITE_CHECKOUT_ENABLED: 'false'
+          VITE_GA_MEASUREMENT_ID: ${{ vars.PROD_GA_MEASUREMENT_ID }}
+          VITE_META_PIXEL_ID: ${{ vars.PROD_META_PIXEL_ID }}
+          VITE_SENTRY_DSN: ${{ vars.PROD_SENTRY_DSN }}
+          VITE_ERROR_REPORT_URL: ${{ vars.PROD_ERROR_REPORT_URL }}
           VITE_FIREBASE_API_KEY: ${{ secrets.PROD_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.PROD_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.PROD_FIREBASE_PROJECT_ID }}
@@ -98,7 +151,7 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.PROD_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.PROD_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.PROD_FIREBASE_MEASUREMENT_ID }}
-      - name: Deploy to LIVE
+      - name: Deploy LIVE Hosting only
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
